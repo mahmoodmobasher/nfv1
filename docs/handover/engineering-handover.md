@@ -12,6 +12,8 @@ Final deployed application commit: `c1125ba7c7b5bc075b89003eb0ecc9840665b5e1` (`
 
 Scope of this update: documentation only; no application code, Git publication, or external system was changed during this handover update.
 
+Post-handover provider work: branch `feature/resend-transactional-email` contains a locally validated Resend transactional-email candidate. It is not yet merged or deployed; current UAT remains on the accepted rc.2 Mailpit configuration until a restricted key and approved real test inbox are supplied. See [`resend-transactional-email-checkpoint.md`](../engineering/resend-transactional-email-checkpoint.md).
+
 ## 1. Status vocabulary
 
 This handover uses the following terms deliberately:
@@ -41,7 +43,7 @@ Do not infer overall Feature acceptance from an individual work-item acceptance.
 - Argon2id password hashing and server-side password policy.
 - Opaque PostgreSQL Sessions with idle and absolute expiry, bounded touch, rotation/revocation, security-version checks, current/all-device logout, and reset-driven revocation.
 - CSRF plus Origin/Referer mutation protection and explicit trusted-proxy handling.
-- PostgreSQL rate limiting, safe audit events, transactional outbox, Mailpit email adapter, and lease/fencing worker behavior.
+- PostgreSQL rate limiting, safe audit events, transactional outbox, local Mailpit adapter, candidate Resend adapter, and lease/fencing worker behavior.
 - Local fixture OIDC implements the provider-adapter contract and recent-auth fixture path. It is forbidden in production mode and is not real Google.
 
 Primary code: `src/server/identity`, `src/server/security`, `src/server/email`, `src/app/api/auth`.
@@ -120,7 +122,7 @@ The exact source inventory is under `src/app/**/page.tsx` and `src/app/api/**/ro
 | `src/server/http.ts` | Database creation, mutation guard, trusted proxy/network context, Session cookie extraction |
 | `src/server/security/*` | password, crypto, Session, request protection, rate limit, canonical audit writer |
 | `src/server/identity/*` | password identity flows and local OIDC fixture |
-| `src/server/email/*` | adapter, Mailpit transport, outbox leasing/fencing, worker |
+| `src/server/email/*` | provider factory, Mailpit and Resend transports, outbox leasing/fencing, worker |
 | `src/server/db/*` | Drizzle schema, migration runner, health/readiness, transaction and repository foundations |
 | `src/server/authz/context.ts` | typed Workspace authorization context |
 | `src/server/workspaces/*` | provisioning, ownership protections, active Workspace selection |
@@ -307,7 +309,7 @@ The four earlier stale expectations—CRM mobile trigger wording, post-join head
 ### Deferred product/provider/operations work
 
 - Real Google OIDC and production provider credentials.
-- Real outbound email/Resend integration; local Mailpit remains the development adapter.
+- Resend adapter code is locally validated on `feature/resend-transactional-email`; protected UAT key installation, immutable deployment, and real-inbox delivery proof remain pending. Local Mailpit remains the development adapter.
 - Post-provision package changes, billing, upgrades/downgrades, and payment behavior.
 - Audit-history UI/API, retention/export, external log delivery, and broader observability.
 - Feature 3 personal profile, preferences, personal security, notification, locale, and avatar work.
@@ -330,7 +332,7 @@ The completed Feature 1 + Feature 2 UAT release is recorded in [`feature-1-2-dep
 
 The rc.1 process/readiness checks exposed a real-browser production hydration loop: `TitleUpdater` observed `<head>` while rewriting `document.title`, retriggering itself and preventing onboarding hydration. The bounded rc.2 hotfix updates the title once per pathname change without a self-observing `MutationObserver`; lint, unit/routes 41/41, TypeScript/build, image build, and public browser rendering passed afterward.
 
-Public UAT uses password identity. Fixture OIDC is disabled and its public endpoints return 404. Mailpit is the intended UAT-only email mode and its UI remains loopback-only. No real Google or production transactional-email provider is configured.
+Public UAT uses password identity. Fixture OIDC is disabled and its public endpoints return 404. The currently deployed rc.2 still uses private loopback-only Mailpit. The Resend candidate is not deployed and no Resend credential is present in Git.
 
 The user explicitly waived backup, restore proof, and preservation of prior UAT application/database state for this release. No new backup was created. This waiver is release-specific and must not be silently carried into a future production or UAT change.
 
@@ -344,7 +346,7 @@ The user explicitly waived backup, restore proof, and preservation of prior UAT 
 ## 12. Environment and secret rules
 
 - `.env.example` contains local placeholder values only. Never commit `.env`, `.env.local`, production credentials, provider secrets, private keys, tokens, database dumps, or backup keys.
-- Required server configuration is validated in `src/server/env.ts`: database URL, Node environment, Session cookie/secret, SMTP host/port, application origin, Session idle/absolute/touch values, trusted-proxy mode/secret, OIDC mode/fixture secret/redirect allowlist, invitation TTL, and recent-auth window.
+- Required server configuration is validated in `src/server/env.ts`: database URL, Node environment, Session cookie/secret, email provider and provider-specific keys, application origin, Session idle/absolute/touch values, trusted-proxy mode/secret, OIDC mode/fixture secret/redirect allowlist, invitation TTL, and recent-auth window.
 - Production mode rejects a loopback database, local-only Session secret text, non-HTTPS origin, fixture OIDC, and trusted-proxy mode without a sufficiently strong internal proxy secret.
 - `OIDC_MODE=fixture` is local-only. UAT/production must use `disabled` until a separately approved real provider adapter/configuration exists.
 - Never expose Session tokens/hashes, verification/reset/invitation tokens or hashes, passwords, cookies, authorization headers, provider assertions, raw request bodies, raw IP addresses, private contact data, or foreign-tenant facts in logs/audits/docs.
@@ -414,3 +416,4 @@ After the Workspace Foundation milestone is accepted, do not expand or refactor 
 - Architecture/Graphics release gates: [`feature-1-2-architecture-release-gate.md`](../release/feature-1-2-architecture-release-gate.md), [`feature-1-2-ux-release-gate.md`](../release/feature-1-2-ux-release-gate.md)
 - Final UAT deployment evidence: [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md)
 - Post-deployment acceptance: [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md), [`feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md)
+- Resend provider candidate: [`resend-transactional-email-checkpoint.md`](../engineering/resend-transactional-email-checkpoint.md), [`resend-email-release-readiness.md`](../release/resend-email-release-readiness.md)

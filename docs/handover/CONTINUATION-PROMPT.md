@@ -42,7 +42,7 @@ Working model:
 - Architect reviews security, data integrity, tenancy, and contracts without coding.
 - Graphics reviews UX, accessibility, responsive behavior, and truthful states without coding.
 - Use the visible project chats for assignments and status communication.
-- UAT is already deployed. Do not configure real providers, alter UAT infrastructure, or use production credentials unless separately authorized.
+- UAT rc.2 is already deployed. A Resend transactional-email candidate exists on `feature/resend-transactional-email`; do not merge/deploy it or handle a provider credential until the restricted key and approved real test inbox are supplied through a protected channel.
 
 First report back with: repository/worktree status, deployed UAT identity and health, the proposed next vertical and its inherited Workspace contract, and any material blocker. Then proceed only after that vertical is explicitly authorized.
 
