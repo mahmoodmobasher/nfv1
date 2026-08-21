@@ -1,0 +1,2 @@
+ALTER TABLE "audit_events" DROP CONSTRAINT "audit_metadata_allowlist_check";--> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_metadata_allowlist_check" CHECK (jsonb_typeof("audit_events"."metadata") = 'object' and ("audit_events"."metadata" - array['risk_bucket', 'change_fields', 'provider', 'auth_method', 'policy_version', 'operation', 'invitation_generation', 'assigned_role', 'team_count', 'expected_version', 'result_version', 'seat_limit', 'active_seats', 'auth_age_bucket', 'selection_version']::text[]) = '{}'::jsonb);

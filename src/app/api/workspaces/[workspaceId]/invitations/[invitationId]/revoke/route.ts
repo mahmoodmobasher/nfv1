@@ -1,2 +1,19 @@
-import{z}from"zod";import{localDatabase,mutationGuard}from"@/server/http";import{invitationDestinationById,revokeInvitation}from"@/server/tenant-admin/invitations";import{auditedFailure,enforceTenantRate,idempotencyKey,success,tenant}from"@/server/tenant-admin/http";import{TenantAdminError}from"@/server/tenant-admin/permissions";
-export async function POST(request:Request,{params}:{params:Promise<{workspaceId:string;invitationId:string}>}){const blocked=mutationGuard(request);if(blocked)return blocked;const{workspaceId,invitationId}=await params,{pool}=localDatabase();try{const parsed=z.object({expectedVersion:z.number().int().positive()}).safeParse(await request.json().catch(()=>null));if(!parsed.success)throw new TenantAdminError("validation_failed",400);const context=await tenant(pool,request,workspaceId);await enforceTenantRate(pool,request,"invite_revoke",context,await invitationDestinationById(pool,workspaceId,invitationId));return success(await revokeInvitation(pool,{context,invitationId,...parsed.data,idempotencyKey:idempotencyKey(request)}))}catch(e){return auditedFailure(pool,request,e,{action:"workspace.invitation_admin_denied",targetType:"invitation"})}finally{await pool.end()}}
+import {z} from "zod";
+import {localDatabase} from "@/server/http";
+import {invitationDestinationById,revokeInvitation} from "@/server/tenant-admin/invitations";
+import {auditedFailure,auditedMutationGuard,enforceTenantRate,failure,idempotencyKey,success,tenant} from "@/server/tenant-admin/http";
+import {TenantAdminError} from "@/server/tenant-admin/permissions";
+
+export async function POST(request:Request,{params}:{params:Promise<{workspaceId:string;invitationId:string}>}){
+  const blocked=await auditedMutationGuard(request,{action:"workspace.invitation_admin_denied",targetType:"invitation"});if(blocked)return blocked;
+  const{workspaceId,invitationId}=await params,{pool}=localDatabase();let serviceOwnsDenial=false;
+  try{
+    const parsed=z.object({expectedVersion:z.number().int().positive()}).safeParse(await request.json().catch(()=>null));
+    if(!parsed.success)throw new TenantAdminError("validation_failed",400);
+    const context=await tenant(pool,request,workspaceId);
+    await enforceTenantRate(pool,request,"invite_revoke",context,await invitationDestinationById(pool,workspaceId,invitationId));
+    const key=idempotencyKey(request);serviceOwnsDenial=true;
+    return success(await revokeInvitation(pool,{context,invitationId,...parsed.data,idempotencyKey:key}));
+  }catch(error){return serviceOwnsDenial?failure(error):auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation",targetId:invitationId})}
+  finally{await pool.end()}
+}

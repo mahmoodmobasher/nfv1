@@ -378,6 +378,7 @@ export const workspaceEntitlementSnapshots = pgTable(
 export const sessions = pgTable("sessions", {
   id: id(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  activeWorkspaceId: uuid("active_workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
   sessionHash: text("session_hash").notNull().unique(),
   securityVersion: integer("security_version").notNull().default(1),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
@@ -524,7 +525,7 @@ export const auditEvents = pgTable(
     check("audit_metadata_version_check", sql`${table.metadataVersion} > 0`),
     check(
       "audit_metadata_allowlist_check",
-      sql`jsonb_typeof(${table.metadata}) = 'object' and (${table.metadata} - array['risk_bucket', 'change_fields', 'provider', 'auth_method', 'policy_version', 'operation', 'invitation_generation', 'assigned_role', 'team_count', 'expected_version', 'result_version', 'seat_limit', 'active_seats', 'auth_age_bucket']::text[]) = '{}'::jsonb`,
+      sql`jsonb_typeof(${table.metadata}) = 'object' and (${table.metadata} - array['risk_bucket', 'change_fields', 'provider', 'auth_method', 'policy_version', 'operation', 'invitation_generation', 'assigned_role', 'team_count', 'expected_version', 'result_version', 'seat_limit', 'active_seats', 'auth_age_bucket', 'selection_version']::text[]) = '{}'::jsonb`,
     ),
   ],
 );

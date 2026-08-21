@@ -15,6 +15,14 @@ export async function resolveTenantContext(database:Pool|PoolClient,input:{userI
   return result.rows[0]??null;
 }
 export function hasPermission(context:TenantContext,permission:TenantPermission){return policyRegistry[context.role].has(permission)}
+export function invitationRoleOptions(context:TenantContext):Array<"admin"|"member">{return context.role==="owner"?["member","admin"]:context.role==="admin"?["member"]:[]}
+export function membershipCapabilities(context:TenantContext,target:{id:string;role:TenantRole;status:string}):{roleOptions:Array<"admin"|"member">;canManageLifecycle:boolean}{
+  const eligible=target.id!==context.membershipId&&target.role!=="owner"&&target.status!=="removed";
+  if(!eligible)return{roleOptions:[] as Array<"admin"|"member">,canManageLifecycle:false};
+  if(context.role==="owner")return{roleOptions:target.status==="active"?["member","admin"]:[] as Array<"admin"|"member">,canManageLifecycle:true};
+  if(context.role==="admin"&&target.role==="member")return{roleOptions:target.status==="active"?["member"] as Array<"admin"|"member">:[],canManageLifecycle:true};
+  return{roleOptions:[] as Array<"admin"|"member">,canManageLifecycle:false};
+}
 export function requirePermission(context:TenantContext|null,permission:TenantPermission){if(!context||!hasPermission(context,permission))throw new TenantAdminError("resource_not_found",404);return context}
 export function requireRecent(context:TenantContext,minutes:number,now=new Date()){if(context.authMethod==="legacy"||context.authenticatedAt.getTime()<now.getTime()-minutes*60_000)throw new TenantAdminError("recent_auth_required",401)}
 export class TenantAdminError extends Error{constructor(public code:string,public status=400,public safe?:unknown){super(code)}}

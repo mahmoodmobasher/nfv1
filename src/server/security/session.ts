@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { keyedHash, randomOpaqueToken } from "./crypto";
 
-export type IdentityContext = Readonly<{ userId: string; sessionId: string }>;
+export type IdentityContext = Readonly<{ userId: string; sessionId: string; activeWorkspaceId?: string | null }>;
 
 export async function createSession(
   database: Pool | PoolClient,
@@ -27,9 +27,9 @@ export async function resolveIdentityContext(
   policy: { idleMinutes: number; touchIntervalSeconds: number } = { idleMinutes: 30, touchIntervalSeconds: 60 },
 ): Promise<IdentityContext | null> {
   if (!token) return null;
-  const result = await database.query<{ session_id: string; user_id: string }>(
+  const result = await database.query<{ session_id: string; user_id: string; active_workspace_id:string|null }>(
     `with valid as materialized (
-       select s.id, s.user_id from sessions s join users u on u.id = s.user_id
+       select s.id, s.user_id, s.active_workspace_id from sessions s join users u on u.id = s.user_id
         where s.session_hash = $1 and s.revoked_at is null and s.idle_expires_at > $2 and s.absolute_expires_at > $2
           and s.security_version = u.security_version and u.status = 'active'
      ), touched as (
@@ -37,10 +37,10 @@ export async function resolveIdentityContext(
          idle_expires_at = least(s.absolute_expires_at, $2 + ($3 * interval '1 minute')), updated_at = $2
        from valid v where s.id = v.id and s.last_seen_at <= $2 - ($4 * interval '1 second')
        returning s.id
-     ) select v.id session_id, v.user_id from valid v`,
+     ) select v.id session_id, v.user_id, v.active_workspace_id from valid v`,
     [keyedHash(token, secret), now, policy.idleMinutes, policy.touchIntervalSeconds],
   );
-  return result.rows[0] ? { userId: result.rows[0].user_id, sessionId: result.rows[0].session_id } : null;
+  return result.rows[0] ? { userId: result.rows[0].user_id, sessionId: result.rows[0].session_id, activeWorkspaceId:result.rows[0].active_workspace_id } : null;
 }
 
 export async function revokeCurrentSession(database: Pool | PoolClient, token: string | undefined, secret: string): Promise<void> {

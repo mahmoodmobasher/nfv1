@@ -64,6 +64,20 @@
       "when": 1787278065633,
       "tag": "0008_daffy_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787300371389,
+      "tag": "0009_small_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787300661348,
+      "tag": "0010_ambiguous_terrax",
+      "breakpoints": true
     }
   ]
 }

@@ -53,9 +53,10 @@ export async function leadTeams(database: Pool|PoolClient, context: TenantContex
   return (await database.query(`select id,name from teams where workspace_id=$1 and status='active' order by name_normalized,id`,[context.workspaceId])).rows;
 }
 
-export async function listLeads(database: Pool|PoolClient, context: TenantContext, search="") {
+export type LeadListFilters={status?:LeadStatus;stageId?:string;ownerMembershipId?:string;teamId?:string;createdSince?:Date};
+export async function listLeads(database: Pool|PoolClient, context: TenantContext, search="", filters:LeadListFilters={}) {
   const query=search.trim().toLowerCase().slice(0,160);
-  return (await database.query(`${selectLead} where l.workspace_id=$1 and ${visibilitySql} and($4='' or lower(l.first_name||' '||l.last_name||' '||l.email_display||' '||l.company) like '%'||$4||'%') ${groupLead} order by l.updated_at desc,l.id desc limit 100`,[context.workspaceId,context.membershipId,context.role,query])).rows;
+  return (await database.query(`${selectLead} where l.workspace_id=$1 and ${visibilitySql} and($4='' or lower(l.first_name||' '||l.last_name||' '||l.email_display||' '||l.company) like '%'||$4||'%') and($5::text is null or l.status=$5) and($6::uuid is null or l.stage_id=$6) and($7::uuid is null or l.owner_membership_id=$7) and($8::uuid is null or exists(select 1 from lead_visible_teams selected_team where selected_team.workspace_id=l.workspace_id and selected_team.lead_id=l.id and selected_team.team_id=$8)) and($9::timestamptz is null or l.created_at>=$9) ${groupLead} order by l.updated_at desc,l.id desc limit 100`,[context.workspaceId,context.membershipId,context.role,query,filters.status??null,filters.stageId??null,filters.ownerMembershipId??null,filters.teamId??null,filters.createdSince??null])).rows;
 }
 
 export async function getLead(database: Pool|PoolClient, context: TenantContext, leadId: string) {

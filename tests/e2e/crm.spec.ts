@@ -2,7 +2,7 @@ import { expect, test } from "playwright/test";
 import { Pool } from "pg";
 import { keyedHash } from "../../src/server/security/crypto";
 
-const database=new Pool({connectionString:"postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow"}),secret="local-only-session-secret-change-me-32chars";
+const database=new Pool({connectionString:process.env.DATABASE_URL??"postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow"}),secret="local-only-session-secret-change-me-32chars";
 test.afterAll(async()=>database.end());
 
 test("creates, searches, moves, edits, and records activity for a persistent lead",async({page})=>{
@@ -35,6 +35,9 @@ test("creates, searches, moves, edits, and records activity for a persistent lea
   await expect(page.getByRole("list",{name:"Lead activity timeline"}).getByText("Contract signed")).toBeVisible();
   await page.goto("/crm?q=acme");await expect(page.getByRole("link",{name:"Jordan Lee"})).toBeVisible();
   await page.goto("/crm/pipeline");await expect(page.getByRole("heading",{name:"Pipeline"})).toBeVisible();await expect(page.getByRole("link",{name:"Jordan Lee"})).toBeVisible();
+  await page.goto("/crm/home");await expect(page.getByRole("heading",{name:"CRM home"})).toBeVisible();await expect(page.getByText("Live workspace data").first()).toBeVisible();await expect(page.locator(".kpi-card").filter({hasText:"Visible leads"}).getByText("1",{exact:true})).toBeVisible();await expect(page.locator(".kpi-card").filter({hasText:"Won"}).getByText("1",{exact:true})).toBeVisible();await expect(page.getByRole("link",{name:"Jordan Lee"}).first()).toBeVisible();await expect(page.locator(".demo-region")).toContainText("Sample values only — this feature is not connected to workspace data.");await expect(page.locator(".demo-region a")).toHaveCount(0);await expect(page.locator(".demo-grid article")).toHaveCount(5);
+  await page.getByLabel("Status").selectOption("lost");await page.getByRole("button",{name:"Apply filters"}).click();await expect(page).toHaveURL(/status=lost/);await expect(page.getByText("No leads match these filters.")).toBeVisible();await page.reload();await expect(page.getByText("No leads match these filters.")).toBeVisible();const clearDashboard=page.getByRole("link",{name:"Clear filters"}).first();await expect(clearDashboard).toHaveAttribute("href","/crm/home");await page.goto("/crm/home");await expect(page).toHaveURL(/\/crm\/home$/);await expect(page.locator(".kpi-card").filter({hasText:"Visible leads"}).getByText("1",{exact:true})).toBeVisible();
   await page.setViewportSize({width:320,height:700});await page.goto("/crm");const menu=page.getByRole("button",{name:"Open CRM navigation"});await expect(menu).toBeVisible();expect((await menu.boundingBox())?.width).toBeGreaterThanOrEqual(44);await menu.click();await page.locator("#crm-menu").getByRole("link",{name:"Pipeline"}).click();await expect(page).toHaveURL(/\/crm\/pipeline/);await expect(page.getByRole("heading",{name:"Pipeline"})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await menu.click();await page.locator("#crm-menu").getByRole("link",{name:"Home"}).click();await expect(page).toHaveURL(/\/crm\/home/);await expect(page.getByRole("heading",{name:"CRM home"})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   expect((await database.query(`select l.status,l.version,ps.name stage,(select count(*)::int from lead_activities where lead_id=l.id) activities from leads l join pipeline_stages ps on ps.id=l.stage_id where l.workspace_id=$1`,[workspace.id])).rows[0]).toMatchObject({status:"won",version:2,stage:"Qualified",activities:4});expect(membership.id).toBeTruthy();
 });

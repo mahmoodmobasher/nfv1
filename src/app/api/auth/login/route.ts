@@ -4,6 +4,8 @@ import { getServerEnv } from "@/server/env";
 import { identityConfig, localDatabase, mutationGuard, requestRiskContext, sessionToken } from "@/server/http";
 import { loginPassword } from "@/server/identity/service";
 import { cookie } from "@/server/security/request";
+import { resolveIdentityContext } from "@/server/security/session";
+import { selectableWorkspaces } from "@/server/workspaces/selection";
 
 const input = z.object({ email: z.string().email(), password: z.string().min(1).max(256) });
 export async function POST(request: Request) {
@@ -14,7 +16,8 @@ export async function POST(request: Request) {
   try {
     const result = await loginPassword(pool, { ...parsed.data, riskKey: requestRiskContext(request), existingSession: sessionToken(request) }, identityConfig());
     if (!result.ok) return NextResponse.json(result, { status: 401 });
-    const response = NextResponse.json({ ok: true, next: "/workspace/create" });
+    const identity=await resolveIdentityContext(pool,result.sessionToken,env.SESSION_SECRET),workspaces=identity?await selectableWorkspaces(pool,{...identity,activeWorkspaceId:identity.activeWorkspaceId??null}):[];
+    const response = NextResponse.json({ ok: true, next: workspaces.length===0?"/workspace/create":workspaces.some(item=>item.current)?"/crm/home":"/workspace/switch" });
     response.headers.set("Set-Cookie", cookie(env.SESSION_COOKIE_NAME, result.sessionToken, { secure: env.APP_ORIGIN.startsWith("https://"), maxAge: env.SESSION_ABSOLUTE_HOURS * 3600 }));
     return response;
   } finally { await pool.end(); }
