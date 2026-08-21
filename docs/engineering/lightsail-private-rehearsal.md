@@ -15,7 +15,7 @@ OIDC must be `disabled`. Fixture and real Google credentials are forbidden. The 
 - `.dockerignore`: excludes environment files, credentials, Git data, tests, reports, logs, backups, local data, and development Compose state.
 - `compose.uat.yml`: explicit services, networks, volumes, profiles, health checks, read-only application roots, bounded temporary filesystems, dropped capabilities, process limits, and rotated local logs.
 - `deploy/uat/Caddyfile`: canonical configured site, compression, 10 MB request bound, security headers, and authenticated proxy-header replacement.
-- Public deployments set `UAT_SITE_ADDRESS` to the canonical hostname and `UAT_SITE_ALIAS` to the `www` hostname; Caddy obtains certificates for both and permanently redirects the alias to the canonical origin.
+- Public deployments set `UAT_SITE_ADDRESS` to the marketing hostname, `UAT_SITE_ALIAS` to its `www` alias, and `UAT_APP_ADDRESS` to the authenticated product hostname. Caddy obtains certificates for all three and permanently redirects only `www` to the marketing origin.
 - `deploy/uat/uat.env.keys`: required key names only. It contains no values and is not an environment file.
 - `deploy/uat/backup.sh` and `restore.sh`: encrypted logical backup and fail-closed disposable restore tooling for the explicit `nexaflow-uat` project and `postgres` service.
 - `deploy/uat/smoke.sh`: bounded health, OIDC-disabled, and protected-route checks.

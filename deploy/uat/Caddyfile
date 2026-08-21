@@ -3,7 +3,7 @@
 	email {$ACME_CONTACT_EMAIL}
 }
 
-{$UAT_SITE_ADDRESS} {
+(nexaflow_app) {
 	encode zstd gzip
 	request_body {
 		max_size 10MB
@@ -25,6 +25,14 @@
 		header_up -X-NexaFlow-Proxy-Secret
 		header_up X-NexaFlow-Proxy-Secret {$TRUSTED_PROXY_SECRET}
 	}
+}
+
+{$UAT_SITE_ADDRESS} {
+	import nexaflow_app
+}
+
+{$UAT_APP_ADDRESS} {
+	import nexaflow_app
 }
 
 {$UAT_SITE_ALIAS} {
