@@ -1,8 +1,8 @@
 # NexaFlow design and product UX handover
 
-**Date:** 2026-08-21  
-**Audience:** Product, Design, Develop, Architecture  
-**Status:** durable transition handover  
+**Date:** 2026-08-21
+**Audience:** Product, Design, Develop, Architecture
+**Status:** durable transition handover; Workspace Foundation accepted
 **Application code changed:** no
 
 ## 1. Product foundation direction
@@ -60,13 +60,13 @@ Legend: **Implemented** means present in the product; **Accepted** means Graphic
 | Audit | Implemented server boundary, accepted | Canonical taxonomy, allowlisted metadata/before-after, hashed correlation, transactional success/replay/denial evidence. No audit-history screen is required. |
 | Entitlements | Implemented foundation attachment | Seat/package checks are server-owned and reflected in invitation/lifecycle denial states. |
 | Personal settings | Deferred | Feature 3; keep separate from Workspace administration. |
-| Work Item 6 | Not started | Do not infer scope until Product/Architecture authorizes it. |
+| Work Item 6 | Complete, accepted | Integrated release validation passed unit/routes 41/41, PostgreSQL 111/111, Playwright 25/25, migrations, lint, type/build, packaging, and final UAT smoke. |
 
 ## 4. Feature 2 Graphics acceptance ledger
 
 ### WI1 — Membership lifecycle
 
-**Implemented and regression-covered; consolidated acceptance deferred to WI6.** Suspend, restore, remove, Owner protection, confirmation dialogs, stale recovery, success/error states, and 320px behavior are implemented and covered. Removed memberships remain historical and are restored through invitation flow rather than silent reactivation. The final integrated Graphics/Product acceptance is intentionally part of WI6.
+**Accepted.** Suspend, restore, remove, Owner protection, confirmation dialogs, stale recovery, success/error states, and 320px behavior are implemented and covered. Removed memberships remain historical and are restored through invitation flow rather than silent reactivation.
 
 ### WI2 — Authority-aware role controls
 
@@ -92,7 +92,17 @@ Review: [`docs/design/feature-2-work-item-4-ux-review.md`](../design/feature-2-w
 
 Review: [`docs/design/feature-2-work-item-5-ux-review.md`](../design/feature-2-work-item-5-ux-review.md).
 
-**Outstanding Feature 2 Graphics gate:** no bounded WI2–WI5 blocker remains. WI1’s consolidated acceptance and the overall Foundation milestone remain pending WI6 and formal Product/Architecture acceptance.
+**Feature 2 Graphics gate:** complete. No bounded WI1–WI6 blocker remains. The integrated release gate completed WI6, and the Workspace Foundation milestone and deployed rc.2 UAT candidate are accepted.
+
+### Final release and UAT status
+
+Graphics accepted the final local Feature 1 + Feature 2 release gate and the deployed UAT candidate. The deployed rc.2 identity is application commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e`, tag `v0.2.0-rc.2`, with deployment evidence recorded under commit `d005d52772ad49268b87dce1c01004a8859825f1`.
+
+The deployed real-browser smoke passed password onboarding and verification, login/recovery boundaries, Workspace creation/ready and server-selected context, People & Roles, invitations and private Mailpit delivery, switcher, tenant-safe denial, CRM entry/dashboard and persistent Lead behavior, refresh/resume, logout, Back/direct-route protection, and login after logout. The rc.1 production title-hydration loop was fixed in rc.2 and validated.
+
+The UAT boundary remains explicit: the Google/OIDC path is a disabled/local fixture, Mailpit is private local guidance, production billing/providers are not connected, and unsupported downstream modules remain clearly labelled demo/preview content. This is not evidence of production provider or deployment certification.
+
+See [`docs/release/feature-1-2-ux-release-gate.md`](../release/feature-1-2-ux-release-gate.md) and [`docs/release/feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md).
 
 ## 5. Accessible and responsive patterns to preserve
 
@@ -166,7 +176,7 @@ The dashboard mock at [`/Users/moemahmood/.codex/visualizations/2026/08/20/01a02
 ### Immediate
 
 1. Preserve the accepted WI1–WI5 foundation contract in all review templates and vertical specs.
-2. Do not begin WI6 from assumption; obtain its authorized scope and checkpoint first.
+2. Do not reopen or expand the accepted Foundation specification speculatively; reopen it only when a real downstream vertical exposes a concrete gap.
 3. When reviewing any new vertical, verify Workspace context, Membership/RBAC, Active Workspace, Ownership, Team/Visibility, Audit, and Entitlement inheritance before visual polish.
 
 ### Subsequent verticals

@@ -7,16 +7,16 @@ Status date: 2026-08-21
 | Area | State | Meaning |
 | --- | --- | --- |
 | Imported website baseline | Complete | Original marketing baseline was selectively imported; unrelated legacy projects and generated files were excluded. |
-| Feature 1 — onboarding/provisioning | Accepted | Registration, verification, login/recovery, package persistence, atomic Workspace creation, initial Owner, Session protection, and CRM entry are established locally. |
-| Feature 2 WI1 — Membership lifecycle | Implemented and regression-covered | Suspend, restore, remove, protections, confirmations, enforcement, and audit are present. Consolidate in WI6. |
+| Feature 1 — onboarding/provisioning | Accepted and deployed | Registration, verification, login/recovery, package persistence, atomic Workspace creation, initial Owner, Session protection, and CRM entry passed local release and final UAT smoke. |
+| Feature 2 WI1 — Membership lifecycle | Accepted | Suspend, restore, remove, protections, confirmations, enforcement, audit, and integrated regressions passed. |
 | Feature 2 WI2 — Authority-aware roles | Accepted | Server-derived authority, generic Owner exclusion, dedicated transfer, concurrency, and denial controls passed. |
 | Feature 2 WI3 — Stale-data handling | Accepted | Expected-version conflicts and server-authoritative reconciliation passed. |
 | Feature 2 WI4 — Workspace selection | Accepted | Trusted Session Workspace context, explicit switching, stale denial, tenant enforcement, and ready-page recovery passed. |
 | Feature 2 WI5 — Audit completion | Accepted | Canonical, transactional, correlated, non-duplicative success and denial evidence passed Architecture and Graphics gates. |
-| Feature 2 WI6 — Final validation | Not started | Next required Product decision gate; obtain explicit authorization before execution. It must produce the final integrated acceptance decision. |
-| Workspace Foundation milestone | Pending | Close only after WI6 and formal Product acceptance. |
-| CRM Leads/core | Implemented locally | Persistent Leads, stages/status, owner/Team/Workspace visibility, notes/activities, search/list/detail/create/edit, and dashboard aggregates exist. |
-| Feature 3 — Personal profile/settings | Deferred | Do not start before Workspace Foundation acceptance. |
+| Feature 2 WI6 — Final validation | Complete | Integrated release gate passed unit/routes 41/41, PostgreSQL 111/111, Playwright 25/25, migrations, lint, type, build, Compose, image, and UAT smoke. |
+| Workspace Foundation milestone | Accepted and deployed | Architecture and Graphics accepted the local and deployed UAT candidate. |
+| CRM Leads/core | Implemented and deployed to UAT | Persistent Leads, stages/status, owner/Team/Workspace visibility, notes/activities, search/list/detail/create/edit, and dashboard aggregates exist; persistent Lead create/read passed final UAT smoke. |
+| Feature 3 — Personal profile/settings | Deferred pending Product authorization | Workspace Foundation acceptance is complete; begin only after Product approves a bounded Feature 3 contract. |
 | Later verticals | Deferred | Companies/Contacts, Deals, Projects, Communications, and later capabilities must inherit the foundation contract. |
 
 ## Latest recorded green evidence
@@ -31,13 +31,13 @@ Status date: 2026-08-21
 - Next.js production build recorded 32 static pages plus dynamic routes.
 - Fresh migration plus rerun, database health, UAT Compose rendering, and a local non-root production image build passed.
 
-These are durable release-candidate results, not a substitute for Product authorization and consolidated Work Item 6 acceptance.
+These include the completed Work Item 6/release gate. Final UAT evidence is recorded in the deployment report.
 
-## What Work Item 6 must decide
+## Work Item 6 disposition
 
-Feature 2 is accepted when an authorized Workspace administrator can safely manage users and memberships, a multi-Workspace user can explicitly operate in a validated active Workspace, and every access decision and material administrative outcome consistently uses the shared foundation contract.
+Feature 2 was accepted after proving that an authorized Workspace administrator can safely manage users and memberships, a multi-Workspace user can explicitly operate in a validated active Workspace, and access decisions and material administrative outcomes use the shared foundation contract.
 
-The integrated validation must cover:
+The completed integrated validation covered:
 
 - invitation and Membership lifecycle;
 - Owner/Admin/Member authority and last-Owner protection;
@@ -55,8 +55,8 @@ Architecture blocks local delivery only for material risks: cross-tenant access 
 
 - Local Google/OIDC is a fixture adapter, not production Google.
 - Local email uses Mailpit; production transactional email is undecided.
-- Production domain/HTTPS, provider configuration, billing, retention/export, production deployment hardening, and broader operations remain outside the local milestone. Existing deployment evidence does not close those Architecture readiness gates.
-- The historical pre-UAT list still requires explicit Architecture disposition. Fresh release evidence now covers fixture-OIDC recent-auth and a clean 25/25 full Playwright run; Owner-transfer response-loss replay, exhaustive route-level denial auditing, destination rate-limit refinement, and any remaining invitation-administration hardening must not be assumed closed without review.
+- Real Google/provider configuration, billing, retention/export, production launch, and broader production operations remain outside the UAT milestone.
+- The Feature 1 + Feature 2 release gate closed the historical pre-UAT Feature 2 list for this candidate.
 - No audit-history viewer exists or is required by Work Item 5.
 - Workspace switcher modes and foundation refactoring must not expand speculatively.
 - Personal settings remain separate from Workspace administration.
@@ -79,9 +79,9 @@ Do not use `npm run local:reset` unless destruction of the disposable local data
 
 - Read every document in the handover index.
 - Read `AGENTS.md` and relevant bundled Next.js documentation before any application-code change.
-- Inspect `git status`; preserve the dirty worktree.
+- Inspect `git status`; preserve any post-deployment documentation updates.
 - Confirm local services and database health.
-- Review the Feature 2 implementation checklist and WI2–WI5 accepted reviews.
-- Define WI6 as evidence consolidation and bounded gap closure, not a new feature.
+- Review the final Feature 2 release and deployment reviews.
+- Treat Feature 1, Feature 2, WI6, and Workspace Foundation as closed for UAT `v0.2.0-rc.2`.
 - Have Develop own all coding; Architecture and Graphics provide independent bounded reviews.
 - Record all new evidence under `docs/` so future sessions do not depend on chat history.

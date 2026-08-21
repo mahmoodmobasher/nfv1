@@ -7,10 +7,10 @@ Purpose: enable a new project owner or ChatGPT/Codex session to continue without
 ## Current position
 
 - Feature 1 — Account onboarding and Workspace provisioning: **accepted / complete**.
-- Feature 2 — User, Role, Membership, Workspace context, and Audit: **Work Items 1–5 implemented**.
-- Work Items 2–5 have explicit Architecture and Graphics acceptance. Work Item 1 is implemented and regression-covered; its final consolidated acceptance belongs in Work Item 6.
-- Work Item 6 — Final Feature 2 validation and milestone acceptance: **not started**.
-- The milestone is not yet formally closed: **NexaFlow Workspace Foundation Complete** remains the next decision gate.
+- Feature 2 — User, Role, Membership, Workspace context, and Audit: **accepted / complete**.
+- Work Items 1–5 are complete; Work Item 6 was completed through the integrated release gate.
+- **NexaFlow Workspace Foundation Complete** is accepted and deployed to UAT.
+- Final UAT application: commit `c1125ba`, tag `v0.2.0-rc.2`, at `https://app.nexaflowsystems.com`.
 - Persistent CRM Leads and a server-backed CRM home/dashboard already exist. Some later dashboard capability cards are explicitly labelled sample/demo data.
 
 ## Read in this order
@@ -23,9 +23,9 @@ Purpose: enable a new project owner or ChatGPT/Codex session to continue without
 
 ## Immediate next action
 
-Obtain Product authorization, then execute **Feature 2 Work Item 6 — Final validation / acceptance**. It should consolidate evidence and close only real gaps across membership lifecycle, role authority, stale-state handling, server-controlled Workspace selection, audit, accessibility, concurrency, tenant isolation, browser journeys, and regressions.
+Select and authorize the next vertical product feature. The roadmap currently places **Feature 3 — Personal Profile, Preferences & Account Security** next.
 
-Do not begin Feature 3 until Feature 2 and the **NexaFlow Workspace Foundation Complete** milestone are formally accepted.
+Do not reopen or refactor the Workspace Foundation speculatively. Reopen it only when a real downstream vertical proves a concrete gap.
 
 ## Non-negotiable platform rule
 
@@ -43,7 +43,7 @@ No downstream feature may create a separate tenant, ownership, access, audit, or
 
 ## Critical worktree warning
 
-The working tree contains substantial tracked modifications and untracked implementation, migrations, tests, and documentation. The working tree—not the current Git `HEAD`—is the authoritative project state at handover.
+The application release is committed and deployed. Post-deployment handover/review documentation may still be awaiting its final documentation-only commit.
 
 Do not run destructive cleanup, reset, checkout, rebase, or bulk overwrite operations. Inspect `git status` first and preserve all existing changes.
 
@@ -54,3 +54,6 @@ Do not run destructive cleanup, reset, checkout, rebase, or bulk overwrite opera
 - [`feature-2-work-item-5-ux-review.md`](../design/feature-2-work-item-5-ux-review.md)
 - [`workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md)
 - [`feature-2-implementation-checklist.md`](../product/feature-2-implementation-checklist.md)
+- [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md)
+- [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md)
+- [`feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md)

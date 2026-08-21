@@ -16,20 +16,20 @@ Before taking action, read these files completely:
 6. `docs/product/feature-2-implementation-checklist.md`
 7. `AGENTS.md`
 
-Treat repository documents and the current working tree as the durable project state. The worktree is materially dirty and contains uncommitted tracked and untracked implementation. Do not reset, clean, checkout, rebase, delete, or overwrite existing work.
+Treat repository documents and Git history as the durable project state. Inspect `git status` before acting and preserve any post-deployment documentation updates.
 
 Current delivery status:
 
 - Feature 1 is accepted and complete.
-- Feature 2 Work Items 1–5 are implemented.
-- WI2–WI5 have explicit Architecture and Graphics acceptance; WI1 is implemented and regression-covered.
-- WI6 final integrated validation has not started.
-- The “NexaFlow Workspace Foundation Complete” milestone is pending WI6 and formal Product acceptance.
+- Feature 2 Work Items 1–6 are complete and accepted for the UAT milestone.
+- “NexaFlow Workspace Foundation Complete” is accepted by Architecture and Graphics.
+- Final deployed application commit is `c1125ba`, tag `v0.2.0-rc.2`, at `https://app.nexaflowsystems.com`.
+- All 11 migrations and the primary onboarding, Workspace, administration, tenant-denial, CRM, email/outbox, audit, and logout smoke passed.
 - Persistent CRM Leads and a server-backed dashboard already exist; later capability previews must remain clearly marked sample data.
 
 Immediate objective:
 
-First obtain explicit Product authorization for Feature 2 Work Item 6. Once authorized, define and execute it as a bounded final validation and acceptance gate. Consolidate evidence across Membership lifecycle, authority-aware Roles, stale-data handling, server-controlled Active Workspace selection, Audit, Entitlements, accessibility, concurrency, tenant isolation, browser journeys, and regression suites. Fix only genuine acceptance blockers. Do not start Feature 3 or expand the foundation speculatively.
+Review the final handover and deployment evidence, then propose the next vertical feature for explicit Product authorization. The roadmap currently places Feature 3 — Personal Profile, Preferences & Account Security next. Do not reopen the Workspace Foundation speculatively; change it only when a real downstream vertical exposes a concrete gap.
 
 Shared platform rule:
 
@@ -42,8 +42,8 @@ Working model:
 - Architect reviews security, data integrity, tenancy, and contracts without coding.
 - Graphics reviews UX, accessibility, responsive behavior, and truthful states without coding.
 - Use the visible project chats for assignments and status communication.
-- Keep all work local; do not configure real providers, deploy infrastructure, or use production credentials unless separately authorized.
+- UAT is already deployed. Do not configure real providers, alter UAT infrastructure, or use production credentials unless separately authorized.
 
-First report back with: repository/worktree status, local service health, whether the recorded evidence is reproducible, the exact proposed WI6 test matrix, and any material blocker. Then proceed only within the authorized WI6 boundary.
+First report back with: repository/worktree status, deployed UAT identity and health, the proposed next vertical and its inherited Workspace contract, and any material blocker. Then proceed only after that vertical is explicitly authorized.
 
 ---

@@ -1,9 +1,9 @@
 # NexaFlow Architecture Transition Handover
 
-Status: **authoritative transition handover**  
-Prepared: 2026-08-21  
-Scope: Workspace Foundation, Feature 1, Feature 2 Work Items 1–5, next Architecture gates, and downstream inheritance  
-Change boundary: documentation only; no application code or external system changed
+Status: **authoritative transition handover — Workspace Foundation and deployed UAT candidate Architecture ACCEPT**
+Prepared: 2026-08-21; updated after rc.2 deployment review
+Scope: accepted Workspace Foundation, Feature 1, Feature 2, deployed UAT candidate, and downstream inheritance
+Change boundary: documentation only; no application code changed by this handover update
 
 ## 1. Executive position
 
@@ -11,9 +11,11 @@ NexaFlow has a locally proven Workspace security and data foundation. The platfo
 
 This is one shared platform contract. CRM, Leads, Companies, Contacts, Deals, Projects, Tasks, Communications, Automation, AI, Reporting, Finance, and Client Portal must inherit it. A downstream feature must not invent another tenant, ownership, access, audit, or entitlement model.
 
-The next formal milestone is **NexaFlow Workspace Foundation Complete**. Feature 2 Work Items 1–5 are implemented locally; Work Items 2–5 have explicit Architecture ACCEPT reviews. Work Item 1 has a completed engineering checkpoint and has remained covered by later regression evidence, but the final Work Item 6 validation must consolidate the whole Feature 2 journey before Product marks the milestone complete.
+The milestone **NexaFlow Workspace Foundation Complete** is now **Architecture ACCEPTED**. The consolidated Feature 1 + Feature 2 release candidate passed the Architecture and Graphics release gates, and the final rc.2 candidate was deployed to NexaFlow UAT and passed bounded post-deployment Architecture review.
 
-After that milestone, do not keep expanding or refactoring the foundation speculatively. Deliver vertical features and reopen the foundation only when a real vertical demonstrates a concrete unmet requirement.
+The accepted UAT release is application commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e1`, annotated tag `v0.2.0-rc.2`, image digest `sha256:320715aa55983fa07e50ba71cfed9fe2dbb26080278f4caddc8f24792a96e279`, at `https://app.nexaflowsystems.com`. Deployment evidence is commit `d005d52772ad49268b87dce1c01004a8859825f1`.
+
+Do not keep expanding or refactoring the accepted foundation speculatively. Deliver vertical features and reopen the foundation only when a real vertical demonstrates a concrete unmet requirement.
 
 ## 2. Authority order and durable sources
 
@@ -24,9 +26,10 @@ Use these sources in descending order for new work:
 3. The detailed security/data contract in [`docs/architecture/security-data-contracts.md`](../architecture/security-data-contracts.md).
 4. Feature 2's implementation-ready contract in [`docs/architecture/feature-2-user-role-membership-contract.md`](../architecture/feature-2-user-role-membership-contract.md).
 5. The relevant accepted gate review for the behavior being reused.
-6. Engineering checkpoints as implementation evidence; a checkpoint does not override an Architecture contract or ACCEPT/REJECT verdict.
+6. The release and deployment verdicts in [`feature-1-2-architecture-release-gate.md`](../release/feature-1-2-architecture-release-gate.md) and [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md).
+7. Engineering checkpoints as implementation evidence; a checkpoint does not override an Architecture contract or ACCEPT/REJECT verdict.
 
-Where old documents describe earliest/first Membership selection or Feature 2 as incomplete before Work Items 4–5, the accepted Work Item 4 and Work Item 5 reviews supersede that historical state.
+Where old documents describe earliest/first Membership selection, pending WI6/Foundation acceptance, open historical pre-UAT items, or deployment as pending, the accepted Work Item 4/5 reviews and final release/deployment reviews supersede that historical state.
 
 ## 3. Classification legend
 
@@ -170,16 +173,31 @@ Evidence: [`feature-2-work-item-5-audit-review.md`](../architecture/feature-2-wo
 
 | Scope | Status | Durable basis |
 | --- | --- | --- |
-| Feature 1 — identity, onboarding, Workspace provisioning | **Product-accepted / Architecture accepted locally** | [`onboarding-workspace-boundary-answers.md`](../architecture/onboarding-workspace-boundary-answers.md), [`workspace-provisioning-validation.md`](../architecture/workspace-provisioning-validation.md), Slice 2 and Slice 3 reviews |
-| Feature 2 WI1 — Membership lifecycle UI | **Implemented locally; final milestone consolidation pending WI6** | [`feature-2-membership-lifecycle-checkpoint.md`](../engineering/feature-2-membership-lifecycle-checkpoint.md); later WI2/WI3/full regressions preserve its behavior. No separate durable Architecture WI1 verdict exists. |
+| Feature 1 — identity, onboarding, Workspace provisioning | **Product/Architecture accepted; deployed UAT ACCEPT** | [`onboarding-workspace-boundary-answers.md`](../architecture/onboarding-workspace-boundary-answers.md), [`workspace-provisioning-validation.md`](../architecture/workspace-provisioning-validation.md), release/deployment reviews |
+| Feature 2 WI1 — Membership lifecycle UI | **Consolidated release ACCEPT** | [`feature-2-membership-lifecycle-checkpoint.md`](../engineering/feature-2-membership-lifecycle-checkpoint.md); final unit/PostgreSQL/Playwright and UAT evidence consolidated it in the release gate |
 | Feature 2 WI2 — authority-aware Role assignment | **Architecture ACCEPT** | [`feature-2-work-item-2-review.md`](../architecture/feature-2-work-item-2-review.md) |
 | Feature 2 WI3 — stale/concurrent state handling | **Architecture ACCEPT** | [`feature-2-work-item-3-review.md`](../architecture/feature-2-work-item-3-review.md) |
 | Feature 2 WI4 — server-controlled Workspace selection | **Architecture ACCEPT** | [`feature-2-work-item-4-review.md`](../architecture/feature-2-work-item-4-review.md); WI4-01 ready-page blocker closed |
 | Feature 2 WI5 — Audit-write completion | **Architecture ACCEPT** | [`feature-2-work-item-5-audit-review.md`](../architecture/feature-2-work-item-5-audit-review.md) |
-| Feature 2 WI6 — final validation | **Not yet accepted** | Exact gate in section 9 below; no WI6 verdict exists |
-| NexaFlow Workspace Foundation Complete | **Pending WI6 plus Product acceptance** | Must consolidate the milestone criteria in [`workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md) |
+| Feature 2 WI6 — consolidated final validation | **Architecture ACCEPT through release gate** | [`feature-1-2-architecture-release-gate.md`](../release/feature-1-2-architecture-release-gate.md); clean migration/build/unit **41/41**, PostgreSQL **111/111**, Playwright **25/25** |
+| NexaFlow Workspace Foundation Complete | **Architecture ACCEPT; deployed UAT ACCEPT** | [`workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md), release gate, and [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md) |
 
 Feature 1's recorded follow-ons do not reopen it: real Google OIDC, post-provision plan changes, improved suspended/no-access copy, and any remaining Workspace-switcher follow-on that was not already closed by accepted WI4.
+
+### Deployed rc.2 disposition
+
+The reviewed UAT deployment is **ACCEPT** under these proven boundaries:
+
+- all 11 migrations applied and the immediate rerun was ledger-safe;
+- public liveness/readiness returned HTTPS 200 with no-store and expected Caddy/TLS security headers;
+- fixture/general and recent-auth OIDC routes returned public 404; real Google is not represented as enabled;
+- unauthenticated CRM remained protected, while password registration, verification, login/logout, refresh, Back/direct protection, Workspace provisioning/context, CRM create/read, People/Roles, invitations, private Mailpit delivery, and tenant-safe denial passed real-browser UAT smoke;
+- provisioning produced the initiating sole Owner and corresponding Workspace/Owner Audit evidence;
+- PostgreSQL and app were not directly host-published; Caddy remained the public edge;
+- the rc.1 production-only title hydration loop was bounded to `TitleUpdater`, corrected in rc.2, passed lint/unit/type/build, and rendered successfully in real-browser and independent public checks; and
+- no secret or provider credential was found or publicly exposed.
+
+The user explicitly authorized destructive UAT replacement and waived backup, restore proof, and preservation for this release. That absence was not a blocker and must not be generalized into a future production backup policy.
 
 ## 6. Material Architecture blocker threshold
 
@@ -199,34 +217,33 @@ Accessibility, UX polish, observability consistency, performance, and generalize
 
 Do not inflate a non-material inconsistency into a foundation redesign. Record it at its actual severity and route it to the appropriate future gate.
 
-## 7. Accepted residual risks and pre-UAT deferred hardening
+## 7. Accepted residual risks and UAT/production boundaries
 
-The delivery reset intentionally deferred these four items to the pre-UAT security gate:
+The release gate explicitly closed all four historical pre-UAT items for Feature 2:
 
-1. recoverable idempotent replay after Owner-transfer Session rotation;
-2. complete route-level denial auditing and normalized-destination rate-limit refinement;
-3. fixture-OIDC recent-auth browser-test stabilization (fresh release evidence now passes this journey, but Architecture has not separately closed the historical item); and
-4. a clean full Playwright rerun plus invitation-administration polish beyond the mandatory invitation stabilization (the full rerun now passes 25/25; any remaining polish still requires explicit disposition).
+1. Owner-transfer response-loss replay is bounded, encrypted, expiring, request-bound, and regression-tested without duplicate Role/Audit mutation;
+2. Feature 2 route-level denial ownership and normalized-destination rate limiting are closed, without implying automatic coverage for future vertical routes;
+3. fixture-OIDC recent-auth browser stability passed for local testing, while fixture OIDC remains prohibited publicly/under production mode; and
+4. the full supported Playwright suite passed **25/25**, including current invitation/Team/confirmation/conflict journeys, and Graphics issued ACCEPT.
 
-Later Work Items may have partially improved these areas, especially Audit coverage, but no durable Architecture document formally closes the complete pre-UAT list. The pre-UAT reviewer must re-evaluate current evidence rather than assuming historical findings remain or are closed.
+The deployed UAT review confirmed public fixture OIDC closure, password identity, private Mailpit, selected Workspace context, tenant-safe denial, sole initial Owner, 11 migrations, TLS/readiness, and primary journeys.
 
-Additional accepted local-only residuals/deferred boundaries:
+Remaining UAT-versus-production limitations:
 
-- real Google OIDC adapter, Google project/consent configuration, client ID/secret, canonical HTTPS domain, and production redirect URIs;
+- real Google OIDC adapter, Google project/consent configuration, client ID/secret, production canonical domain decision, and production redirect URIs;
 - production transactional-email provider/account, sender identity, deliverability, and webhook/reconciliation policy;
 - production billing and post-provision plan changes;
 - Audit retention/read/export and external security monitoring;
-- backup/restore proof, incident response, support access, data retention/deletion/export, regional storage, legal policy acceptance, and production operations;
-- production trusted-proxy/firewall/domain/secrets configuration and external UAT approval;
-- fixture OIDC must remain disabled in production and clearly local/UAT-only wherever temporarily enabled.
+- production backup/restore policy and proof, incident response, support access, data retention/deletion/export, regional storage, legal policy acceptance, and production operations;
+- production trusted-proxy/firewall/secrets governance and production-launch approval;
+- fixture OIDC must remain disabled in production and must never be presented as real Google.
 
-An engineering deployment checkpoint or reachable environment is not by itself Architecture closure of these pre-UAT controls.
+The accepted rc.2 deployment is UAT only. Its password/Mailpit/provider limitations and the user-specific backup waiver must remain explicit; they do not authorize production launch.
 
 ## 8. Unresolved Product and Operations decisions
 
 ### Product
 
-- Work Item 6 scheduling and final Feature 2/Product acceptance.
 - Commercial plan catalog and seat counts; billing provider and lifecycle; post-provision upgrades/downgrades.
 - Whether and when to expose removed-Membership restoration outside invitation acceptance.
 - Exact downstream vertical sequence if it differs from Profile → Companies/Contacts → Leads → Deals/Pipeline → Projects/Delivery → Communications.
@@ -237,7 +254,7 @@ An engineering deployment checkpoint or reachable environment is not by itself A
 
 - Terms/Privacy policy versions and consent requirements.
 - Data retention, deletion, export, backup/restore, incident response, support access, and regional-storage policies.
-- Canonical domain, public-UAT authorization, DNS ownership, TLS policy, and environment naming.
+- Production domain/launch authorization, DNS ownership, TLS operations policy, and environment naming beyond accepted UAT.
 
 ### Vendor/Operations
 
@@ -246,21 +263,21 @@ An engineering deployment checkpoint or reachable environment is not by itself A
 - Production secret owner/store/rotation process.
 - Backup key owner and destination, monitoring/alerting destination, and operational log retention.
 
-These decisions are not required for local WI6 unless Product explicitly adds them. They are required before the corresponding production/provider journey is claimed.
+These decisions do not reopen Workspace Foundation or UAT acceptance. They are required before the corresponding production/provider journey is claimed.
 
-## 9. Exact Architecture gate for Feature 2 Work Item 6
+## 9. Completed Work Item 6 / Foundation release gate
 
-WI6 is a final validation and milestone gate, not authorization for new foundation features or refactoring.
+WI6's consolidated final validation was completed through the Feature 1 + Feature 2 Architecture release gate. It validated the milestone without adding a new foundation feature, provider integration, deployment abstraction, Audit UI, billing, or speculative refactor.
 
-### Required inputs
+### Final inputs satisfied
 
-- One durable Development WI6 checkpoint referencing exact commit/worktree state and migrations.
-- Current Product checklist with Work Items 1–5 mapped to evidence.
-- Unit, route, migration, PostgreSQL, focused concurrency/idempotency, browser, lint, type, and production-build results.
-- Explicit list of skipped, flaky, deferred, or provider-dependent tests; no silent exclusions.
-- Product confirmation of the complete Owner/Admin/Member/invitee/suspended-user/multi-Workspace journeys.
+- Development published a durable release-readiness checkpoint tied to the exact working-tree candidate and migrations.
+- Work Items 1–5 were mapped to accepted contracts and regression evidence.
+- Fresh dependency, migration/rerun, health, unit/route **41/41**, serial PostgreSQL **111/111**, full Playwright **25/25**, lint, type, production-build, Compose, and image evidence passed.
+- Skipped/provider-dependent boundaries and the unsupported concurrent shared-database test command were explicitly classified.
+- Graphics accepted the supported end-to-end Owner/Admin/Member/invitee/suspended-user/multi-Workspace journeys.
 
-### Required Architecture proof
+### Architecture proof satisfied
 
 1. **Identity and tenant:** active User/Session and server-selected Active Workspace are enforced on every protected Feature 2 page/API; path/body IDs cannot override context.
 2. **Invitation and Membership:** create/resend/revoke/accept, existing active Membership preservation, suspended/removed reactivation, seat checks, and rollback are tenant-scoped, idempotent, and transactional.
@@ -275,13 +292,11 @@ WI6 is a final validation and milestone gate, not authorization for new foundati
 11. **Sessions/logout:** logout protects all Workspace routes; suspended/removed access and stale Session authority are denied.
 12. **Primary journeys and accessibility:** all Product-required WI6 journeys work locally with keyboard, confirmation focus behavior, recovery actions, 320px, and 200% evidence proportionate to the supported UI.
 
-### WI6 verdict rule
+### Final disposition
 
-- **ACCEPT / Workspace Foundation Complete:** all material invariants above are proven, required local journeys pass, Product accepts the end-to-end feature, and any remaining failures are explicitly demonstrated unrelated/non-material or assigned to pre-UAT.
-- **REJECT:** identify only bounded, evidence-backed material blockers and the smallest testable remediation. Do not reopen accepted Work Items wholesale.
-- WI6 must not introduce Work Item 7, Feature 3, provider integration, deployment, Audit UI, billing, or speculative foundation abstractions.
-
-The durable verdict should be written to `docs/architecture/feature-2-work-item-6-foundation-review.md` and explicitly state whether the milestone **NexaFlow Workspace Foundation Complete** is achieved.
+- [`feature-1-2-architecture-release-gate.md`](../release/feature-1-2-architecture-release-gate.md) issued **ACCEPT** and formally accepted the technical milestone **NexaFlow Workspace Foundation Complete** for the reviewed candidate.
+- [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md) issued **ACCEPT** for the deployed rc.2 UAT candidate with no bounded material blocker.
+- Feature 3 was not started. Future work proceeds vertically under section 10 and may not reopen the accepted foundation absent a concrete downstream gap.
 
 ## 10. Architecture gate for every future vertical slice
 
@@ -339,8 +354,8 @@ Block only the material threshold in section 6 or an explicit primary acceptance
 
 ## 12. Immediate handover recommendation
 
-1. Development should prepare Work Item 6 as evidence consolidation and bounded gap closure only.
-2. Architecture should perform the section 9 gate and issue one durable milestone verdict.
-3. Product should accept or reject the end-to-end Feature 2 journeys.
-4. If accepted, declare **NexaFlow Workspace Foundation Complete** and move to the next Product-approved vertical.
-5. Before external UAT, separately close or explicitly disposition the pre-UAT items in section 7; do not confuse local foundation acceptance with production/provider readiness.
+1. Treat **NexaFlow Workspace Foundation Complete** and deployed UAT rc.2 as Architecture ACCEPTED.
+2. Preserve the accepted release identity and UAT limitations; a different image, environment, migration state, hostname, or public fixture setting requires proportionate re-review.
+3. Move to the next Product-approved vertical rather than extending the foundation speculatively.
+4. Require every vertical to inherit Workspace scope, active Membership, trusted Active Workspace context, RBAC, Ownership/Team/Visibility, Audit, and Entitlement in the mandatory order.
+5. Keep real Google, production email, billing, production backup/operations, and production launch under separate explicit gates. UAT acceptance is not production authorization.
