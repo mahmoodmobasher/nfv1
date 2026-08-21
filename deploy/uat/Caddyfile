@@ -1,0 +1,32 @@
+{
+	admin off
+	email {$ACME_CONTACT_EMAIL}
+}
+
+{$UAT_SITE_ADDRESS} {
+	encode zstd gzip
+	request_body {
+		max_size 10MB
+	}
+
+	@edgeHealth path /caddy-health
+	respond @edgeHealth 200
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	reverse_proxy app:3000 {
+		header_up Host {host}
+		header_up -X-NexaFlow-Proxy-Secret
+		header_up X-NexaFlow-Proxy-Secret {$TRUSTED_PROXY_SECRET}
+	}
+}
+
+http://127.0.0.1 {
+	respond /caddy-health 200
+}

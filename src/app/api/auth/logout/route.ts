@@ -1,0 +1,7 @@
+import { NextResponse } from "next/server";
+import { getServerEnv } from "@/server/env";
+import { localDatabase, mutationGuard, sessionToken } from "@/server/http";
+import { cookie } from "@/server/security/request";
+import { resolveIdentityContext, revokeAllSessions, revokeCurrentSession } from "@/server/security/session";
+import { writeAudit } from "@/server/security/audit";
+export async function POST(request: Request) { const rejected=mutationGuard(request);if(rejected)return rejected;const env=getServerEnv(),token=sessionToken(request),{pool}=localDatabase();try{const body=await request.json().catch(()=>({}));const context=await resolveIdentityContext(pool,token,env.SESSION_SECRET);if(context){const client=await pool.connect();try{await client.query("begin");if(body.scope==="all")await revokeAllSessions(client,context.userId);else await revokeCurrentSession(client,token,env.SESSION_SECRET);await writeAudit(client,{actorUserId:context.userId,sessionId:context.sessionId,action:body.scope==="all"?"identity.logout_all":"identity.logout",targetType:"session",targetId:context.sessionId,outcome:"success",metadata:{operation:body.scope==="all"?"logout_all":"logout"}});await client.query("commit")}catch(error){await client.query("rollback");throw error}finally{client.release()}}else await revokeCurrentSession(pool,token,env.SESSION_SECRET);const response=NextResponse.json({ok:true});response.headers.set("Set-Cookie",cookie(env.SESSION_COOKIE_NAME,"",{secure:env.APP_ORIGIN.startsWith("https://"),maxAge:0}));return response}finally{await pool.end()}}

@@ -1,0 +1,142 @@
+name: ${UAT_COMPOSE_PROJECT_NAME:-nexaflow-uat}
+
+x-app-runtime: &app-runtime
+  image: ${NEXAFLOW_IMAGE:?set NEXAFLOW_IMAGE to an immutable release tag or digest}
+  env_file:
+    - ${UAT_APP_ENV_FILE:?set UAT_APP_ENV_FILE to the protected app environment file}
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+    - /app/.next/cache:rw,noexec,nosuid,size=64m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  pids_limit: 256
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16.10-bookworm@sha256:38471f330eb885e04de130b768d6db4e10469e2311879c7e5c699f6d2d8a1c74
+    env_file:
+      - ${UAT_POSTGRES_ENV_FILE:?set UAT_POSTGRES_ENV_FILE to the protected PostgreSQL environment file}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    shm_size: 128m
+    pids_limit: 256
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: "5" }
+
+  migrate:
+    <<: *app-runtime
+    command: ["./node_modules/.bin/tsx", "src/server/db/migrate.ts"]
+    profiles: [release]
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [database]
+    restart: "no"
+
+  app:
+    <<: *app-runtime
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [frontend, database]
+    healthcheck:
+      test: [CMD, node, -e, "Promise.all(['/api/health/live','/api/health/ready'].map(p=>fetch('http://127.0.0.1:3000'+p))).then(rs=>{if(rs.some(r=>!r.ok))process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    env_file:
+      - ${UAT_CADDY_ENV_FILE:?set UAT_CADDY_ENV_FILE to the protected Caddy environment file}
+    ports:
+      - "${UAT_BIND_ADDRESS:-127.0.0.1}:${UAT_HTTP_PORT:-8080}:80"
+      - "${UAT_BIND_ADDRESS:-127.0.0.1}:${UAT_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./deploy/uat/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [frontend]
+    depends_on:
+      app: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1/caddy-health]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: "5" }
+
+  mailpit:
+    image: axllent/mailpit:v1.27.7@sha256:cae83a33cd9b9598e4acb210be673dda7e741d5271ed4045310ab456950a136a
+    profiles: [uat-mail]
+    ports:
+      - "127.0.0.1:${UAT_MAILPIT_UI_PORT:-8025}:8025"
+    networks: [database, operator]
+    healthcheck:
+      test: [CMD, /mailpit, readyz]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 128
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: "5" }
+
+  email-worker:
+    <<: *app-runtime
+    command: ["./node_modules/.bin/tsx", "src/server/email/worker.ts", "--continuous"]
+    profiles: [uat-mail]
+    depends_on:
+      postgres: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
+    networks: [database]
+    restart: unless-stopped
+
+networks:
+  frontend:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-frontend
+  database:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-database
+    internal: true
+  operator:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-operator
+
+volumes:
+  postgres_data:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-postgres-data
+  caddy_data:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-caddy-data
+  caddy_config:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-caddy-config

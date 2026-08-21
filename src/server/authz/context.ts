@@ -1,0 +1,2 @@
+export type WorkspaceAuthorizationContext = Readonly<{ userId: string; workspaceId: string; membershipId: string; role: "owner" | "admin" | "member"; }>; 
+export function requireWorkspaceContext(context: WorkspaceAuthorizationContext | null | undefined): WorkspaceAuthorizationContext { if (!context?.userId || !context.workspaceId || !context.membershipId) throw new Error("workspace_context_required"); return context; }

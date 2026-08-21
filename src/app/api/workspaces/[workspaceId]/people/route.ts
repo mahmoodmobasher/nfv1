@@ -1,0 +1,2 @@
+import{getServerEnv}from"@/server/env";import{localDatabase}from"@/server/http";import{peoplePage,pageOptions}from"@/server/tenant-admin/pagination";import{failure,success,tenant}from"@/server/tenant-admin/http";
+export async function GET(request:Request,{params}:{params:Promise<{workspaceId:string}>}){const{workspaceId}=await params,{pool}=localDatabase(),env=getServerEnv();try{return success(await peoplePage(pool,await tenant(pool,request,workspaceId),pageOptions(request,env.SESSION_SECRET)))}catch(e){return failure(e)}finally{await pool.end()}}

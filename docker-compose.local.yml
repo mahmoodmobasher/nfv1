@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports: ["127.0.0.1:54329:5432"]
+    environment:
+      POSTGRES_USER: nexaflow
+      POSTGRES_PASSWORD: nexaflow
+      POSTGRES_DB: nexaflow
+    volumes: [nexaflow_pg_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexaflow -d nexaflow"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  mailpit:
+    image: axllent/mailpit:v1.26
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  nexaflow_pg_data:

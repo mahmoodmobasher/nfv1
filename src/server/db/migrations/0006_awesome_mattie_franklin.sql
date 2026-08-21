@@ -1,0 +1,1 @@
+ALTER TABLE "oidc_transactions" DROP CONSTRAINT "oidc_transaction_redirect_check";
