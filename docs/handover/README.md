@@ -1,7 +1,7 @@
 # NexaFlow project handover — start here
 
-Handover date: 2026-08-21  
-Project directory: `/Users/moemahmood/builder_code/Nexflow_v1`  
+Handover date: 2026-08-21
+Project directory: `/Users/moemahmood/builder_code/Nexflow_v1`
 Purpose: enable a new project owner or ChatGPT/Codex session to continue without relying on prior chat history.
 
 ## Current position
@@ -10,7 +10,9 @@ Purpose: enable a new project owner or ChatGPT/Codex session to continue without
 - Feature 2 — User, Role, Membership, Workspace context, and Audit: **accepted / complete**.
 - Work Items 1–5 are complete; Work Item 6 was completed through the integrated release gate.
 - **NexaFlow Workspace Foundation Complete** is accepted and deployed to UAT.
-- Final UAT application: commit `c1125ba`, tag `v0.2.0-rc.2`, at `https://app.nexaflowsystems.com`.
+- Current UAT application authority: commit `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`, at `https://app.nexaflowsystems.com`.
+- Resend is the active UAT transactional-email provider. Mailpit is the local-development adapter only.
+- Accepted Resend deployment/review evidence was published in documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2`.
 - Persistent CRM Leads and a server-backed CRM home/dashboard already exist. Some later dashboard capability cards are explicitly labelled sample/demo data.
 
 ## Read in this order
@@ -43,7 +45,7 @@ No downstream feature may create a separate tenant, ownership, access, audit, or
 
 ## Critical worktree warning
 
-The application release is committed and deployed. Post-deployment handover/review documentation may still be awaiting its final documentation-only commit.
+The application release and accepted Resend deployment/review documentation are committed and pushed. The worktree was clean at the start of this master-index correction and must be clean again after its documentation-only publication.
 
 Do not run destructive cleanup, reset, checkout, rebase, or bulk overwrite operations. Inspect `git status` first and preserve all existing changes.
 
@@ -57,3 +59,7 @@ Do not run destructive cleanup, reset, checkout, rebase, or bulk overwrite opera
 - [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md)
 - [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md)
 - [`feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md)
+- [`resend-email-release-readiness.md`](../release/resend-email-release-readiness.md)
+- [`resend-email-deployment-result.md`](../release/resend-email-deployment-result.md)
+- [`resend-email-architecture-review.md`](../release/resend-email-architecture-review.md)
+- [`resend-transactional-email-ux-review.md`](../design/resend-transactional-email-ux-review.md)

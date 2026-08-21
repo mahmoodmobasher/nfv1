@@ -31,7 +31,7 @@ Do not infer overall Feature acceptance from an individual work-item acceptance.
 - **Workspace Foundation is the shared platform contract.** All future Workspace-scoped verticals inherit the same tenant, active Membership, server-selected Workspace, RBAC, ownership/Team/visibility, audit, and entitlement chain. See [`docs/architecture/workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md).
 - **Local release verification is green:** unit/direct-route 41/41, live PostgreSQL 111/111, full Playwright 25/25, ESLint clean, TypeScript/Next.js production build clean, fresh migration/rerun clean, and local database health healthy. See [`feature-1-2-release-readiness.md`](../release/feature-1-2-release-readiness.md).
 - **The accepted Workspace Foundation remains live, with the Resend provider overlay deployed and accepted:** `https://app.nexaflowsystems.com` serves `v0.2.1-uat.2`; all 11 migrations remain applied; PostgreSQL, app, Caddy, and worker are healthy. The approved-recipient delivery gate is closed.
-- **The application release is committed and pushed.** Current uncommitted work is documentation-only from the coordinated post-deployment handover/review pass. Preserve those shared documentation edits and do not reset or clean the worktree.
+- **The application release and accepted Resend evidence are committed and pushed.** Documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2` published the final provider evidence/reviews, and the worktree was clean before this master-index correction.
 
 ## 3. Current implemented system
 
@@ -226,7 +226,7 @@ Important testing behavior:
 
 The source of truth is `src/server/db/schema.ts`; migration history is `src/server/db/migrations` and `src/server/db/migrations/meta/_journal.json`.
 
-Do not generate or amend migrations casually while coordinated documentation changes are uncommitted. For a future authorized schema change, first return to a reviewed source state, inspect existing migration history, update `schema.ts`, generate one additive migration, review SQL and metadata, apply to an empty/disposable database, rerun through the ledger, and execute the complete integration suite.
+Do not generate or amend migrations casually. For a future authorized schema change, first return to a reviewed source state, inspect existing migration history, update `schema.ts`, generate one additive migration, review SQL and metadata, apply to an empty/disposable database, rerun through the ledger, and execute the complete integration suite.
 
 ## 9. Feature status
 
@@ -292,8 +292,8 @@ Latest release and deployment evidence on 2026-08-21:
 | Production image / UAT Compose | Local non-root image build passed; UAT Compose rendering passed with safe placeholders |
 | Git publication | `8f82320` published the authoritative Feature 1 + Feature 2 set to `origin/main` and tag `v0.2.0-rc.1`; `c1125ba` published the production hydration hotfix and final tag `v0.2.0-rc.2`; `d005d52` published deployment evidence |
 | UAT migration state | Migration service passed twice; exactly **11** rows in `drizzle.__drizzle_migrations` |
-| UAT services | PostgreSQL, application, Caddy, and private Mailpit healthy; email worker running from the final application image |
-| UAT browser smoke | Password registration/verification, safe login denials, Workspace provisioning/context, refresh, CRM Lead create/read, People & Roles, invitation/private Mailpit delivery, tenant-safe 404, logout, Back/direct protection, and login-after-logout passed |
+| UAT services | PostgreSQL, application, Caddy, and Resend-backed email worker healthy; Mailpit is not the active UAT provider |
+| UAT browser/provider smoke | Base password/Workspace/CRM/administration/logout journeys passed; approved-recipient Resend verification, recovery, and invitation journeys also passed |
 | Post-deployment reviews | **Architecture ACCEPT** and **Graphics ACCEPT**; no deployment-relevant blockers |
 | Resend final regression | Identity PostgreSQL **17/17** and full serialized PostgreSQL **114/114** passed; unit/routes **50/50**, lint, type, and build passed |
 | Resend approved-recipient proof | **2 verification + 1 recovery + 1 invitation** delivered; single-use/replay, Session revocation, and intended-identity acceptance passed |
@@ -316,18 +316,18 @@ The four earlier stale expectations—CRM mobile trigger wording, post-join head
 - Future UAT/production hardening such as an approved backup/restore and off-instance retention policy, firewall/operator policy, monitoring/alerts, external-provider readiness, and production release operations. The explicit backup waiver applied only to the completed rc.2 UAT replacement.
 - Generalized downstream Companies, Contacts, Deals, Projects, Tasks, Communications, Automation, AI, Reporting, Finance, and Client Portal verticals.
 
-### Deployment status versus local worktree
+### Deployment history and current authority
 
 The completed Feature 1 + Feature 2 UAT release is recorded in [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md):
 
 - Git release set commit `8f82320f6706bc95393d2a12f46403bd9846df82`, tagged `v0.2.0-rc.1`;
-- production hydration hotfix commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e1`, tagged and deployed as final `v0.2.0-rc.2`;
+- production hydration hotfix commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e1`, tagged and deployed as the historical base `v0.2.0-rc.2`;
 - deployment-evidence commit `d005d52772ad49268b87dce1c01004a8859825f1`;
 - UAT application `https://app.nexaflowsystems.com` on AWS Lightsail `99.79.158.110`;
-- release directory `/opt/nexaflow/uat/releases/c1125ba`, with `/opt/nexaflow/uat/current` pointing to it;
+- historical base release directory `/opt/nexaflow/uat/releases/c1125ba`, which was current for the rc.2 review;
 - image `nexaflow:c1125ba`, digest `sha256:320715aa55983fa07e50ba71cfed9fe2dbb26080278f4caddc8f24792a96e279`;
 - exactly 11 applied migrations with a successful immediate rerun;
-- healthy PostgreSQL, application, Caddy, private Mailpit, and running email worker;
+- healthy PostgreSQL, application, Caddy, private Mailpit, and running email worker at the historical rc.2 review boundary;
 - public HTTPS/readiness and full post-deployment browser smoke passed.
 
 The rc.1 process/readiness checks exposed a real-browser production hydration loop: `TitleUpdater` observed `<head>` while rewriting `document.title`, retriggering itself and preventing onboarding hydration. The bounded rc.2 hotfix updates the title once per pathname change without a self-observing `MutationObserver`; lint, unit/routes 41/41, TypeScript/build, image build, and public browser rendering passed afterward.
@@ -343,7 +343,7 @@ The user explicitly waived backup, restore proof, and preservation of prior UAT 
 - `README.md` is stale for the current full-stack runtime.
 - Early Slice/baseline documents contain older route, migration, and test counts. Use the newest bounded checkpoint for each capability.
 - Some older reviews name pre-canonical audit actions; WI5 canonicalization supersedes those names without changing accepted business semantics.
-- Historical documents saying the workspace was not a Git repository, that the authoritative implementation is uncommitted, or that the current Feature 1 + Feature 2 release is not deployed are stale. The application release is committed and pushed on `main`; only coordinated documentation updates are currently uncommitted.
+- Historical documents saying the workspace was not a Git repository, that the authoritative implementation is uncommitted, or that the current Feature 1 + Feature 2 release is not deployed are stale. The application release and accepted Resend evidence are committed and pushed on `main`.
 
 ## 12. Environment and secret rules
 
@@ -357,16 +357,16 @@ The user explicitly waived backup, restore proof, and preservation of prior UAT 
 
 ## 13. Current Git/worktree safety
 
-The authoritative Feature 1 + Feature 2 application, migrations, tests, contracts, and release evidence are committed and pushed on `main`. At this documentation update boundary, `HEAD` and `origin/main` were `d005d52772ad49268b87dce1c01004a8859825f1` before the coordinated final handover/review edits began. Current uncommitted changes are documentation-only and belong to multiple project chats; they must be preserved until the root/master handover and all domain reviews are reconciled for one final documentation commit.
+The authoritative application, migrations, tests, contracts, and release evidence are committed and pushed on `main`. Documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2` published the accepted Resend deployment and reviews; the worktree was clean at the start of this bounded master-index correction.
 
 Required handling:
 
 1. Do not run `git reset --hard`, `git clean`, broad checkout/restore commands, destructive rebases, or mass deletion.
-2. Do not assume untracked files are disposable; the post-deployment Architecture review and other coordinated handover documents may still be untracked until the final documentation commit.
+2. Do not assume future untracked files are disposable; inspect and classify them before any cleanup.
 3. Before editing, inspect `git status`, the relevant file, and its diff. Preserve unrelated changes.
 4. Coordinate with other agents before touching shared files; all chats use the same working tree.
 5. Keep generated runtime outputs such as `.next` and `test-results` out of documentation commits, but do not delete ambiguous material without explicit authorization.
-6. Do not commit or push this domain update independently. Wait until root/master documents and the other domain reviews are complete, then inventory, review, and commit the final documentation set together.
+6. Keep future documentation updates bounded, link-checked, secret-scanned, and published separately from application changes when practical.
 7. Documentation changes do not change the deployed image. The UAT application authority is commit `3f7fc1d`, tag `v0.2.1-uat.2`, and image ID `sha256:d81a2a6eb6c35719c475fb63ab2213f54429a26849155c67cd83b846d91b1f39`.
 
 ## 14. Immediate engineering next step

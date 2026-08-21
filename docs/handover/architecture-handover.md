@@ -1,7 +1,7 @@
 # NexaFlow Architecture Transition Handover
 
 Status: **authoritative transition handover — Workspace Foundation and deployed UAT candidate Architecture ACCEPT**
-Prepared: 2026-08-21; updated after rc.2 deployment review
+Prepared: 2026-08-21; updated after the accepted Resend UAT overlay
 Scope: accepted Workspace Foundation, Feature 1, Feature 2, deployed UAT candidate, and downstream inheritance
 Change boundary: documentation only; no application code changed by this handover update
 
@@ -11,9 +11,9 @@ NexaFlow has a locally proven Workspace security and data foundation. The platfo
 
 This is one shared platform contract. CRM, Leads, Companies, Contacts, Deals, Projects, Tasks, Communications, Automation, AI, Reporting, Finance, and Client Portal must inherit it. A downstream feature must not invent another tenant, ownership, access, audit, or entitlement model.
 
-The milestone **NexaFlow Workspace Foundation Complete** is now **Architecture ACCEPTED**. The consolidated Feature 1 + Feature 2 release candidate passed the Architecture and Graphics release gates, and the final rc.2 candidate was deployed to NexaFlow UAT and passed bounded post-deployment Architecture review.
+The milestone **NexaFlow Workspace Foundation Complete** is now **Architecture ACCEPTED**. The consolidated Feature 1 + Feature 2 release candidate passed the Architecture and Graphics release gates, the rc.2 base candidate passed bounded post-deployment review, and the subsequent Resend UAT overlay passed final Architecture and Graphics/UX review.
 
-The accepted UAT release is application commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e1`, annotated tag `v0.2.0-rc.2`, image digest `sha256:320715aa55983fa07e50ba71cfed9fe2dbb26080278f4caddc8f24792a96e279`, at `https://app.nexaflowsystems.com`. Deployment evidence is commit `d005d52772ad49268b87dce1c01004a8859825f1`.
+The current accepted UAT authority is application commit `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, annotated tag `v0.2.1-uat.2`, image ID `sha256:d81a2a6eb6c35719c475fb63ab2213f54429a26849155c67cd83b846d91b1f39`, at `https://app.nexaflowsystems.com`. Resend is active in UAT; Mailpit is local-development only. Accepted deployment/review evidence was published in documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2`.
 
 Do not keep expanding or refactoring the accepted foundation speculatively. Deliver vertical features and reopen the foundation only when a real vertical demonstrates a concrete unmet requirement.
 
@@ -27,7 +27,8 @@ Use these sources in descending order for new work:
 4. Feature 2's implementation-ready contract in [`docs/architecture/feature-2-user-role-membership-contract.md`](../architecture/feature-2-user-role-membership-contract.md).
 5. The relevant accepted gate review for the behavior being reused.
 6. The release and deployment verdicts in [`feature-1-2-architecture-release-gate.md`](../release/feature-1-2-architecture-release-gate.md) and [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md).
-7. Engineering checkpoints as implementation evidence; a checkpoint does not override an Architecture contract or ACCEPT/REJECT verdict.
+7. The accepted Resend overlay evidence in [`resend-email-deployment-result.md`](../release/resend-email-deployment-result.md) and [`resend-email-architecture-review.md`](../release/resend-email-architecture-review.md).
+8. Engineering checkpoints as implementation evidence; a checkpoint does not override an Architecture contract or ACCEPT/REJECT verdict.
 
 Where old documents describe earliest/first Membership selection, pending WI6/Foundation acceptance, open historical pre-UAT items, or deployment as pending, the accepted Work Item 4/5 reviews and final release/deployment reviews supersede that historical state.
 
@@ -184,9 +185,9 @@ Evidence: [`feature-2-work-item-5-audit-review.md`](../architecture/feature-2-wo
 
 Feature 1's recorded follow-ons do not reopen it: real Google OIDC, post-provision plan changes, improved suspended/no-access copy, and any remaining Workspace-switcher follow-on that was not already closed by accepted WI4.
 
-### Deployed rc.2 disposition
+### Historical rc.2 base disposition
 
-The reviewed UAT deployment is **ACCEPT** under these proven boundaries:
+The pre-Resend rc.2 base deployment was **ACCEPT** under these proven boundaries:
 
 - all 11 migrations applied and the immediate rerun was ledger-safe;
 - public liveness/readiness returned HTTPS 200 with no-store and expected Caddy/TLS security headers;
@@ -226,19 +227,19 @@ The release gate explicitly closed all four historical pre-UAT items for Feature
 3. fixture-OIDC recent-auth browser stability passed for local testing, while fixture OIDC remains prohibited publicly/under production mode; and
 4. the full supported Playwright suite passed **25/25**, including current invitation/Team/confirmation/conflict journeys, and Graphics issued ACCEPT.
 
-The deployed UAT review confirmed public fixture OIDC closure, password identity, private Mailpit, selected Workspace context, tenant-safe denial, sole initial Owner, 11 migrations, TLS/readiness, and primary journeys.
+The historical rc.2 deployment review confirmed public fixture OIDC closure, password identity, private Mailpit delivery, selected Workspace context, tenant-safe denial, sole initial Owner, 11 migrations, TLS/readiness, and primary journeys. The current `v0.2.1-uat.2` overlay instead uses Resend in UAT; approved-recipient verification, recovery, and invitation journeys passed.
 
 Remaining UAT-versus-production limitations:
 
 - real Google OIDC adapter, Google project/consent configuration, client ID/secret, production canonical domain decision, and production redirect URIs;
-- production transactional-email provider/account, sender identity, deliverability, and webhook/reconciliation policy;
+- production transactional-email operational readiness, generalized deliverability, and webhook/bounce/complaint reconciliation policy;
 - production billing and post-provision plan changes;
 - Audit retention/read/export and external security monitoring;
 - production backup/restore policy and proof, incident response, support access, data retention/deletion/export, regional storage, legal policy acceptance, and production operations;
 - production trusted-proxy/firewall/secrets governance and production-launch approval;
 - fixture OIDC must remain disabled in production and must never be presented as real Google.
 
-The accepted rc.2 deployment is UAT only. Its password/Mailpit/provider limitations and the user-specific backup waiver must remain explicit; they do not authorize production launch.
+The accepted `v0.2.1-uat.2` deployment is UAT only. Resend UAT acceptance does not establish generalized production deliverability or asynchronous reconciliation, and the user-specific backup waiver does not authorize production launch.
 
 ## 8. Unresolved Product and Operations decisions
 

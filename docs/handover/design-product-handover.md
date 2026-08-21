@@ -55,7 +55,7 @@ Legend: **Implemented** means present in the product; **Accepted** means Graphic
 | Workspace creation/ready | Implemented, accepted | Server-derived plan/cadence, Workspace, Owner assignment, trial, refresh/direct-route protection. |
 | CRM shell/dashboard | Implemented, accepted for bounded local slice | Leads, pipeline, ownership/team visibility, activities, live KPIs, empty/error/filter states, explicit preview cards. See [`docs/design/crm-home-dashboard-review.md`](../design/crm-home-dashboard-review.md). |
 | People & Roles | Implemented, accepted | Server-derived role controls, Owner protection, Admin ceiling, lifecycle controls, stale authority recovery. |
-| Invitations | Implemented, accepted | Multi-entry, role/team assignment, partial retry, pending/expired/revoked states, accept flow, local Mailpit boundary. |
+| Invitations | Implemented, accepted | Multi-entry, role/team assignment, partial retry, pending/expired/revoked states, accept flow, provider-neutral delivery; Mailpit local and Resend UAT. |
 | Workspace switcher | Implemented, accepted | Explicit multi-Workspace chooser, current marker, server-owned Active Workspace, stale option reconciliation, two-tab context refresh. |
 | Audit | Implemented server boundary, accepted | Canonical taxonomy, allowlisted metadata/before-after, hashed correlation, transactional success/replay/denial evidence. No audit-history screen is required. |
 | Entitlements | Implemented foundation attachment | Seat/package checks are server-owned and reflected in invitation/lifecycle denial states. |
@@ -92,15 +92,15 @@ Review: [`docs/design/feature-2-work-item-4-ux-review.md`](../design/feature-2-w
 
 Review: [`docs/design/feature-2-work-item-5-ux-review.md`](../design/feature-2-work-item-5-ux-review.md).
 
-**Feature 2 Graphics gate:** complete. No bounded WI1–WI6 blocker remains. The integrated release gate completed WI6, and the Workspace Foundation milestone and deployed rc.2 UAT candidate are accepted.
+**Feature 2 Graphics gate:** complete. No bounded WI1–WI6 blocker remains. The integrated release gate completed WI6, and the Workspace Foundation milestone, rc.2 base, and current Resend UAT overlay are accepted.
 
 ### Final release and UAT status
 
-Graphics accepted the final local Feature 1 + Feature 2 release gate and the deployed UAT candidate. The deployed rc.2 identity is application commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e`, tag `v0.2.0-rc.2`, with deployment evidence recorded under commit `d005d52772ad49268b87dce1c01004a8859825f1`.
+Graphics accepted the final local Feature 1 + Feature 2 release gate and the deployed UAT candidate. The historical rc.2 base was application commit `c1125ba7c7b5bc075b89003eb0ecc9840665b5e`, tag `v0.2.0-rc.2`. The current UAT authority is application commit `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`; Resend is active in UAT and its provider-neutral user experience is accepted.
 
-The deployed real-browser smoke passed password onboarding and verification, login/recovery boundaries, Workspace creation/ready and server-selected context, People & Roles, invitations and private Mailpit delivery, switcher, tenant-safe denial, CRM entry/dashboard and persistent Lead behavior, refresh/resume, logout, Back/direct-route protection, and login after logout. The rc.1 production title-hydration loop was fixed in rc.2 and validated.
+The historical rc.2 real-browser smoke passed password onboarding and verification, login/recovery boundaries, Workspace creation/ready and server-selected context, People & Roles, invitations and private Mailpit delivery, switcher, tenant-safe denial, CRM entry/dashboard and persistent Lead behavior, refresh/resume, logout, Back/direct-route protection, and login after logout. The rc.1 production title-hydration loop was fixed in rc.2 and validated.
 
-The UAT boundary remains explicit: the Google/OIDC path is a disabled/local fixture, Mailpit is private local guidance, production billing/providers are not connected, and unsupported downstream modules remain clearly labelled demo/preview content. This is not evidence of production provider or deployment certification.
+The UAT boundary remains explicit: the Google/OIDC path is disabled and local-fixture only, Resend is active in UAT, Mailpit is local-development only, production billing is not connected, and unsupported downstream modules remain clearly labelled demo/preview content. This is not evidence of production launch certification or generalized email deliverability.
 
 See [`docs/release/feature-1-2-ux-release-gate.md`](../release/feature-1-2-ux-release-gate.md) and [`docs/release/feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md).
 
@@ -167,7 +167,7 @@ The dashboard mock at [`/Users/moemahmood/.codex/visualizations/2026/08/20/01a02
 - No audit-history viewer exists or is required. Future audit UI must be separately scoped.
 - Workspace switcher is foundation-complete for current requirements; do not add speculative switching modes.
 - Personal settings, profile, notification preferences, password/session management UI, Companies & Contacts, Deals, Projects, Communications, Automation, AI, Reporting, Finance, and Client Portal remain future vertical work.
-- Local Google/OIDC fixture, Mailpit, and local server language must remain explicit; never imply production providers.
+- Local Google/OIDC fixture and local Mailpit language must remain explicit in development; public UAT email guidance stays provider-neutral even though Resend is the active server-side adapter.
 - The earlier four stale Playwright expectations were reconciled during release preparation. The complete browser suite now passes **25/25**, including the accessible Team confirmation/conflict journey, 320px checks, and 200% zoom. This removes test-baseline debt but does not replace consolidated Graphics/Product acceptance.
 - The current visual direction has more than one exploratory palette in mock work. Product implementation should continue using the accepted light tokens until a formal visual refresh is approved.
 
