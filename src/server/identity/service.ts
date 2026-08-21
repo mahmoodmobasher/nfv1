@@ -43,10 +43,11 @@ async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<
 
 function tokenEmail(purpose: "email_verification" | "password_reset", email: string, token: string, appOrigin: string) {
   const path = purpose === "email_verification" ? "/verify-email?token=" : "/reset-password?token=";
+  const action = purpose === "email_verification" ? "Verify your NexaFlow account" : "Reset your NexaFlow password";
   return {
     to: email,
-    subject: purpose === "email_verification" ? "Verify your NexaFlow account" : "Reset your NexaFlow password",
-    text: `Local non-production link: ${appOrigin}${path}${encodeURIComponent(token)}`,
+    subject: action,
+    text: `${action}: ${appOrigin}${path}${encodeURIComponent(token)}`,
   };
 }
 
