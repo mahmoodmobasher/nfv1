@@ -54,7 +54,7 @@ Architecture blocks local delivery only for material risks: cross-tenant access 
 ## Known boundaries and deferred work
 
 - Local Google/OIDC is a fixture adapter, not production Google.
-- Local email uses Mailpit; production transactional email is undecided.
+- Local email uses Mailpit. A Resend production/UAT adapter is implemented and locally validated on `feature/resend-transactional-email`; protected-key installation, immutable UAT deployment, and approved real-inbox proof remain pending.
 - Real Google/provider configuration, billing, retention/export, production launch, and broader production operations remain outside the UAT milestone.
 - The Feature 1 + Feature 2 release gate closed the historical pre-UAT Feature 2 list for this candidate.
 - No audit-history viewer exists or is required by Work Item 5.

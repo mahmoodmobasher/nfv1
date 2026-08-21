@@ -117,11 +117,9 @@ services:
   email-worker:
     <<: *app-runtime
     command: ["./node_modules/.bin/tsx", "src/server/email/worker.ts", "--continuous"]
-    profiles: [uat-mail]
     depends_on:
       postgres: { condition: service_healthy }
-      mailpit: { condition: service_healthy }
-    networks: [database]
+    networks: [database, email-egress]
     restart: unless-stopped
 
 networks:
@@ -132,6 +130,8 @@ networks:
     internal: true
   operator:
     name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-operator
+  email-egress:
+    name: ${UAT_RESOURCE_PREFIX:-nexaflow-uat}-email-egress
 
 volumes:
   postgres_data:

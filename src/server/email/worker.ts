@@ -1,15 +1,15 @@
 import { createDb } from "../db/client";
 import { getServerEnv } from "../env";
-import { MailpitEmailAdapter } from "./mailpit";
+import { createEmailAdapter } from "./factory";
 import { processOneOutbox } from "./outbox";
 
 export async function runWorkerBatch(limit = 25): Promise<number> {
   const env = getServerEnv();
   const { pool } = createDb();
-  const adapter = new MailpitEmailAdapter(env.SMTP_HOST, env.SMTP_PORT);
+  const adapter = createEmailAdapter(env);
   let processed = 0;
   try {
-    while (processed < limit && await processOneOutbox(pool, adapter, env.SESSION_SECRET, `local-${process.pid}`)) processed += 1;
+    while (processed < limit && await processOneOutbox(pool, adapter, env.SESSION_SECRET, `email-${process.pid}`)) processed += 1;
     return processed;
   } finally { await pool.end(); }
 }
