@@ -2,7 +2,7 @@
 
 Date: 2026-08-21
 
-Status: **code candidate ready; UAT release blocked on protected Resend key and approved test inbox**
+Status: **deployed as `v0.2.1-uat.1`; provider health passed; approved real-inbox journeys pending**
 
 Scope: transactional email provider change only. No Feature 3, Google OIDC, billing, or unrelated infrastructure changes.
 
@@ -35,15 +35,15 @@ The host-only application environment must contain:
 ```text
 EMAIL_PROVIDER=resend
 RESEND_API_KEY=<protected restricted key>
-EMAIL_FROM=NexaFlow accounts <accounts@mail.nexaflowsystems.com>
+EMAIL_FROM=NexaFlow <accounts@mail.nexaflowsystems.com>
 # EMAIL_REPLY_TO is omitted until a monitored address is approved
 ```
 
 Do not place these values in Git, image layers, Compose interpolation output, shell history, CI logs, documentation, screenshots, or chat. Existing SMTP values may remain inert for rollback, but production validation will not allow `smtp-local` as the active provider.
 
-## Proposed immutable deployment
+## Completed immutable deployment
 
-After the feature branch is reviewed and merged normally:
+The feature branch was reviewed and merged normally as `6393f4fb81d83c6d685c30efd6b83a5800232410`, then deployed as `v0.2.1-uat.1` / `nexaflow:6393f4f`. The existing 11 migrations passed twice, services became healthy, and public readiness passed before the current pointer was changed.
 
 1. Build an immutable image from the merge commit and record its digest.
 2. Create `/opt/nexaflow/uat/releases/<commit>` from the exact Git release.
@@ -66,9 +66,8 @@ docker compose --project-name nexaflow-uat --file compose.uat.yml ps
 
 If readiness or delivery proof fails, restore `/opt/nexaflow/uat/current` and `NEXAFLOW_IMAGE` to the recorded `v0.2.0-rc.2` release and restore its prior protected email-provider configuration, then restart only NexaFlow UAT services. No migration rollback is needed because this candidate adds none. Any accepted provider delivery may already exist externally and must not be represented as undone.
 
-## Blocking inputs
+## Remaining input
 
-- Restricted Resend key supplied by root through an approved protected channel.
 - Approved real test inbox supplied privately.
 
-Until both exist, keep the current accepted UAT release unchanged.
+No email may be sent until that recipient is explicitly approved. See [`resend-email-deployment-result.md`](resend-email-deployment-result.md).

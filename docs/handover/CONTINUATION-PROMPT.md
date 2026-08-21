@@ -23,7 +23,7 @@ Current delivery status:
 - Feature 1 is accepted and complete.
 - Feature 2 Work Items 1–6 are complete and accepted for the UAT milestone.
 - “NexaFlow Workspace Foundation Complete” is accepted by Architecture and Graphics.
-- Final deployed application commit is `c1125ba`, tag `v0.2.0-rc.2`, at `https://app.nexaflowsystems.com`.
+- Final deployed application commit is `6393f4f`, tag `v0.2.1-uat.1`, at `https://app.nexaflowsystems.com`.
 - All 11 migrations and the primary onboarding, Workspace, administration, tenant-denial, CRM, email/outbox, audit, and logout smoke passed.
 - Persistent CRM Leads and a server-backed dashboard already exist; later capability previews must remain clearly marked sample data.
 
@@ -42,7 +42,7 @@ Working model:
 - Architect reviews security, data integrity, tenancy, and contracts without coding.
 - Graphics reviews UX, accessibility, responsive behavior, and truthful states without coding.
 - Use the visible project chats for assignments and status communication.
-- UAT rc.2 is already deployed. A Resend transactional-email candidate exists on `feature/resend-transactional-email`; do not merge/deploy it or handle a provider credential until the restricted key and approved real test inbox are supplied through a protected channel.
+- Resend is active in UAT under protected verified-domain configuration. Provider health passed without sending email. Do not run registration/recovery/invitation delivery proof until the user supplies an explicitly approved real inbox; never expose credentials, tokens, links, or message bodies.
 
 First report back with: repository/worktree status, deployed UAT identity and health, the proposed next vertical and its inherited Workspace contract, and any material blocker. Then proceed only after that vertical is explicitly authorized.
 

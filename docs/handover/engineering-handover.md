@@ -6,13 +6,11 @@ Workspace: `/Users/moemahmood/builder_code/Nexflow_v1`
 
 Branch observed at update: `main`
 
-Observed HEAD: `d005d52772ad49268b87dce1c01004a8859825f1` (`Document Feature 1 and Feature 2 UAT deployment`)
+Observed application HEAD before this evidence update: `6393f4fb81d83c6d685c30efd6b83a5800232410` (`Add Resend transactional email adapter`)
 
-Final deployed application commit: `c1125ba7c7b5bc075b89003eb0ecc9840665b5e1` (`v0.2.0-rc.2`)
+Final deployed application commit: `6393f4fb81d83c6d685c30efd6b83a5800232410` (`v0.2.1-uat.1`)
 
-Scope of this update: documentation only; no application code, Git publication, or external system was changed during this handover update.
-
-Post-handover provider work: branch `feature/resend-transactional-email` contains a locally validated Resend transactional-email candidate. It is not yet merged or deployed; current UAT remains on the accepted rc.2 Mailpit configuration until a restricted key and approved real test inbox are supplied. See [`resend-transactional-email-checkpoint.md`](../engineering/resend-transactional-email-checkpoint.md).
+Post-handover provider update: Resend is merged and deployed to UAT. Provider/configuration health passed without sending email; final registration/recovery/invitation delivery proof awaits an explicitly approved real inbox. See [`resend-email-deployment-result.md`](../release/resend-email-deployment-result.md).
 
 ## 1. Status vocabulary
 
@@ -32,7 +30,7 @@ Do not infer overall Feature acceptance from an individual work-item acceptance.
 - **The current local CRM includes persistent Leads and a server-backed dashboard.** Leads, pipeline stages/status movement, owner/Team/Workspace visibility, notes/activity, list/search/detail/create/edit, and CRM home aggregates are implemented. Deals, conversion, projects, delivery, and reporting dashboard values remain isolated labelled sample/demo data where shown.
 - **Workspace Foundation is the shared platform contract.** All future Workspace-scoped verticals inherit the same tenant, active Membership, server-selected Workspace, RBAC, ownership/Team/visibility, audit, and entitlement chain. See [`docs/architecture/workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md).
 - **Local release verification is green:** unit/direct-route 41/41, live PostgreSQL 111/111, full Playwright 25/25, ESLint clean, TypeScript/Next.js production build clean, fresh migration/rerun clean, and local database health healthy. See [`feature-1-2-release-readiness.md`](../release/feature-1-2-release-readiness.md).
-- **The final UAT release is live and accepted:** `https://app.nexaflowsystems.com` serves `v0.2.0-rc.2`; all 11 migrations are applied; PostgreSQL, app, Caddy, Mailpit, and worker were healthy; and the post-deployment password/onboarding/Workspace/CRM/administration/logout smoke passed. See [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md).
+- **The accepted Workspace Foundation remains live, with the Resend provider overlay deployed:** `https://app.nexaflowsystems.com` serves `v0.2.1-uat.1`; all 11 migrations remain applied; PostgreSQL, app, Caddy, and worker are healthy. Provider/configuration health passed, while final real-inbox delivery awaits explicit recipient approval.
 - **The application release is committed and pushed.** Current uncommitted work is documentation-only from the coordinated post-deployment handover/review pass. Preserve those shared documentation edits and do not reset or clean the worktree.
 
 ## 3. Current implemented system
@@ -43,7 +41,7 @@ Do not infer overall Feature acceptance from an individual work-item acceptance.
 - Argon2id password hashing and server-side password policy.
 - Opaque PostgreSQL Sessions with idle and absolute expiry, bounded touch, rotation/revocation, security-version checks, current/all-device logout, and reset-driven revocation.
 - CSRF plus Origin/Referer mutation protection and explicit trusted-proxy handling.
-- PostgreSQL rate limiting, safe audit events, transactional outbox, local Mailpit adapter, candidate Resend adapter, and lease/fencing worker behavior.
+- PostgreSQL rate limiting, safe audit events, transactional outbox, local Mailpit adapter, deployed UAT Resend adapter, and lease/fencing worker behavior.
 - Local fixture OIDC implements the provider-adapter contract and recent-auth fixture path. It is forbidden in production mode and is not real Google.
 
 Primary code: `src/server/identity`, `src/server/security`, `src/server/email`, `src/app/api/auth`.
@@ -309,7 +307,7 @@ The four earlier stale expectations—CRM mobile trigger wording, post-join head
 ### Deferred product/provider/operations work
 
 - Real Google OIDC and production provider credentials.
-- Resend adapter code is locally validated on `feature/resend-transactional-email`; protected UAT key installation, immutable deployment, and real-inbox delivery proof remain pending. Local Mailpit remains the development adapter.
+- Resend is deployed to UAT with protected restricted credentials; only explicitly approved real-inbox registration/recovery/invitation proof remains pending. Local Mailpit remains the development adapter.
 - Post-provision package changes, billing, upgrades/downgrades, and payment behavior.
 - Audit-history UI/API, retention/export, external log delivery, and broader observability.
 - Feature 3 personal profile, preferences, personal security, notification, locale, and avatar work.
@@ -332,7 +330,7 @@ The completed Feature 1 + Feature 2 UAT release is recorded in [`feature-1-2-dep
 
 The rc.1 process/readiness checks exposed a real-browser production hydration loop: `TitleUpdater` observed `<head>` while rewriting `document.title`, retriggering itself and preventing onboarding hydration. The bounded rc.2 hotfix updates the title once per pathname change without a self-observing `MutationObserver`; lint, unit/routes 41/41, TypeScript/build, image build, and public browser rendering passed afterward.
 
-Public UAT uses password identity. Fixture OIDC is disabled and its public endpoints return 404. The currently deployed rc.2 still uses private loopback-only Mailpit. The Resend candidate is not deployed and no Resend credential is present in Git.
+Public UAT uses password identity and Resend transactional email. Fixture OIDC is disabled and its public endpoints return 404. Mailpit remains private and is not the active UAT provider. No Resend credential is present in Git or documentation.
 
 The user explicitly waived backup, restore proof, and preservation of prior UAT application/database state for this release. No new backup was created. This waiver is release-specific and must not be silently carried into a future production or UAT change.
 
@@ -365,7 +363,7 @@ Required handling:
 4. Coordinate with other agents before touching shared files; all chats use the same working tree.
 5. Keep generated runtime outputs such as `.next` and `test-results` out of documentation commits, but do not delete ambiguous material without explicit authorization.
 6. Do not commit or push this domain update independently. Wait until root/master documents and the other domain reviews are complete, then inventory, review, and commit the final documentation set together.
-7. Documentation changes do not change the deployed image. The UAT application authority remains commit `c1125ba`, tag `v0.2.0-rc.2`, and the recorded immutable image digest.
+7. Documentation changes do not change the deployed image. The UAT application authority is commit `6393f4f`, tag `v0.2.1-uat.1`, and image ID `sha256:9dbeee6befe5ba39fa5a2978b6fe0ceffbf87872b56d8bf9889f9bf17cb9d3fc`.
 
 ## 14. Immediate engineering next step
 
@@ -373,7 +371,7 @@ Required handling:
 2. Treat Feature 1, Feature 2, WI6, and **NexaFlow Workspace Foundation Complete** as closed for the deployed `v0.2.0-rc.2` UAT release. Do not reopen or refactor the foundation speculatively.
 3. Wait for Product authorization and a bounded contract before beginning the next vertical. The directed sequence starts with Profile/Personal Settings, then Companies/Contacts, Leads expansion, Deals/Pipeline, Projects/Delivery, Communications, and later capabilities.
 4. Every next vertical must inherit the accepted Workspace tenant, Membership, Active Workspace, RBAC, ownership/Team/visibility, Audit, and Entitlement contract. Reopen foundation code only when a real vertical proves a concrete gap.
-5. Real Google OIDC, production email, billing/package changes, Audit retention/export, monitoring/backup policy, production deployment, and Feature 3 remain separately authorized work. Do not infer authorization from this UAT acceptance.
+5. Real Google OIDC, billing/package changes, Audit retention/export, monitoring/backup policy, production launch, and Feature 3 remain separately authorized work. Resend real-inbox validation is authorized only after the user supplies an approved recipient.
 
 ## 15. How future verticals inherit the Workspace Foundation
 
@@ -417,3 +415,4 @@ After the Workspace Foundation milestone is accepted, do not expand or refactor 
 - Final UAT deployment evidence: [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md)
 - Post-deployment acceptance: [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md), [`feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md)
 - Resend provider candidate: [`resend-transactional-email-checkpoint.md`](../engineering/resend-transactional-email-checkpoint.md), [`resend-email-release-readiness.md`](../release/resend-email-release-readiness.md)
+- Resend UAT deployment: [`resend-email-deployment-result.md`](../release/resend-email-deployment-result.md)
