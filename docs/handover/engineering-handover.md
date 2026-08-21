@@ -31,7 +31,7 @@ Do not infer overall Feature acceptance from an individual work-item acceptance.
 - **Workspace Foundation is the shared platform contract.** All future Workspace-scoped verticals inherit the same tenant, active Membership, server-selected Workspace, RBAC, ownership/Team/visibility, audit, and entitlement chain. See [`docs/architecture/workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md).
 - **Local release verification is green:** unit/direct-route 41/41, live PostgreSQL 111/111, full Playwright 25/25, ESLint clean, TypeScript/Next.js production build clean, fresh migration/rerun clean, and local database health healthy. See [`feature-1-2-release-readiness.md`](../release/feature-1-2-release-readiness.md).
 - **The accepted Workspace Foundation remains live, with the Resend provider overlay deployed and accepted:** `https://app.nexaflowsystems.com` serves `v0.2.1-uat.2`; all 11 migrations remain applied; PostgreSQL, app, Caddy, and worker are healthy. The approved-recipient delivery gate is closed.
-- **The application release and accepted Resend evidence are committed and pushed.** Documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2` published the final provider evidence/reviews, and the worktree was clean before this master-index correction.
+- **The application release and accepted Resend evidence are committed and pushed.** Documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2` published the final provider evidence/reviews; handover correction `405a35f9c737be0005f4d8fff8b9725b453b3a8a` aligned the master/domain current authority. Local `main` matched `origin/main` and the worktree was clean before the final transition audit.
 
 ## 3. Current implemented system
 
@@ -357,7 +357,7 @@ The user explicitly waived backup, restore proof, and preservation of prior UAT 
 
 ## 13. Current Git/worktree safety
 
-The authoritative application, migrations, tests, contracts, and release evidence are committed and pushed on `main`. Documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2` published the accepted Resend deployment and reviews; the worktree was clean at the start of this bounded master-index correction.
+The authoritative application, migrations, tests, contracts, and release evidence are committed and pushed on `main`. Documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2` published the accepted Resend deployment/reviews, and `405a35f9c737be0005f4d8fff8b9725b453b3a8a` published the current-authority handover correction. Local `main` matched `origin/main` and the worktree was clean before this final transition audit.
 
 Required handling:
 
@@ -367,7 +367,7 @@ Required handling:
 4. Coordinate with other agents before touching shared files; all chats use the same working tree.
 5. Keep generated runtime outputs such as `.next` and `test-results` out of documentation commits, but do not delete ambiguous material without explicit authorization.
 6. Keep future documentation updates bounded, link-checked, secret-scanned, and published separately from application changes when practical.
-7. Documentation changes do not change the deployed image. The UAT application authority is commit `3f7fc1d`, tag `v0.2.1-uat.2`, and image ID `sha256:d81a2a6eb6c35719c475fb63ab2213f54429a26849155c67cd83b846d91b1f39`.
+7. Documentation changes do not change the deployed image. The UAT application authority is commit `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`, and image ID `sha256:d81a2a6eb6c35719c475fb63ab2213f54429a26849155c67cd83b846d91b1f39`.
 
 ## 14. Immediate engineering next step
 

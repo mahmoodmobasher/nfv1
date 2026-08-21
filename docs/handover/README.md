@@ -45,7 +45,7 @@ No downstream feature may create a separate tenant, ownership, access, audit, or
 
 ## Critical worktree warning
 
-The application release and accepted Resend deployment/review documentation are committed and pushed. The worktree was clean at the start of this master-index correction and must be clean again after its documentation-only publication.
+The application release and accepted Resend deployment/review documentation are committed and pushed. At the final transition-audit boundary, local `main` matched `origin/main` and the worktree was clean before the bounded documentation audit.
 
 Do not run destructive cleanup, reset, checkout, rebase, or bulk overwrite operations. Inspect `git status` first and preserve all existing changes.
 

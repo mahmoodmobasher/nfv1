@@ -2,6 +2,8 @@
 
 Status date: 2026-08-21
 
+Current UAT authority: application commit `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`, at `https://app.nexaflowsystems.com`. Resend is active in UAT; Mailpit is local-development only. The final audit observed public readiness HTTP 200 with `{"status":"ready"}` and `Cache-Control: no-store`.
+
 ## Delivery ledger
 
 | Area | State | Meaning |
@@ -62,6 +64,7 @@ Architecture blocks local delivery only for material risks: cross-tenant access 
 - No audit-history viewer exists or is required by Work Item 5.
 - Workspace switcher modes and foundation refactoring must not expand speculatively.
 - Personal settings remain separate from Workspace administration.
+- Generalized email deliverability and asynchronous bounce/complaint reconciliation, real Google OIDC, billing/package changes, Audit retention/export, production monitoring/backup policy, and production launch remain separately authorized production work. They do not reopen the closed UAT gates.
 
 ## Local start summary
 

@@ -23,9 +23,12 @@ Current delivery status:
 - Feature 1 is accepted and complete.
 - Feature 2 Work Items 1–6 are complete and accepted for the UAT milestone.
 - “NexaFlow Workspace Foundation Complete” is accepted by Architecture and Graphics.
-- Final deployed application commit is `3f7fc1d`, tag `v0.2.1-uat.2`, at `https://app.nexaflowsystems.com`.
+- Final deployed application commit is `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`, at `https://app.nexaflowsystems.com`.
 - All 11 migrations and the primary onboarding, Workspace, administration, tenant-denial, CRM, email/outbox, audit, and logout smoke passed.
 - Persistent CRM Leads and a server-backed dashboard already exist; later capability previews must remain clearly marked sample data.
+- Feature 1, Feature 2, WI6, Workspace Foundation, and the approved-recipient Resend UAT delivery gate are closed. Do not reopen them without a concrete downstream defect or an explicitly authorized contract change.
+- Resend is the active UAT email adapter; Mailpit is local-development only.
+- Production-only limitations remain explicit: real Google OIDC, billing/package lifecycle, Audit retention/export, generalized email deliverability and asynchronous bounce/complaint reconciliation, monitoring/backup policy, and production-launch approval.
 
 Immediate objective:
 
