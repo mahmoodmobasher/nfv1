@@ -15,7 +15,7 @@ Status date: 2026-08-21
 | Feature 2 WI5 — Audit completion | Accepted | Canonical, transactional, correlated, non-duplicative success and denial evidence passed Architecture and Graphics gates. |
 | Feature 2 WI6 — Final validation | Complete | Integrated release gate passed unit/routes 41/41, PostgreSQL 111/111, Playwright 25/25, migrations, lint, type, build, Compose, image, and UAT smoke. |
 | Workspace Foundation milestone | Accepted and deployed | Architecture and Graphics accepted the local and deployed UAT candidate. |
-| Transactional email provider | Deployed; final recipient proof pending | Resend is active in UAT under a restricted verified-domain key; authenticated non-delivery provider health passed. Local development remains Mailpit. |
+| Transactional email provider | Accepted and deployed | Resend is active in UAT under a restricted verified-domain key; approved-recipient registration, verification rotation, recovery, and invitation journeys passed. Local development remains Mailpit. |
 | CRM Leads/core | Implemented and deployed to UAT | Persistent Leads, stages/status, owner/Team/Workspace visibility, notes/activities, search/list/detail/create/edit, and dashboard aggregates exist; persistent Lead create/read passed final UAT smoke. |
 | Feature 3 — Personal profile/settings | Deferred pending Product authorization | Workspace Foundation acceptance is complete; begin only after Product approves a bounded Feature 3 contract. |
 | Later verticals | Deferred | Companies/Contacts, Deals, Projects, Communications, and later capabilities must inherit the foundation contract. |
@@ -31,6 +31,7 @@ Status date: 2026-08-21
 - ESLint, TypeScript, and production build: passed.
 - Next.js production build recorded 32 static pages plus dynamic routes.
 - Fresh migration plus rerun, database health, UAT Compose rendering, and a local non-root production image build passed.
+- Resend final regression: identity PostgreSQL **17/17**, full serialized PostgreSQL **114/114**, provider-neutral copy lint/type/build green, and approved-recipient delivery journeys passed.
 
 These include the completed Work Item 6/release gate. Final UAT evidence is recorded in the deployment report.
 
@@ -55,7 +56,7 @@ Architecture blocks local delivery only for material risks: cross-tenant access 
 ## Known boundaries and deferred work
 
 - Local Google/OIDC is a fixture adapter, not production Google.
-- Local email uses Mailpit. UAT uses deployed Resend under protected configuration; approved real-inbox registration/recovery/invitation proof remains pending.
+- Local email uses Mailpit. UAT uses deployed Resend under protected configuration; approved-recipient registration/verification, recovery, and invitation proof passed.
 - Real Google/provider configuration, billing, retention/export, production launch, and broader production operations remain outside the UAT milestone.
 - The Feature 1 + Feature 2 release gate closed the historical pre-UAT Feature 2 list for this candidate.
 - No audit-history viewer exists or is required by Work Item 5.
@@ -83,6 +84,6 @@ Do not use `npm run local:reset` unless destruction of the disposable local data
 - Inspect `git status`; preserve any post-deployment documentation updates.
 - Confirm local services and database health.
 - Review the final Feature 2 release and deployment reviews.
-- Treat Feature 1, Feature 2, WI6, and Workspace Foundation as closed. Current UAT application tag is `v0.2.1-uat.1`; final Resend recipient proof is a bounded provider validation, not a reopening of the foundation.
+- Treat Feature 1, Feature 2, WI6, Workspace Foundation, and the UAT Resend delivery gate as closed. Current UAT application tag is `v0.2.1-uat.2`.
 - Have Develop own all coding; Architecture and Graphics provide independent bounded reviews.
 - Record all new evidence under `docs/` so future sessions do not depend on chat history.

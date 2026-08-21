@@ -2,7 +2,7 @@
 
 Date: 2026-08-21
 
-Status: **implemented and deployed to UAT; provider health passed; real-inbox journey validation pending explicit recipient approval**
+Status: **implemented, deployed, and accepted after approved-recipient UAT validation**
 
 Branch: `feature/resend-transactional-email`
 
@@ -31,8 +31,8 @@ Branch: `feature/resend-transactional-email`
 | --- | --- |
 | Resend adapter/config targeted unit tests | **15/15 passed** in the initial focused run |
 | Unit/direct-route suite | **50 passed**, **113 DB-gated skipped** across 12 passed and 13 skipped files |
-| Identity PostgreSQL integration | **16/16 passed** |
-| Complete PostgreSQL integration | **113/113 passed** across 13 files |
+| Identity PostgreSQL integration after provider-neutral copy correction | **17/17 passed** |
+| Complete serialized PostgreSQL integration | **114/114 passed** across 13 files |
 | Relevant identity/invitation Playwright | **12/12 passed** |
 | ESLint | Passed, zero warnings |
 | TypeScript | `npx tsc --noEmit` passed |
@@ -44,19 +44,21 @@ Branch: `feature/resend-transactional-email`
 
 ## UAT deployment evidence
 
-The reviewed candidate merged normally as `6393f4fb81d83c6d685c30efd6b83a5800232410`, was tagged `v0.2.1-uat.1`, and was deployed as immutable image `nexaflow:6393f4f`. The restricted key was installed only in the root-owned UAT environment with mode `0600`; clipboard and temporary handling were cleared without displaying or recording the value.
+The provider candidate merged normally as `6393f4fb81d83c6d685c30efd6b83a5800232410`. A provider-neutral verification/email-copy correction then merged as `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, was tagged `v0.2.1-uat.2`, and was deployed as immutable image `nexaflow:3f7fc1d` (`sha256:d81a2a6eb6c35719c475fb63ab2213f54429a26849155c67cd83b846d91b1f39`). The restricted key was installed only in the root-owned UAT environment with mode `0600`; clipboard and temporary handling were cleared without displaying or recording the value.
 
 The existing 11 migrations ran twice, public readiness/protection smoke passed, all services were healthy, the worker restart count was zero, and an authenticated non-delivery Resend API probe returned HTTP 200. Existing email outbox aggregates were unchanged and contained no pending/retry/dead-letter transactional messages.
 
 Full evidence is in [`resend-email-deployment-result.md`](../release/resend-email-deployment-result.md).
 
-## Required post-deployment proof
+## Completed post-deployment proof
 
-An explicitly approved real inbox is still required. The `example.test` cohort cannot prove public delivery.
+One explicitly approved inbox was used without retaining its address or any credential, token, link, cookie, body, or provider ID in evidence.
 
-- Registration queues and delivers a verification email; the single-use link activates the account.
-- Verification resend rotates the token and the older link fails.
-- Password recovery reaches the approved inbox and the reset link is single-use.
-- Workspace invitation reaches the approved inbox and acceptance succeeds for the intended verified identity.
-- A forced provider failure enters retry without leaking provider detail; replay does not create a second accepted Resend message.
-- The worker records only non-secret provider message IDs, expected delivery state, and sanitized failure classifications.
+- Registration and verification delivery/activation passed.
+- Verification resend delivery, token rotation, old-token rejection, and replay rejection passed.
+- Password recovery/reset delivery, single-use behavior, prior-Session revocation, and replacement-password login passed.
+- Workspace invitation delivery and intended verified-identity acceptance passed.
+- Provider status reached delivered for **2 verification + 1 recovery + 1 invitation** messages.
+- Final bounded state contained one active verified User, one active Membership, one accepted Invitation, zero active Sessions, and three terminal identity-email Outbox rows.
+
+Architecture and Graphics/UX both issued final ACCEPT. Asynchronous bounce/complaint reconciliation and generalized deliverability remain production-operations limitations rather than UAT blockers.

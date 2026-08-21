@@ -2,19 +2,20 @@
 
 Date: 2026-08-21
 
-Status: **deployed; provider/configuration validation passed; real-inbox delivery validation pending explicit recipient approval**
+Status: **deployed and validated through the user-approved recipient journeys**
 
 Scope: Resend transactional-email provider overlay only. No Feature 3, Google OIDC, billing, schema change, or unrelated infrastructure work.
 
 ## Release identity
 
-- Pull request: [#1](https://github.com/mahmoodmobasher/nfv1/pull/1), merged normally without force push.
-- Deployed merge commit: `6393f4fb81d83c6d685c30efd6b83a5800232410`.
-- Immutable tag: `v0.2.1-uat.1`.
-- UAT release directory: `/opt/nexaflow/uat/releases/6393f4f`.
-- UAT current pointer: `/opt/nexaflow/uat/current` → `/opt/nexaflow/uat/releases/6393f4f`.
-- Image: `nexaflow:6393f4f`.
-- Image ID: `sha256:9dbeee6befe5ba39fa5a2978b6fe0ceffbf87872b56d8bf9889f9bf17cb9d3fc`.
+- Provider implementation: [#1](https://github.com/mahmoodmobasher/nfv1/pull/1), merged normally without force push as `6393f4fb81d83c6d685c30efd6b83a5800232410`.
+- Provider-neutral copy correction: [#2](https://github.com/mahmoodmobasher/nfv1/pull/2), merged normally without force push.
+- Final deployed merge commit: `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`.
+- Immutable tag: `v0.2.1-uat.2`.
+- UAT release directory: `/opt/nexaflow/uat/releases/3f7fc1d`.
+- UAT current pointer: `/opt/nexaflow/uat/current` → `/opt/nexaflow/uat/releases/3f7fc1d`.
+- Image: `nexaflow:3f7fc1d`.
+- Image ID: `sha256:d81a2a6eb6c35719c475fb63ab2213f54429a26849155c67cd83b846d91b1f39`.
 - Public application: `https://app.nexaflowsystems.com`.
 - Target: AWS Lightsail NexaFlow UAT host `99.79.158.110`.
 
@@ -47,20 +48,28 @@ Scope: Resend transactional-email provider overlay only. No Feature 3, Google OI
 | Fixture OIDC public endpoints | Remain disabled/404 |
 | Worker provider environment | Provider, key format, and approved sender validated without exposing values |
 | Resend non-delivery API probe | Authenticated HTTPS request returned **200**; no email was created or sent |
-| Historical transactional outbox | Unchanged: verification **10 delivered**, invitation **9 delivered**, no pending/retry/dead-letter email topics |
+| Provider-neutral copy correction | Deployed; public verification guidance contains no Mailpit/local-delivery claim |
+| Approved-recipient journeys | Registration/verification, verification rotation, recovery/reset, and invitation delivery/acceptance passed |
+| Full serialized PostgreSQL regression | **114/114 passed** across 13 files |
 
-The existing UAT database was retained. There was no schema change and no destructive database action.
+The existing UAT database was retained. There was no schema change and no destructive database action. All 11 migrations applied and reran safely.
 
-## Remaining final validation
+## Approved-recipient delivery validation
 
-No real email was sent because the user has not yet approved a recipient inbox in this chat. The release is ready for the final bounded journeys once an inbox is supplied privately:
+The user explicitly approved one recipient inbox. A temporary in-memory harness exercised the public UAT application and private worker/provider evidence without recording the recipient, credentials, tokens, links, cookies, message bodies, or provider IDs. It proved:
 
-1. Registration → verification delivery → single-use verification.
-2. Password recovery → reset delivery → single-use reset and Session revocation.
-3. Workspace invitation → delivery → intended verified-user acceptance.
-4. Verification resend rotation proving the older link is invalid.
+1. registration queued and delivered verification, and the single-use link activated the User;
+2. verification resend delivered a replacement, invalidated the older token, and rejected replay;
+3. password recovery delivered, reset was single-use, the prior Session was revoked, and login with the replacement password succeeded;
+4. a Workspace invitation delivered and was accepted only by the intended verified User; and
+5. validation-created Sessions were revoked after the journey.
 
-Validation must inspect only minimized delivery state and provider message IDs. Credentials, full URLs, tokens, cookies, and message bodies must remain out of evidence.
+Minimized provider evidence was **2 verification + 1 recovery + 1 invitation** messages with provider delivery status observed. Final bounded database evidence was one active verified User, one active Membership, one accepted Invitation, zero active Sessions, and three terminal identity-email Outbox rows. This proves the approved UAT journeys, not generalized deliverability or asynchronous bounce/complaint reconciliation.
+
+## Reviews
+
+- Architecture: [`resend-email-architecture-review.md`](resend-email-architecture-review.md) — **FINAL ACCEPT**.
+- Graphics/UX: [`resend-transactional-email-ux-review.md`](../design/resend-transactional-email-ux-review.md) — **ACCEPT**.
 
 ## Rollback
 
