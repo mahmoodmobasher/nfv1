@@ -76,6 +76,12 @@ async function seedVisualCrm(fixture: Awaited<ReturnType<typeof tenantBrowserFix
   await database.query(`insert into leads(workspace_id,first_name,last_name,email_normalized,email_display,company,source,status,stage_id,owner_membership_id,visibility,created_at,updated_at) values($1,'Jordan','Lee','jordan.visual@example.test','jordan.visual@example.test','Acme North','website','open',$2,$3,'workspace','2026-08-20T12:00:00Z','2026-08-20T12:00:00Z')`, [fixture.workspace.id, stage.id, fixture.members[0].id]);
 }
 
+async function seedVisualPipeline(fixture: Awaited<ReturnType<typeof tenantBrowserFixture>>) {
+  const stages = (await database.query<{ id: string; name: string }>("insert into pipeline_stages(workspace_id,name,position) values($1,'New',0),($1,'Qualified',1),($1,'Proposal',2) returning id,name", [fixture.workspace.id])).rows;
+  const stage = (name: string) => stages.find(item => item.name === name)!.id;
+  await database.query(`insert into leads(workspace_id,first_name,last_name,email_normalized,email_display,company,source,status,stage_id,owner_membership_id,visibility,created_at,updated_at) values($1,'Jordan','Lee','jordan.pipeline@example.test','jordan.pipeline@example.test','Acme North','website','open',$2,$4,'workspace','2026-08-20T12:00:00Z','2026-08-20T12:00:00Z'),($1,'Avery','Chen','avery.pipeline@example.test','avery.pipeline@example.test','Meridian Studio','referral','open',$3,$4,'workspace','2026-08-21T12:00:00Z','2026-08-21T12:00:00Z')`, [fixture.workspace.id, stage("New"), stage("Qualified"), fixture.members[0].id]);
+}
+
 async function visualBaseline(page: Page, name: string) {
   await page.locator("nextjs-portal").evaluateAll(portals => portals.forEach(portal => portal.remove()));
   await expect(page).toHaveScreenshot(name, { fullPage: true, animations: "disabled" });
@@ -316,6 +322,68 @@ test("Workspace navigation states and representative controls retain keyboard fo
     expect(zoomProxyBox!.y).toBeGreaterThanOrEqual(0);
     expect(zoomProxyBox!.y + zoomProxyBox!.height).toBeLessThanOrEqual(720);
     await page.setViewportSize({ width: 1280, height: 720 });
+  }
+});
+
+test("Pipeline semantic surfaces retain paired contrast, interaction, and responsive behavior", async ({ page }) => {
+  const fixture = await tenantBrowserFixture(page);
+  await seedVisualPipeline(fixture);
+  for (const theme of ["light", "dark"] as const) {
+    await setServerAppearance(fixture.users[0].id, theme);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/crm/pipeline");
+    await expect(page.getByRole("heading", { name: "Pipeline" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
+    const populatedStage = page.getByRole("region", { name: /New/ });
+    const emptyStage = page.getByRole("region", { name: /Proposal/ });
+    const card = populatedStage.locator(".pipeline-lead-card");
+    const count = populatedStage.locator(".pipeline-count");
+    const changeStage = card.getByRole("link", { name: "Change stage" });
+    expect(await renderedTextContrast(populatedStage.getByRole("heading", { name: /New/ }), populatedStage)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(count, populatedStage)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(card.getByRole("link", { name: "Jordan Lee" }), card)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(card.locator(".pipeline-company"), card)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(card.locator(".pipeline-owner"), card)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(card.locator(".pipeline-visibility"), card)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(emptyStage.locator(".pipeline-empty-stage"), emptyStage)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(page.locator(".crm-preview>aside .brand b"), page.locator(".crm-preview>aside"))).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(page.locator(".crm-preview>aside .admin-workspace b"), page.locator(".crm-preview>aside .admin-workspace"))).toBeGreaterThanOrEqual(4.5);
+    const defaultCardBorder = await card.evaluate(element => getComputedStyle(element).borderColor);
+    await card.hover();
+    expect(await card.evaluate(element => getComputedStyle(element).borderColor)).not.toBe(defaultCardBorder);
+    await page.mouse.move(0, 0);
+    await tabTo(page, changeStage);
+    await expectVisibleFocus(changeStage, card);
+    expect(await renderedTextContrast(changeStage, card)).toBeGreaterThanOrEqual(4.5);
+    await visualBaseline(page, `design-system-pipeline-${theme}.png`);
+
+    await page.goto("/crm/pipeline?q=not-a-real-lead");
+    const empty = page.locator(".empty");
+    await expect(page.getByRole("heading", { name: "No leads match these filters." })).toBeVisible();
+    expect(await renderedTextContrast(empty.getByRole("heading"), empty)).toBeGreaterThanOrEqual(4.5);
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto("/crm/pipeline");
+    await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const mobileCard = page.locator(".pipeline-lead-card").first();
+    const mobileBox = await mobileCard.boundingBox();
+    expect(mobileBox!.x).toBeGreaterThanOrEqual(0);
+    expect(mobileBox!.x + mobileBox!.width).toBeLessThanOrEqual(320);
+    const mobileAction = mobileCard.getByRole("link", { name: "Change stage" });
+    expect((await mobileAction.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+
+    await page.setViewportSize({ width: 640, height: 720 });
+    await page.goto("/crm/pipeline");
+    await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
+    const zoomAction = page.locator(".pipeline-lead-card").first().getByRole("link", { name: "Change stage" });
+    await tabTo(page, zoomAction);
+    await zoomAction.scrollIntoViewIfNeeded();
+    await expectVisibleFocus(zoomAction, page.locator(".pipeline-lead-card").first());
+    const zoomBox = await zoomAction.boundingBox();
+    expect(zoomBox!.x).toBeGreaterThanOrEqual(0);
+    expect(zoomBox!.x + zoomBox!.width).toBeLessThanOrEqual(640);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
 });
 

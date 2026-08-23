@@ -80,4 +80,20 @@ describe("theme foundation", () => {
     for (const color of ["#34433e", "#8f3215", "#62716b"]) expect(contrast(color, lightSurface), color).toBeGreaterThanOrEqual(4.5);
     for (const color of ["#d1ddd8", "#ff9a78", "#9fb0aa"]) expect(contrast(color, darkSurface), color).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("keeps Pipeline stage, card, count, and metadata text at WCAG AA contrast", () => {
+    const themes = [
+      { stage: "#f0f4f2", card: "#ffffff", raised: "#ffffff", strong: "#18221f", text: "#34433e", muted: "#62716b" },
+      { stage: "#17241f", card: "#121d19", raised: "#1d2b26", strong: "#f2f7f5", text: "#d1ddd8", muted: "#9fb0aa" },
+    ];
+    for (const theme of themes) {
+      expect(contrast(theme.strong, theme.stage)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(theme.muted, theme.stage)).toBeGreaterThanOrEqual(4.5);
+      for (const surface of [theme.card, theme.raised]) {
+        expect(contrast(theme.strong, surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(theme.text, surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(theme.muted, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 });
