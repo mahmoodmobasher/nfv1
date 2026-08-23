@@ -29,6 +29,8 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [securityStatus, setSecurityStatus] = useState("");
+  const [needsReauth, setNeedsReauth] = useState(false);
+  const [fieldError, setFieldError] = useState("");
 
   useEffect(() => {
     fetch("/api/account/preferences", { cache: "no-store" }).then(async response => {
@@ -62,15 +64,38 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       const data = body.data as { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number };
       const next = { theme: data.appearance, locale: data.locale ?? defaults.locale, timezone: data.timeZone ?? defaults.timezone, version: data.version };
       setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Preferences updated.");
-    } catch { setPreferencesStatus("We couldn’t save your preferences. Reload the latest settings and try again."); }
+    } catch { setPreferencesStatus("We couldn’t save your preferences."); }
+  }
+
+  function reloadPreferences() {
+    setPreferencesStatus("Loading latest preferences…");
+    fetch("/api/account/preferences", { cache: "no-store" }).then(async response => {
+      const payload = await response.json() as { data?: { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number } };
+      if (!response.ok || !payload.data) throw new Error("reload_failed");
+      const next = { theme: payload.data.appearance, locale: payload.data.locale ?? defaults.locale, timezone: payload.data.timeZone ?? defaults.timezone, version: payload.data.version };
+      setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Latest preferences loaded.");
+    }).catch(() => setPreferencesStatus("We couldn’t load the latest preferences. Try again."));
+  }
+
+  async function reauthenticate(event: FormEvent) {
+    event.preventDefault();
+    setSecurityStatus("Confirming your identity…");
+    try {
+      const { response } = await accountMutation("/api/auth/recent/password", "POST", { password: currentPassword });
+      if (!response.ok) throw new Error("reauth_failed");
+      setCurrentPassword(""); setNeedsReauth(false); setSecurityStatus("Identity confirmed. Enter your passwords again to continue.");
+    } catch { setSecurityStatus("We couldn’t confirm your identity. Check your password and try again."); }
   }
 
   async function changePassword(event: FormEvent) {
     event.preventDefault();
-    if (newPassword !== confirmPassword) return setSecurityStatus("New passwords do not match.");
+    if (newPassword.length < 12 || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) { setFieldError("Use 12–256 characters, including a number and a symbol."); return; }
+    if (newPassword !== confirmPassword) { setFieldError("New passwords do not match."); return; }
+    setFieldError("");
     setSecurityStatus("Changing password…");
     try {
-      const { response } = await accountMutation("/api/account/security/password", "POST", { currentPassword, newPassword });
+      const { response, body } = await accountMutation("/api/account/security/password", "POST", { currentPassword, newPassword });
+      if (!response.ok && body?.code === "recent_auth_required") { setNeedsReauth(true); setNewPassword(""); setConfirmPassword(""); setSecurityStatus("Confirm your identity to continue changing your password."); return; }
       if (!response.ok) throw new Error("password_not_changed");
       setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
       window.location.replace("/login?signedOut=1");
@@ -98,13 +123,13 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
           <label className="field"><span>Time zone</span><select value={preferences.timezone} onChange={event => setPreferences(current => ({ ...current, timezone: event.target.value }))}><option value="America/Toronto">Toronto (Eastern)</option><option value="America/Vancouver">Vancouver (Pacific)</option><option value="Europe/London">London</option><option value="UTC">UTC</option></select></label>
           <button className="primary">Save preferences</button>
         </form>
-        {preferencesStatus && <p className="alert" role="status">{preferencesStatus}</p>}
+        {preferencesStatus && <><p className="alert" role="status">{preferencesStatus}</p><button className="secondary" type="button" onClick={reloadPreferences}>Reload latest</button></>}
       </section>
 
       <section className="account-section" aria-labelledby="security-heading">
         <div><p className="eyebrow">Account security</p><h2 id="security-heading">Change your password</h2><p>Confirm your identity before starting a password change. Password recovery completes the change and revokes existing sessions.</p></div>
-        <form onSubmit={changePassword}><label className="field"><span>Current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><label className="field"><span>New password</span><input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" required /></label><label className="field"><span>Confirm new password</span><input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" required /></label><p>Changing your password signs you out of all devices. Sign in again to continue.</p><button className="primary">Change password</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form>
-        {securityStatus && <p className="alert" role="status">{securityStatus}</p>}
+        {needsReauth ? <form onSubmit={reauthenticate}><label className="field"><span>Confirm your current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><button className="primary">Confirm identity</button></form> : <form onSubmit={changePassword}><label className="field"><span>Current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><label className="field"><span>New password</span><small>Use 12–256 characters, including a number and a symbol.</small><input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} /></label><label className="field"><span>Confirm new password</span><input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} /></label>{fieldError && <p className="alert error" role="alert">{fieldError}</p>}<p>Changing your password signs you out of all devices. Sign in again to continue.</p><button className="primary">Change password</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form>}
+        {securityStatus && <p className="alert" role={needsReauth || securityStatus.includes("couldn’t") ? "alert" : "status"}>{securityStatus}</p>}
       </section>
     </main>
   </div>;
