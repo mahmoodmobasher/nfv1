@@ -40,3 +40,35 @@ The shared authenticated primitives now override legacy literals without a risky
 ## Integration
 
 Cherry-pick the implementation commit after the proposal/document commits already recorded on this branch. Run lint, unit tests, the focused Playwright journey, and production build. Do not deploy from this branch; Product owns promotion after Architecture and Graphics review.
+
+## Formal-review remediation
+
+Remediation date: 2026-08-23
+Review authorities: Architecture `411d88f`; Graphics `53fbab4`.
+
+- Initial HTML now resolves the allowlisted authenticated User preference from the session and database. Browser storage is never consulted by the bootstrap and cannot override the server result.
+- Personal settings receives its confirmed preference from its Server Component. Theme selection is an ephemeral preview; only a successful mutation updates browser storage. A failed mutation restores the confirmed server value and reload cannot retain the preview.
+- A per-request nonce is produced in `src/proxy.ts`, propagated through the request CSP and Next render, and attached to the fixed bootstrap and framework scripts. Production `script-src` contains no `unsafe-inline` or `unsafe-eval`. Development permits only the Next-documented style/debug exceptions; script inline execution remains nonce-bound.
+- The existing UAT Caddy boundary overrides protected document caching to `private, no-store`. The account-preferences endpoint sets `private, no-store` on success and failure responses. Dev2 must retain the Caddy override when integrating because Next owns the upstream document cache header.
+- System media-query listeners now attach only for `system`, detach on explicit Light/Dark, avoid duplicates, and clean up on unmount.
+- Primary actions now use theme/state-specific accessible foreground/fill pairs. Default, hover, pressed, focus, and disabled combinations have automated 4.5:1 assertions.
+- The authenticated eyebrow primitive explicitly supersedes the legacy 900-weight cascade and computes to the approved weight 550.
+- Mobile drawers move focus to the first navigation item on open and restore focus to the trigger on Escape.
+
+Remediation verification:
+
+- `npm run lint`, `npx tsc --noEmit`, and `git diff --check`: pass.
+- `npm test`: 59 pass; 119 database-gated integration tests skipped by default.
+- `npm run build`: pass; all routes dynamically render under the nonce-based CSP proxy.
+- Production `next start` response: HTTP 200; CSP nonce present; bootstrap nonce matches; `script-src` has neither `unsafe-inline` nor `unsafe-eval`.
+- CSP negative browser test: a bootstrap with a corrupt nonce is blocked while the matching nonce executes.
+- Focused Playwright: 3 pass. Covers empty/correct/stale/unavailable cache, Light/Dark/System server authority, OS changes, failed-save rollback and reload, Workspace switch and browser Back, CSP/hydration console checks, keyboard focus, drawer entry/return, 44px targets, 320px reflow, and a 640 CSS-pixel viewport proxy for 200% zoom on a 1280-pixel display.
+
+Paired durable baselines, all with development overlays removed:
+
+- Personal settings: `design-system-personal-settings-light-darwin.png`, `design-system-personal-settings-dark-darwin.png`
+- CRM: `design-system-crm-light-darwin.png`, `design-system-crm-dark-darwin.png`
+- Workspace administration: `design-system-workspace-admin-light-darwin.png`, `design-system-workspace-admin-dark-darwin.png`
+- 320px Workspace drawer: `design-system-mobile-drawer-light-darwin.png`, `design-system-mobile-drawer-dark-darwin.png`
+
+The two original unpaired snapshots remain only as historical artifacts and are no longer referenced by the browser suite. No Stage 3/4 route migration was included.

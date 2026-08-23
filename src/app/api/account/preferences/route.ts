@@ -14,13 +14,21 @@ const updateInput = z.object({
 
 function failure(error: unknown) {
   const known = error instanceof AccountError ? error : new AccountError("validation_failed", 400);
-  return NextResponse.json({ ok: false, code: known.code }, { status: known.status });
+  const response = NextResponse.json({ ok: false, code: known.code }, { status: known.status });
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
+function privatePreferences(data: unknown) {
+  const response = NextResponse.json({ data });
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
 }
 
 export async function GET(request: Request) {
   const { pool } = localDatabase();
   try {
-    return NextResponse.json({ data: await accountPreferences(pool, await identity(pool, request)) });
+    return privatePreferences(await accountPreferences(pool, await identity(pool, request)));
   } catch (error) {
     return failure(error);
   } finally {
@@ -37,7 +45,7 @@ export async function PATCH(request: Request) {
     const parsed = updateInput.safeParse(await request.json().catch(() => null));
     if (!parsed.success) throw new AccountError("validation_failed", 400);
     session = await identity(pool, request);
-    return NextResponse.json({ data: await updateAccountPreferences(pool, session, parsed.data) });
+    return privatePreferences(await updateAccountPreferences(pool, session, parsed.data));
   } catch (error) {
     if (session) await safeDenialAudit(pool, { userId: session.userId, sessionId: session.sessionId, action: "identity.preferences_update_denied", targetType: "user_preference", error });
     return failure(error);

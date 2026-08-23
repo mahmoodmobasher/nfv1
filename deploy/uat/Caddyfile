@@ -20,6 +20,9 @@
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 	}
 
+	@privateDocuments path /crm /crm/* /settings /workspace/*
+	header @privateDocuments Cache-Control "private, no-store"
+
 	reverse_proxy app:3000 {
 		header_up Host {host}
 		header_up -X-NexaFlow-Proxy-Secret
