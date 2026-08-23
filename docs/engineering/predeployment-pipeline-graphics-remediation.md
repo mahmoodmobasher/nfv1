@@ -1,8 +1,8 @@
 # Pre-deployment Pipeline Graphics remediation
 
-Date: 2026-08-23  
-Base: `origin/main` at `eb17e33`  
-Graphics rejection: `docs/design/predeployment-graphics-clearance-eb17e33.md`  
+Date: 2026-08-23
+Base: `origin/main` at `eb17e33`
+Graphics rejection: `docs/design/predeployment-graphics-clearance-eb17e33.md`
 Disposition: **P1 cleared; P3 corrected; ready for Graphics re-review**
 
 ## Bounded implementation

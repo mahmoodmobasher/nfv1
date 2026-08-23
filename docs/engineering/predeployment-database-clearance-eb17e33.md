@@ -1,7 +1,7 @@
 # Pre-deployment database clearance — `eb17e33`
 
-Date: 2026-08-23  
-Scope: database and transaction review of `origin/main` at `eb17e33`; local disposable PostgreSQL only  
+Date: 2026-08-23
+Scope: database and transaction review of `origin/main` at `eb17e33`; local disposable PostgreSQL only
 UAT mutation: none
 
 ## Verdict
