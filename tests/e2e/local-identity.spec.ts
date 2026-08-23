@@ -67,6 +67,21 @@ async function login(page: Page, email: string, value = password) {
 
 async function tenantBrowserFixture(page:Page,seats=6){const suffix=`${Date.now()}-${Math.floor(Math.random()*10000)}`,emails={owner:`owner-${suffix}@example.test`,member:`member-${suffix}@example.test`,admin:`admin-${suffix}@example.test`,invitee:`invitee-${suffix}@example.test`},users=(await database.query(`insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at)values($1,$1,'Browser Owner','active',now()),($2,$2,'Browser Member','active',now()),($3,$3,'Browser Admin','active',now()),($4,$4,'Browser Invitee','active',now())returning id`,Object.values(emails))).rows,workspace=(await database.query(`insert into workspaces(name,slug,status,plan_code,billing_cadence,created_by_user_id)values('Slice 4 Completion',$1,'active','growth','monthly',$2)returning id`,[`slice4-${suffix}`,users[0].id])).rows[0],roles=(await database.query(`insert into roles(workspace_id,code,permissions,is_system,policy_version)values($1,'owner','{}',true,'tenant-admin-v1'),($1,'admin','{}',true,'tenant-admin-v1'),($1,'member','{}',true,'tenant-admin-v1')returning id,code`,[workspace.id])).rows,role=(code:string)=>roles.find(value=>value.code===code).id,members=(await database.query(`insert into workspace_memberships(workspace_id,user_id,role_id,status)values($1,$2,$5,'active'),($1,$3,$6,'active'),($1,$4,$7,'active')returning id,user_id,version`,[workspace.id,users[0].id,users[1].id,users[2].id,role("owner"),role("member"),role("admin")])).rows;await database.query(`insert into workspace_entitlement_snapshots(workspace_id,plan_code,catalog_version,effective_feature_flags,effective_limits)values($1,'growth','e2e','{}',$2)`,[workspace.id,JSON.stringify({activeSeats:seats})]);const token=`browser-owner-${crypto.randomUUID()}`,session=(await database.query(`insert into sessions(user_id,session_hash,security_version,idle_expires_at,absolute_expires_at,authenticated_at,auth_method)values($1,$2,1,now()+interval '1 hour',now()+interval '1 day',now(),'password')returning id`,[users[0].id,keyedHash(token,"local-only-session-secret-change-me-32chars")])).rows[0];await page.context().addCookies([{name:"nexaflow_session",value:token,url:"http://127.0.0.1:3000"}]);return{emails,users,workspace,roles,members,token,session}}
 
+test("personal settings are globally scoped and preference changes remain available at mobile width", async ({ page }) => {
+  await tenantBrowserFixture(page);
+  await page.goto("/crm");
+  await expect(page.getByRole("link", { name: "Personal settings" })).toBeVisible();
+  await page.getByRole("link", { name: "Personal settings" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Personal settings" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Display name" })).toHaveValue("Browser Owner");
+  await page.getByRole("combobox", { name: "Theme" }).selectOption("dark");
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect(page.getByRole("status")).toContainText("Preferences saved for this browser");
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test.beforeEach(async () => {
   await database.query("delete from rate_limit_windows");
   await database.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,feature_flags,trial_days,effective_from) values ('growth','e2e','Growth','active','["monthly","annual"]',5,'{}',14,now()-interval '1 day') on conflict(code,catalog_version) do update set status='active'`);

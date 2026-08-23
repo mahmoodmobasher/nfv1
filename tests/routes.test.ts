@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routes = ["/", "/select-plan", "/register", "/verify-email", "/login", "/forgot-password", "/reset-password", "/workspace/create", "/workspace/ready", "/workspace/switch", "/crm", "/crm/home", "/crm/pipeline", "/invite", "/workspace/settings", "/workspace/settings/people", "/workspace/settings/invite", "/workspace/settings/invitations", "/workspace/settings/teams", "/workspace/settings/transfer-ownership", "/workspace/invitations/accept", "/crm/leads/new"];
+const routes = ["/", "/select-plan", "/register", "/verify-email", "/login", "/forgot-password", "/reset-password", "/settings", "/workspace/create", "/workspace/ready", "/workspace/switch", "/crm", "/crm/home", "/crm/pipeline", "/invite", "/workspace/settings", "/workspace/settings/people", "/workspace/settings/invite", "/workspace/settings/invitations", "/workspace/settings/teams", "/workspace/settings/transfer-ownership", "/workspace/invitations/accept", "/crm/leads/new"];
 const apiRoutes = ["/api/health/live", "/api/health/ready", "/api/workspaces/selectable", "/api/workspaces/switch"];
 
 describe("Next.js route smoke coverage", () => {
