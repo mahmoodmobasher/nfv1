@@ -11,22 +11,35 @@ const connectionString = process.env.DATABASE_URL ?? "postgres://nexaflow:nexafl
 const config = { secret: "account-integration-secret-at-least-32-characters", appOrigin: "http://127.0.0.1:3000", idleMinutes: 30, absoluteHours: 24, touchIntervalSeconds: 60 };
 let pool: Pool;
 
-async function activePasswordUser() {
-  await registerPasswordUser(pool, { email: "account@example.test", displayName: "Initial Name", password: "Initial-password-123!", riskKey: "account-register" }, config);
+async function activePasswordUser(email = "account@example.test") {
+  await registerPasswordUser(pool, { email, displayName: "Initial Name", password: "Initial-password-123!", riskKey: `account-register:${email}` }, config);
   const message = (await pool.query<{ payload: { envelope: string } }>("select payload from outbox_messages where topic='identity.email_verification'")).rows[0];
   const token = decodeURIComponent(decryptEnvelope<{ text: string }>(message.payload.envelope, config.secret).text.split("token=")[1]);
   await verifyEmailToken(pool, token, config);
-  const login = await loginPassword(pool, { email: "account@example.test", password: "Initial-password-123!", riskKey: "account-login" }, config);
+  const login = await loginPassword(pool, { email, password: "Initial-password-123!", riskKey: `account-login:${email}` }, config);
   if (!login.ok) throw new Error("login failed");
   const session = await resolveIdentityContext(pool, login.sessionToken, config.secret);
   if (!session) throw new Error("missing session");
   return { login, session };
 }
 
-async function passwordResetToken() {
-  await requestPasswordReset(pool, "account@example.test", "account-reset", config);
+async function passwordResetToken(email = "account@example.test") {
+  await requestPasswordReset(pool, email, `account-reset:${email}`, config);
   const message = (await pool.query<{ payload: { envelope: string } }>("select payload from outbox_messages where topic='identity.password_reset' order by created_at desc limit 1")).rows[0];
   return decodeURIComponent(decryptEnvelope<{ text: string }>(message.payload.envelope, config.secret).text.split("token=")[1]);
+}
+
+async function waitForAdvisoryWaiters(expected: number) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const result = await pool.query<{ count: number }>(
+      `select count(*)::int count from pg_stat_activity
+       where datname = current_database() and pid <> pg_backend_pid()
+       and wait_event_type = 'Lock' and wait_event = 'advisory'`,
+    );
+    if (result.rows[0].count >= expected) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error(`Expected ${expected} password-operation advisory lock waiters`);
 }
 
 integration("Feature 3 account service", () => {
@@ -54,6 +67,53 @@ integration("Feature 3 account service", () => {
     expect(await completePasswordReset(pool, resetToken, "Recovery-password-123!", config)).toEqual({ ok: false, code: "invalid_or_expired" });
     expect((await loginPassword(pool, { email: "account@example.test", password: "Changed-password-123!", riskKey: "account-login-changed" }, config)).ok).toBe(true);
     expect((await pool.query("select action,outcome from audit_events where action='identity.password_changed'")).rows).toEqual([{ action: "identity.password_changed", outcome: "success" }]);
+  });
+
+  it.each(["change", "reset"] as const)("serializes password change against reset completion when %s wins", async (first) => {
+      const email = `concurrent-${first}@example.test`;
+      const { session } = await activePasswordUser(email);
+      const resetToken = await passwordResetToken(email);
+      const blocker = await pool.connect();
+      await blocker.query("begin");
+      await blocker.query(
+        "select pg_advisory_xact_lock(hashtext('identity.password_operation'), hashtext($1))",
+        [session.userId],
+      );
+      const change = () => changePassword(pool, { ...session, currentPassword: "Initial-password-123!", newPassword: "Changed-password-123!", recentMinutes: 10 });
+      const reset = () => completePasswordReset(pool, resetToken, "Recovery-password-123!", config);
+      const firstOperation = first === "change" ? change() : reset();
+      await waitForAdvisoryWaiters(1);
+      const secondOperation = first === "change" ? reset() : change();
+      await waitForAdvisoryWaiters(2);
+      await blocker.query("commit");
+      blocker.release();
+      const [firstResult, secondResult] = await Promise.allSettled([firstOperation, secondOperation]);
+      const changeResult = first === "change" ? firstResult : secondResult;
+      const resetResult = first === "reset" ? firstResult : secondResult;
+
+      if (first === "change") {
+        expect(changeResult).toMatchObject({ status: "fulfilled", value: { ok: true } });
+        expect(resetResult).toMatchObject({ status: "fulfilled", value: { ok: false, code: "invalid_or_expired" } });
+      } else {
+        expect(resetResult).toMatchObject({ status: "fulfilled", value: { ok: true } });
+        expect(changeResult).toMatchObject({ status: "rejected", reason: { code: "authentication_required", status: 401 } });
+      }
+
+      expect((await pool.query("select security_version from users where id=$1", [session.userId])).rows[0].security_version).toBe(2);
+      expect((await pool.query("select count(*)::int count from sessions where user_id=$1 and revoked_at is null", [session.userId])).rows[0].count).toBe(0);
+      const tokenState = (await pool.query("select consumed_at,replaced_at from identity_tokens where user_id=$1 and purpose='password_reset'", [session.userId])).rows[0];
+      expect(Boolean(tokenState.consumed_at)).toBe(first === "reset");
+      expect(Boolean(tokenState.replaced_at)).toBe(first === "change");
+      expect((await pool.query("select action from audit_events where actor_user_id=$1 and action in ('identity.password_changed','identity.password_reset_completed')", [session.userId])).rows).toEqual([
+        { action: first === "change" ? "identity.password_changed" : "identity.password_reset_completed" },
+      ]);
+
+      await expect(completePasswordReset(pool, resetToken, "Retry-password-123!", config)).resolves.toEqual({ ok: false, code: "invalid_or_expired" });
+      await expect(change()).rejects.toMatchObject({ code: "authentication_required", status: 401 });
+      expect((await pool.query("select security_version from users where id=$1", [session.userId])).rows[0].security_version).toBe(2);
+      expect((await pool.query("select count(*)::int count from audit_events where actor_user_id=$1 and action in ('identity.password_changed','identity.password_reset_completed')", [session.userId])).rows[0].count).toBe(1);
+      const winnerPassword = first === "change" ? "Changed-password-123!" : "Recovery-password-123!";
+      expect((await loginPassword(pool, { email, password: winnerPassword, riskKey: `winner-login:${email}` }, config)).ok).toBe(true);
   });
 
   it("rolls back password, reset-token, Session, and success Audit changes after a late transaction failure", async () => {

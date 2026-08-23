@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { writeAudit } from "../security/audit";
 import { hashPassword, verifyPassword } from "../security/password";
 import { revokeAllSessions } from "../security/session";
+import { lockPasswordOperation } from "../security/password-operation";
 import { PasswordPolicyError, assertPasswordPolicy } from "../../shared/password-policy";
 
 export class AccountError extends Error {
@@ -171,6 +172,7 @@ export async function changePassword(
   }
   const passwordHash = await hashPassword(input.newPassword);
   return transaction(pool, async (client) => {
+    await lockPasswordOperation(client, input.userId);
     const found = await client.query<{ password_hash: string | null; authenticated_at: Date; auth_method: string }>(
       `select c.password_hash, s.authenticated_at, s.auth_method
        from sessions s left join identity_credentials c on c.user_id = s.user_id and c.provider = 'password'

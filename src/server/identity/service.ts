@@ -6,6 +6,7 @@ import { consumeRateLimitDimensions } from "../security/rate-limit";
 import { createSession, revokeAllSessions, revokeCurrentSession } from "../security/session";
 import { assertPasswordPolicy } from "../../shared/password-policy";
 import type { RequestRiskContext } from "../http";
+import { lockPasswordOperation } from "../security/password-operation";
 
 export type IdentityConfig = {
   secret: string;
@@ -164,11 +165,19 @@ export async function requestPasswordReset(pool: Pool, emailInput: string, riskK
 export async function completePasswordReset(pool: Pool, token: string, password: string, config: IdentityConfig) {
   assertPasswordPolicy(password);
   const passwordHash = await hashPassword(password);
+  const tokenHash = keyedHash(token, config.secret);
   return transaction(pool, async (client) => {
+    const candidate = await client.query<{ user_id: string }>(
+      `select user_id from identity_tokens where token_hash = $1 and purpose = 'password_reset'
+       and consumed_at is null and replaced_at is null and expires_at > now()`,
+      [tokenHash],
+    );
+    if (!candidate.rows[0]) return { ok: false, code: "invalid_or_expired" } as const;
+    await lockPasswordOperation(client, candidate.rows[0].user_id);
     const found = await client.query<{ id: string; user_id: string }>(
       `select id, user_id from identity_tokens where token_hash = $1 and purpose = 'password_reset'
-       and consumed_at is null and replaced_at is null and expires_at > now() for update`,
-      [keyedHash(token, config.secret)],
+       and user_id = $2 and consumed_at is null and replaced_at is null and expires_at > now() for update`,
+      [tokenHash, candidate.rows[0].user_id],
     );
     if (!found.rows[0]) return { ok: false, code: "invalid_or_expired" } as const;
     const row = found.rows[0];
