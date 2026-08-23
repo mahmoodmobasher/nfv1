@@ -33,9 +33,9 @@ The password-change regression proves that an outstanding reset link becomes inv
 ## Gate status
 
 - Engineering integration: **PASS**.
-- Architecture: **PENDING explicit final verdict** after closure of the reset-token blocker.
-- Graphics: **PENDING explicit final verdict** after the theme and password-accessibility remediations.
-- Product acceptance: **PENDING Architecture and Graphics acceptance**.
+- Architecture: **ACCEPT**, relayed by Product after closure of the reset-token blocker at `750c880`.
+- Graphics: **ACCEPT**, relayed by Product after the theme and password-accessibility remediations.
+- Product acceptance: **ACCEPT for merge**, based on the completed Engineering evidence and both independent gates.
 - Merge/deployment: not performed.
 
-The review tasks completed without returning visible verdict text. This checkpoint therefore does not claim Architecture, Graphics, Product, merge, release, or UAT acceptance.
+The accepted scope remains a local release candidate. Merge evidence and any UAT deployment must be recorded separately; this checkpoint does not claim UAT or production deployment.
