@@ -24,7 +24,7 @@ export default async function Page() {
       [identity.userId],
     )).rows[0];
     if (!user) redirect("/login?next=/settings");
-    return <AccountSettingsClient initialName={user.display_name} email={user.primary_email_display ?? ""} />;
+    return <AccountSettingsClient initialName={user.display_name} />;
   } finally {
     await pool.end();
   }

@@ -3,74 +3,78 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { Brand } from "../onboarding/components";
-import { securePost } from "../onboarding/api";
 
-type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string };
-const preferenceKey = "nexaflow-personal-settings-preview";
-const defaults: Preferences = { theme: "light", locale: "en-CA", timezone: "America/Toronto" };
+type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string; version: number };
+const defaults: Preferences = { theme: "light", locale: "en-CA", timezone: "America/Toronto", version: 0 };
 
 function applyTheme(theme: Preferences["theme"]) {
   const effectiveTheme = theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   document.documentElement.dataset.accountTheme = effectiveTheme;
 }
 
-function loadPreferences(): Preferences {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(preferenceKey) ?? "null") as Partial<Preferences> | null;
-    return { ...defaults, ...saved };
-  } catch { return defaults; }
+async function accountMutation(path: string, method: "PATCH" | "POST", body: unknown) {
+  const csrf = await fetch("/api/auth/csrf", { cache: "no-store" });
+  if (!csrf.ok) throw new Error("csrf_unavailable");
+  const { token } = await csrf.json() as { token: string };
+  const response = await fetch(path, { method, headers: { "content-type": "application/json", "x-csrf-token": token }, body: JSON.stringify(body) });
+  return { response, body: await response.json().catch(() => null) as { data?: unknown; code?: string } | null };
 }
 
-export function AccountSettingsClient({ initialName, email }: { initialName: string; email: string }) {
-  const [preferences, setPreferences] = useState<Preferences>(defaults);
+export function AccountSettingsClient({ initialName }: { initialName: string }) {
+  const [preferences, setPreferences] = useState<Preferences>({ ...defaults, version: 0 });
   const [profileName, setProfileName] = useState(initialName);
   const [profileStatus, setProfileStatus] = useState("");
   const [preferencesStatus, setPreferencesStatus] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
-  const [reauthenticated, setReauthenticated] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [securityStatus, setSecurityStatus] = useState("");
 
   useEffect(() => {
-    const saved = loadPreferences();
-    setPreferences(saved);
-    applyTheme(saved.theme);
+    fetch("/api/account/preferences", { cache: "no-store" }).then(async response => {
+      if (!response.ok) return;
+      const payload = await response.json() as { data?: { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number } };
+      if (!payload.data) return;
+      const next = { theme: payload.data.appearance, locale: payload.data.locale ?? defaults.locale, timezone: payload.data.timeZone ?? defaults.timezone, version: payload.data.version };
+      setPreferences(next); applyTheme(next.theme);
+    }).catch(() => undefined);
   }, []);
 
-  function saveProfile(event: FormEvent) {
+  async function saveProfile(event: FormEvent) {
     event.preventDefault();
     const value = profileName.trim();
     if (!value) return setProfileStatus("Enter the name you want to use in NexaFlow.");
-    // Integration seam: the existing identity API has no authenticated profile-update endpoint.
-    setProfileStatus("Profile updates are ready for the account API. No profile change was saved.");
-  }
-
-  function savePreferences(event: FormEvent) {
-    event.preventDefault();
-    window.localStorage.setItem(preferenceKey, JSON.stringify(preferences));
-    applyTheme(preferences.theme);
-    setPreferencesStatus("Preferences saved for this browser. Server-synced preferences will replace this local setting.");
-  }
-
-  async function confirmIdentity(event: FormEvent) {
-    event.preventDefault();
-    setSecurityStatus("Confirming your identity…");
+    setProfileStatus("Saving profile…");
     try {
-      const { response } = await securePost("/api/auth/recent/password", { password: currentPassword });
-      if (!response.ok) return setSecurityStatus("We couldn’t confirm your identity. Check your password and try again.");
-      setCurrentPassword("");
-      setReauthenticated(true);
-      setSecurityStatus("Identity confirmed. Continue with the secure recovery flow.");
-    } catch { setSecurityStatus("We couldn’t confirm your identity. Try again."); }
+      const { response, body } = await accountMutation("/api/account/profile", "PATCH", { displayName: value });
+      if (!response.ok || !body?.data || typeof body.data !== "object") throw new Error("profile_not_saved");
+      const data = body.data as { displayName: string };
+      setProfileName(data.displayName); setProfileStatus("Profile updated.");
+    } catch { setProfileStatus("We couldn’t save your profile. Try again."); }
   }
 
-  async function requestRecovery(event: FormEvent) {
+  async function savePreferences(event: FormEvent) {
     event.preventDefault();
-    setSecurityStatus("Sending a secure recovery link…");
+    setPreferencesStatus("Saving preferences…");
     try {
-      const { response } = await securePost("/api/auth/reset-request", { email });
-      if (!response.ok) throw new Error("recovery_unavailable");
-      setSecurityStatus("Check your email for a recovery link. It securely completes the password change and revokes existing sessions.");
-    } catch { setSecurityStatus("We couldn’t start account recovery. Use the recovery page to try again."); }
+      const { response, body } = await accountMutation("/api/account/preferences", "PATCH", { appearance: preferences.theme, locale: preferences.locale, timeZone: preferences.timezone, expectedVersion: preferences.version });
+      if (!response.ok || !body?.data || typeof body.data !== "object") throw new Error("preferences_not_saved");
+      const data = body.data as { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number };
+      const next = { theme: data.appearance, locale: data.locale ?? defaults.locale, timezone: data.timeZone ?? defaults.timezone, version: data.version };
+      setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Preferences updated.");
+    } catch { setPreferencesStatus("We couldn’t save your preferences. Reload the latest settings and try again."); }
+  }
+
+  async function changePassword(event: FormEvent) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) return setSecurityStatus("New passwords do not match.");
+    setSecurityStatus("Changing password…");
+    try {
+      const { response } = await accountMutation("/api/account/security/password", "POST", { currentPassword, newPassword });
+      if (!response.ok) throw new Error("password_not_changed");
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      window.location.replace("/login?signedOut=1");
+    } catch { setSecurityStatus("We couldn’t change your password. Confirm your current password and try again."); }
   }
 
   return <div className="account-shell">
@@ -99,7 +103,7 @@ export function AccountSettingsClient({ initialName, email }: { initialName: str
 
       <section className="account-section" aria-labelledby="security-heading">
         <div><p className="eyebrow">Account security</p><h2 id="security-heading">Change your password</h2><p>Confirm your identity before starting a password change. Password recovery completes the change and revokes existing sessions.</p></div>
-        {!reauthenticated ? <form onSubmit={confirmIdentity}><label className="field"><span>Current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><button className="primary">Confirm identity</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form> : <form onSubmit={requestRecovery}><p>You’re confirmed. For this phase, password changes use the existing secure recovery link rather than a new direct-change API.</p><button className="primary">Send secure recovery link</button><Link className="text-button" href="/forgot-password">Use the recovery page instead</Link></form>}
+        <form onSubmit={changePassword}><label className="field"><span>Current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><label className="field"><span>New password</span><input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" required /></label><label className="field"><span>Confirm new password</span><input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" required /></label><p>Changing your password signs you out of all devices. Sign in again to continue.</p><button className="primary">Change password</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form>
         {securityStatus && <p className="alert" role="status">{securityStatus}</p>}
       </section>
     </main>

@@ -77,7 +77,7 @@ test("personal settings are globally scoped and preference changes remain availa
   await expect(page.getByRole("textbox", { name: "Display name" })).toHaveValue("Browser Owner");
   await page.getByRole("combobox", { name: "Theme" }).selectOption("dark");
   await page.getByRole("button", { name: "Save preferences" }).click();
-  await expect(page.getByRole("status")).toContainText("Preferences saved for this browser");
+  await expect(page.getByRole("status")).toContainText("Preferences updated.");
   await page.setViewportSize({ width: 320, height: 640 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
