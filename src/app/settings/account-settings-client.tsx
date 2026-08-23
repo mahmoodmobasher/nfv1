@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { Brand } from "../onboarding/components";
+import { AccountThemeSync } from "../account-theme-sync";
+import { announceThemePreference } from "../theme";
 
 type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string; version: number };
 const defaults: Preferences = { theme: "light", locale: "en-CA", timezone: "America/Toronto", version: 0 };
-
-function applyTheme(theme: Preferences["theme"]) {
-  const effectiveTheme = theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  document.documentElement.dataset.accountTheme = effectiveTheme;
-}
 
 async function accountMutation(path: string, method: "PATCH" | "POST", body: unknown) {
   const csrf = await fetch("/api/auth/csrf", { cache: "no-store" });
@@ -20,8 +17,9 @@ async function accountMutation(path: string, method: "PATCH" | "POST", body: unk
   return { response, body: await response.json().catch(() => null) as { data?: unknown; code?: string } | null };
 }
 
-export function AccountSettingsClient({ initialName }: { initialName: string }) {
-  const [preferences, setPreferences] = useState<Preferences>({ ...defaults, version: 0 });
+export function AccountSettingsClient({ initialName, initialPreferences }: { initialName: string; initialPreferences: Preferences }) {
+  const [preferences, setPreferences] = useState<Preferences>(initialPreferences);
+  const confirmedPreferences = useRef<Preferences>(initialPreferences);
   const [profileName, setProfileName] = useState(initialName);
   const [profileStatus, setProfileStatus] = useState("");
   const [preferencesStatus, setPreferencesStatus] = useState("");
@@ -33,16 +31,6 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
   const [fieldError, setFieldError] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const passwordErrorRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    fetch("/api/account/preferences", { cache: "no-store" }).then(async response => {
-      if (!response.ok) return;
-      const payload = await response.json() as { data?: { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number } };
-      if (!payload.data) return;
-      const next = { theme: payload.data.appearance, locale: payload.data.locale ?? defaults.locale, timezone: payload.data.timeZone ?? defaults.timezone, version: payload.data.version };
-      setPreferences(next); applyTheme(next.theme);
-    }).catch(() => undefined);
-  }, []);
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
@@ -65,8 +53,12 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       if (!response.ok || !body?.data || typeof body.data !== "object") throw new Error("preferences_not_saved");
       const data = body.data as { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number };
       const next = { theme: data.appearance, locale: data.locale ?? defaults.locale, timezone: data.timeZone ?? defaults.timezone, version: data.version };
-      setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Preferences updated.");
-    } catch { setPreferencesStatus("We couldn’t save your preferences."); }
+      confirmedPreferences.current = next; setPreferences(next); announceThemePreference(next.theme, true); setPreferencesStatus("Preferences updated.");
+    } catch {
+      const confirmed = confirmedPreferences.current;
+      setPreferences(confirmed); announceThemePreference(confirmed.theme, true);
+      setPreferencesStatus("We couldn’t save your preferences. Your last saved theme has been restored.");
+    }
   }
 
   function reloadPreferences() {
@@ -75,7 +67,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       const payload = await response.json() as { data?: { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number } };
       if (!response.ok || !payload.data) throw new Error("reload_failed");
       const next = { theme: payload.data.appearance, locale: payload.data.locale ?? defaults.locale, timezone: payload.data.timeZone ?? defaults.timezone, version: payload.data.version };
-      setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Latest preferences loaded.");
+      confirmedPreferences.current = next; setPreferences(next); announceThemePreference(next.theme, true); setPreferencesStatus("Latest preferences loaded.");
     }).catch(() => setPreferencesStatus("We couldn’t load the latest preferences. Try again."));
   }
 
@@ -104,7 +96,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
     } catch { setSecurityStatus("We couldn’t change your password. Confirm your current password and try again."); }
   }
 
-  return <div className="account-shell">
+  return <div className="account-shell"><AccountThemeSync reconcile={false} />
     <header className="account-header"><Brand /><nav aria-label="Account navigation"><Link href="/crm">Back to CRM</Link></nav></header>
     <main className="account-content">
       <p className="eyebrow">Account</p>
@@ -120,7 +112,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       <section className="account-section" aria-labelledby="preferences-heading">
         <div><p className="eyebrow">Preferences</p><h2 id="preferences-heading">Appearance and regional settings</h2><p>Choose how NexaFlow looks and formats information for you.</p></div>
         <form onSubmit={savePreferences} className="account-form-grid">
-          <label className="field"><span>Theme</span><select value={preferences.theme} onChange={event => setPreferences(current => ({ ...current, theme: event.target.value as Preferences["theme"] }))}><option value="light">Light</option><option value="system">Use device setting</option><option value="dark">Dark</option></select></label>
+          <label className="field"><span>Theme</span><select value={preferences.theme} onChange={event => { const theme = event.target.value as Preferences["theme"]; setPreferences(current => ({ ...current, theme })); announceThemePreference(theme); }}><option value="light">Light</option><option value="system">Use device setting</option><option value="dark">Dark</option></select></label>
           <label className="field"><span>Language and region</span><select value={preferences.locale} onChange={event => setPreferences(current => ({ ...current, locale: event.target.value }))}><option value="en-CA">English (Canada)</option><option value="en-US">English (United States)</option><option value="en-GB">English (United Kingdom)</option></select></label>
           <label className="field"><span>Time zone</span><select value={preferences.timezone} onChange={event => setPreferences(current => ({ ...current, timezone: event.target.value }))}><option value="America/Toronto">Toronto (Eastern)</option><option value="America/Vancouver">Vancouver (Pacific)</option><option value="Europe/London">London</option><option value="UTC">UTC</option></select></label>
           <button className="primary">Save preferences</button>

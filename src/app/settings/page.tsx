@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getServerEnv } from "@/server/env";
 import { localDatabase, sessionToken } from "@/server/http";
 import { resolveIdentityContext } from "@/server/security/session";
+import { accountPreferences } from "@/server/account/service";
 import { AccountSettingsClient } from "./account-settings-client";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,8 @@ export default async function Page() {
       [identity.userId],
     )).rows[0];
     if (!user) redirect("/login?next=/settings");
-    return <AccountSettingsClient initialName={user.display_name} />;
+    const preferences = await accountPreferences(pool, identity);
+    return <AccountSettingsClient initialName={user.display_name} initialPreferences={{ theme: preferences.appearance, locale: preferences.locale ?? "en-CA", timezone: preferences.timeZone ?? "America/Toronto", version: preferences.version }} />;
   } finally {
     await pool.end();
   }
