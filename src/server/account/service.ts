@@ -190,6 +190,11 @@ export async function changePassword(
       "update identity_credentials set password_hash = $2, updated_at = now() where user_id = $1 and provider = 'password'",
       [input.userId, passwordHash],
     );
+    await client.query(
+      `update identity_tokens set replaced_at = now(), updated_at = now()
+       where user_id = $1 and purpose = 'password_reset' and consumed_at is null and replaced_at is null`,
+      [input.userId],
+    );
     await revokeAllSessions(client, input.userId);
     await writeAudit(client, {
       actorUserId: input.userId,

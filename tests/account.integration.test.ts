@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb } from "../src/server/db/client";
 import { accountPreferences, accountProfile, changePassword, updateAccountPreferences, updateDisplayName } from "../src/server/account/service";
-import { loginPassword, registerPasswordUser, verifyEmailToken } from "../src/server/identity/service";
+import { completePasswordReset, loginPassword, registerPasswordUser, requestPasswordReset, verifyEmailToken } from "../src/server/identity/service";
 import { decryptEnvelope } from "../src/server/security/crypto";
 import { resolveIdentityContext } from "../src/server/security/session";
 
@@ -23,6 +23,12 @@ async function activePasswordUser() {
   return { login, session };
 }
 
+async function passwordResetToken() {
+  await requestPasswordReset(pool, "account@example.test", "account-reset", config);
+  const message = (await pool.query<{ payload: { envelope: string } }>("select payload from outbox_messages where topic='identity.password_reset' order by created_at desc limit 1")).rows[0];
+  return decodeURIComponent(decryptEnvelope<{ text: string }>(message.payload.envelope, config.secret).text.split("token=")[1]);
+}
+
 integration("Feature 3 account service", () => {
   beforeAll(() => { ({ pool } = createDb({ connectionString })); });
   beforeEach(async () => { await pool.query("truncate lead_activities,lead_visible_teams,leads,pipeline_stages,team_memberships,teams,workspace_invitations,audit_events,outbox_messages,idempotency_records,workspace_entitlement_snapshots,workspace_memberships,roles,oidc_transactions,identity_tokens,sessions,identity_credentials,onboarding_progress,workspaces,users,rate_limit_windows restart identity cascade"); });
@@ -36,16 +42,33 @@ integration("Feature 3 account service", () => {
     expect((await pool.query("select action,outcome,metadata from audit_events where action='identity.profile_updated'")).rows[0]).toEqual({ action: "identity.profile_updated", outcome: "success", metadata: { operation: "identity.profile_updated", change_fields: ["display_name"] } });
   });
 
-  it("requires recent authentication and current password, then revokes every session", async () => {
+  it("requires recent authentication and current password, then revokes every session and outstanding reset token", async () => {
     const { login, session } = await activePasswordUser();
+    const resetToken = await passwordResetToken();
     const second = await loginPassword(pool, { email: "account@example.test", password: "Initial-password-123!", riskKey: "account-login-second" }, config);
     if (!second.ok) throw new Error("second login failed");
     await expect(changePassword(pool, { ...session, currentPassword: "wrong-password", newPassword: "Changed-password-123!", recentMinutes: 10 })).rejects.toMatchObject({ code: "invalid_credentials" });
     await expect(changePassword(pool, { ...session, currentPassword: "Initial-password-123!", newPassword: "Changed-password-123!", recentMinutes: 10 })).resolves.toEqual({ ok: true });
     expect(await resolveIdentityContext(pool, login.sessionToken, config.secret)).toBeNull();
     expect(await resolveIdentityContext(pool, second.sessionToken, config.secret)).toBeNull();
+    expect(await completePasswordReset(pool, resetToken, "Recovery-password-123!", config)).toEqual({ ok: false, code: "invalid_or_expired" });
     expect((await loginPassword(pool, { email: "account@example.test", password: "Changed-password-123!", riskKey: "account-login-changed" }, config)).ok).toBe(true);
     expect((await pool.query("select action,outcome from audit_events where action='identity.password_changed'")).rows).toEqual([{ action: "identity.password_changed", outcome: "success" }]);
+  });
+
+  it("rolls back password, reset-token, Session, and success Audit changes after a late transaction failure", async () => {
+    const { login, session } = await activePasswordUser();
+    await passwordResetToken();
+    await pool.query("alter table audit_events add constraint account_password_change_rollback_test check (action <> 'identity.password_changed')");
+    try {
+      await expect(changePassword(pool, { ...session, currentPassword: "Initial-password-123!", newPassword: "Changed-password-123!", recentMinutes: 10 })).rejects.toMatchObject({ code: "23514" });
+    } finally {
+      await pool.query("alter table audit_events drop constraint account_password_change_rollback_test");
+    }
+    expect((await pool.query("select consumed_at,replaced_at from identity_tokens where purpose='password_reset'")).rows).toEqual([{ consumed_at: null, replaced_at: null }]);
+    expect(await resolveIdentityContext(pool, login.sessionToken, config.secret)).not.toBeNull();
+    expect((await loginPassword(pool, { email: "account@example.test", password: "Initial-password-123!", riskKey: "account-rollback-login" }, config)).ok).toBe(true);
+    expect((await pool.query("select count(*)::int count from audit_events where action='identity.password_changed'")).rows[0].count).toBe(0);
   });
 
   it("creates, reads, and version-controls only the current user's typed preferences", async () => {
