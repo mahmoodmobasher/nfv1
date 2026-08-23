@@ -1,6 +1,6 @@
 # Design system Stage 1–2 implementation handoff
 
-Date: 2026-08-23  
+Date: 2026-08-23
 Scope: Graphics proposal `23d23f4`, Stage 1 foundation and Stage 2 shared authenticated shell/controls only.
 
 ## Implemented

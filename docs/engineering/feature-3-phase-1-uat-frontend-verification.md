@@ -1,9 +1,9 @@
 # Feature 3 Phase 1 — UAT frontend verification
 
-Date: 2026-08-23  
-Environment: `https://app.nexaflowsystems.com`  
-Release under review: `v0.3.0-uat.1`  
-Reviewer: Dev1 frontend/browser acceptance  
+Date: 2026-08-23
+Environment: `https://app.nexaflowsystems.com`
+Release under review: `v0.3.0-uat.1`
+Reviewer: Dev1 frontend/browser acceptance
 Overall frontend verdict: **FAIL — bounded UI defects remain**
 
 ## Scope and evidence boundary

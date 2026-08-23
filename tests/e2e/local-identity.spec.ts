@@ -145,8 +145,11 @@ test("authenticated server theme is authoritative over empty, correct, stale, an
   expect(await response!.text()).toContain('data-theme-preference="dark"');
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.goto("/workspace/switch");
+  await page.waitForURL(/\/crm\/home$/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.evaluate(() => history.pushState(null, "", "/workspace/switch"));
   await page.goBack();
+  await page.waitForURL(/\/crm\/home$/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
