@@ -155,6 +155,9 @@ html[data-theme="light"] {
   --nf-danger-soft: #fef0ee;
   --nf-info: #2457b2;
   --nf-info-soft: #edf3ff;
+  --nf-nav-text: #34433e;
+  --nf-nav-accent: #8f3215;
+  --nf-nav-unavailable: #62716b;
   --nf-space-1: 4px;
   --nf-space-2: 8px;
   --nf-space-3: 12px;
@@ -215,6 +218,9 @@ html[data-theme="dark"] {
   --nf-danger-soft: #421f1c;
   --nf-info: #91b2ff;
   --nf-info-soft: #192d58;
+  --nf-nav-text: #d1ddd8;
+  --nf-nav-accent: #ff9a78;
+  --nf-nav-unavailable: #9fb0aa;
   --nf-shadow-1: 0 1px 2px rgb(0 0 0 / 28%);
   --nf-shadow-2: 0 8px 28px rgb(0 0 0 / 32%);
   --nf-shadow-3: 0 20px 64px rgb(0 0 0 / 48%);
@@ -241,6 +247,10 @@ small { font-size: .75rem; line-height: 1.417; }
 .brand small,.lead,.reassurance,.filter-context { color: var(--nf-text-muted); }
 .crm-preview nav a,.admin-shell nav a,.admin-mobile nav a { color: var(--nf-text); border-radius: var(--nf-radius-control); }
 .crm-preview nav a:hover,.admin-shell nav a:hover,.crm-preview nav a.active { background: var(--nf-brand-soft); color: var(--nf-brand); }
+.admin-shell>aside nav a:link,.admin-shell>aside nav a:visited { color: var(--nf-nav-text); }
+.admin-shell>aside nav a:hover,.admin-shell>aside nav a:active,.admin-shell>aside nav a[aria-current="page"] { background: var(--nf-brand-soft); color: var(--nf-nav-accent); }
+.admin-shell>aside nav a:focus-visible { color: var(--nf-nav-accent); }
+.admin-shell>aside nav a[aria-disabled="true"] { background: transparent; color: var(--nf-nav-unavailable); cursor: not-allowed; }
 .admin-workspace,.workspace-control { background: var(--nf-surface-2); color: var(--nf-text); border-radius: var(--nf-radius-card); }
 .mobile-menu .menu-backdrop { background: rgb(11 18 16 / 64%); }
 .mobile-menu-panel { background: var(--nf-surface-raised); color: var(--nf-text-strong); border-color: var(--nf-border-strong); border-radius: var(--nf-radius-card); box-shadow: var(--nf-shadow-3); }
@@ -277,6 +287,8 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .confirm-dialog p { color: var(--nf-text); }
 .account-section,.admin-grid article,.admin-list article,.empty,.lead-card,.activity-list li,.dashboard-card,.kpi-card,.dashboard-filters,.admin-table,.workspace-choice-list li { background: var(--nf-surface-1); color: var(--nf-text-strong); border-color: var(--nf-border-subtle); border-radius: var(--nf-radius-card); box-shadow: var(--nf-shadow-1); }
 .account-section p:not(.eyebrow):not(.alert),.account-content>.lead,.lead-card p,.activity-list p,.kpi-card span,.dashboard-section-heading>p,.dashboard-activity p { color: var(--nf-text); }
+.lead-card h2 a,.lead-card h3 a { color: var(--nf-text-strong); }
+.lead-card>div,.lead-card small { color: var(--nf-text-muted); }
 .admin-table th { background: var(--nf-surface-2); color: var(--nf-text-strong); font-size: 13px; font-weight: 600; }
 .admin-table th,.admin-table td { border-color: var(--nf-border-subtle); }
 .admin-table tbody tr:hover { background: var(--nf-surface-2); }

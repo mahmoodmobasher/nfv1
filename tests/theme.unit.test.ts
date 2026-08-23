@@ -73,4 +73,11 @@ describe("theme foundation", () => {
     expect(policy).not.toContain("unsafe-eval");
     expect(policy).toContain("frame-ancestors 'none'");
   });
+
+  it("keeps desktop Workspace navigation states at WCAG AA contrast", () => {
+    const lightSurface = "#ffffff";
+    const darkSurface = "#121d19";
+    for (const color of ["#34433e", "#8f3215", "#62716b"]) expect(contrast(color, lightSurface), color).toBeGreaterThanOrEqual(4.5);
+    for (const color of ["#d1ddd8", "#ff9a78", "#9fb0aa"]) expect(contrast(color, darkSurface), color).toBeGreaterThanOrEqual(4.5);
+  });
 });

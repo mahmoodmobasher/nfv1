@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Pool } from "pg";
-import { expect, test, type Page } from "playwright/test";
+import { expect, test, type Locator, type Page } from "playwright/test";
 import { keyedHash } from "../../src/server/security/crypto";
 
 const run = promisify(execFile);
@@ -71,9 +71,47 @@ async function setServerAppearance(userId: string, appearance: "light" | "dark" 
   await database.query(`insert into user_preferences(user_id,appearance) values($1,$2) on conflict(user_id) do update set appearance=$2,version=user_preferences.version+1,updated_at=now()`, [userId, appearance]);
 }
 
+async function seedVisualCrm(fixture: Awaited<ReturnType<typeof tenantBrowserFixture>>) {
+  const stage = (await database.query<{ id: string }>("insert into pipeline_stages(workspace_id,name,position) values($1,'Qualified',0) returning id", [fixture.workspace.id])).rows[0];
+  await database.query(`insert into leads(workspace_id,first_name,last_name,email_normalized,email_display,company,source,status,stage_id,owner_membership_id,visibility,created_at,updated_at) values($1,'Jordan','Lee','jordan.visual@example.test','jordan.visual@example.test','Acme North','website','open',$2,$3,'workspace','2026-08-20T12:00:00Z','2026-08-20T12:00:00Z')`, [fixture.workspace.id, stage.id, fixture.members[0].id]);
+}
+
 async function visualBaseline(page: Page, name: string) {
   await page.locator("nextjs-portal").evaluateAll(portals => portals.forEach(portal => portal.remove()));
   await expect(page).toHaveScreenshot(name, { fullPage: true, animations: "disabled" });
+}
+
+async function tabTo(page: Page, target: Locator) {
+  for (let index = 0; index < 50; index += 1) {
+    await page.keyboard.press("Tab");
+    if (await target.evaluate(element => element === document.activeElement).catch(() => false)) return;
+  }
+  throw new Error("Keyboard traversal did not reach the requested control.");
+}
+
+function rgb(value: string) {
+  return value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+}
+
+function colorContrast(foreground: string, background: string) {
+  const channel = (value: number) => { const normalized = value / 255; return normalized <= .04045 ? normalized / 12.92 : ((normalized + .055) / 1.055) ** 2.4; };
+  const luminance = (value: string) => { const [red, green, blue] = rgb(value).map(channel); return .2126 * red + .7152 * green + .0722 * blue; };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (lighter + .05) / (darker + .05);
+}
+
+async function expectVisibleFocus(target: Locator, surface: Locator) {
+  const style = await target.evaluate(element => ({ color: getComputedStyle(element).outlineColor, width: getComputedStyle(element).outlineWidth, offset: getComputedStyle(element).outlineOffset }));
+  const background = await surface.evaluate(element => getComputedStyle(element).backgroundColor);
+  expect(style.width).toBe("2px");
+  expect(style.offset).toBe("2px");
+  expect(colorContrast(style.color, background)).toBeGreaterThanOrEqual(3);
+}
+
+async function renderedTextContrast(target: Locator, surface: Locator) {
+  const style = await target.evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
+  const fallback = await surface.evaluate(element => getComputedStyle(element).backgroundColor);
+  return colorContrast(style.color, /rgba\([^)]*,\s*0\)/.test(style.background) ? fallback : style.background);
 }
 
 test("authenticated server theme is authoritative over empty, correct, stale, and unavailable cache", async ({ page }) => {
@@ -119,6 +157,7 @@ test("strict CSP authorizes only the matching nonce", async ({ page }) => {
 
 test("personal settings theme, paired baselines, keyboard focus, and responsive shells", async ({ page }) => {
   const fixture = await tenantBrowserFixture(page);
+  await seedVisualCrm(fixture);
   const consoleFailures: string[] = [];
   page.on("console", message => { if (/Content Security Policy|hydration|recoverable/i.test(message.text())) consoleFailures.push(message.text()); });
   const response = await page.goto("/crm");
@@ -163,6 +202,8 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   await visualBaseline(page, "design-system-personal-settings-dark.png");
   await page.goto("/crm");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
   await visualBaseline(page, "design-system-crm-dark.png");
   await page.goto("/workspace/settings");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -170,6 +211,8 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
 
   await setServerAppearance(fixture.users[0].id, "light");
   await page.goto("/crm");
+  await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
   await visualBaseline(page, "design-system-crm-light.png");
   await page.goto("/workspace/settings");
   await visualBaseline(page, "design-system-workspace-admin-light.png");
@@ -203,6 +246,74 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   expect(focusBox!.x + focusBox!.width).toBeLessThanOrEqual(640);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(consoleFailures).toEqual([]);
+});
+
+test("Workspace navigation states and representative controls retain keyboard focus in both themes", async ({ page }) => {
+  const fixture = await tenantBrowserFixture(page);
+  for (const theme of ["light", "dark"] as const) {
+    await setServerAppearance(fixture.users[0].id, theme);
+    await page.goto("/crm");
+    await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+    await page.goto("/workspace/settings");
+    await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
+    const aside = page.locator(".admin-shell>aside");
+    const nav = aside.getByRole("navigation", { name: "Workspace navigation" });
+    const defaultLink = nav.getByRole("link", { name: "CRM overview" });
+    const activeLink = nav.getByRole("link", { name: "Workspace settings" });
+    expect(await renderedTextContrast(defaultLink, aside)).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(defaultLink, aside)).toBeGreaterThanOrEqual(4.5);
+    expect(await activeLink.getAttribute("aria-current")).toBe("page");
+    expect(await renderedTextContrast(activeLink, aside)).toBeGreaterThanOrEqual(4.5);
+    await defaultLink.hover();
+    expect(await renderedTextContrast(defaultLink, aside)).toBeGreaterThanOrEqual(4.5);
+    const box = await defaultLink.boundingBox();
+    await page.mouse.move(box!.x + 8, box!.y + 8);
+    await page.mouse.down();
+    expect(await renderedTextContrast(defaultLink, aside)).toBeGreaterThanOrEqual(4.5);
+    await page.mouse.move(0, 0);
+    await page.mouse.up();
+    await defaultLink.evaluate(element => element.setAttribute("aria-disabled", "true"));
+    expect(await renderedTextContrast(defaultLink, aside)).toBeGreaterThanOrEqual(4.5);
+    await defaultLink.evaluate(element => element.removeAttribute("aria-disabled"));
+    await page.locator("body").press("Home").catch(() => undefined);
+    await tabTo(page, defaultLink);
+    await expectVisibleFocus(defaultLink, aside);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "Personal settings" })).toBeVisible();
+    const pageSurface = page.locator(".account-shell");
+    const targets = [
+      page.getByRole("link", { name: "Back to CRM" }),
+      page.getByRole("textbox", { name: "Display name" }),
+      page.getByRole("button", { name: "Save profile" }),
+      page.getByRole("combobox", { name: "Theme" }),
+      page.getByRole("button", { name: "Show passwords" }),
+    ];
+    for (const target of targets) {
+      await tabTo(page, target);
+      await expectVisibleFocus(target, pageSurface);
+      await target.scrollIntoViewIfNeeded();
+      const focusedBox = await target.evaluate(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; });
+      const focusName = await target.evaluate(element => element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName);
+      expect(focusedBox!.y, focusName).toBeGreaterThanOrEqual(0);
+      expect(focusedBox!.y + focusedBox!.height, focusName).toBeLessThanOrEqual(900);
+    }
+    expect(await targets[2].getAttribute("class")).toContain("primary");
+    expect(await targets[4].getAttribute("class")).toContain("secondary");
+    await page.setViewportSize({ width: 640, height: 720 });
+    await page.goto("/settings");
+    const zoomProxyInput = page.getByRole("textbox", { name: "Display name" });
+    await tabTo(page, zoomProxyInput);
+    await expectVisibleFocus(zoomProxyInput, page.locator(".account-shell"));
+    await zoomProxyInput.scrollIntoViewIfNeeded();
+    const zoomProxyBox = await zoomProxyInput.evaluate(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; });
+    expect(zoomProxyBox!.x).toBeGreaterThanOrEqual(0);
+    expect(zoomProxyBox!.x + zoomProxyBox!.width).toBeLessThanOrEqual(640);
+    expect(zoomProxyBox!.y).toBeGreaterThanOrEqual(0);
+    expect(zoomProxyBox!.y + zoomProxyBox!.height).toBeLessThanOrEqual(720);
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
 });
 
 test.beforeEach(async () => {

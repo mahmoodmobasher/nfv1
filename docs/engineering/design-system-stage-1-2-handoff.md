@@ -72,3 +72,23 @@ Paired durable baselines, all with development overlays removed:
 - 320px Workspace drawer: `design-system-mobile-drawer-light-darwin.png`, `design-system-mobile-drawer-dark-darwin.png`
 
 The two original unpaired snapshots remain only as historical artifacts and are no longer referenced by the browser suite. No Stage 3/4 route migration was included.
+
+## Second formal-review remediation
+
+Review authorities: Architecture `af9a5d1`; Graphics `bb756d9`; Dev2 reference contract `bf22546`.
+
+- Proxy cache classification now reads the configured `SESSION_COOKIE_NAME`, trims it, and uses `nexaflow_session` only as the existing fallback. Any document carrying that configured cookie is marked `private, no-store` before Session resolution, including stale or invalid values. Anonymous documents remain unclassified and disclose no Session validity. Nonce/CSP propagation and the Caddy protected-route defense remain intact.
+- Desktop Workspace navigation now has semantic default/visited, hover, active/current, focus, and unavailable states at selector specificity sufficient to supersede the legacy cascade. Unit and computed-style browser assertions require 4.5:1 text contrast in both themes.
+- CRM visual evidence now seeds a deterministic `Jordan Lee` lead in a stable pipeline stage and waits for the loaded Leads heading and record before capture. The paired CRM baselines therefore cover the settled shell, navigation, search controls, primary/secondary actions, status badge, and customer card rather than the Suspense fallback.
+- Keyboard-only traversal now reaches representative navigation, primary and secondary buttons, text input, select, and password-visibility control in both Light and Dark. Each asserts 2px/2px focus geometry and focus-to-surface contrast. The 640 CSS-pixel 200% proxy separately verifies a keyboard-focused input remains visible and horizontally contained.
+- The settled CRM capture exposed legacy lead-card title/metadata colors in Dark mode; those shared card elements were moved to semantic strong/muted text tokens within the Stage 2 control/card boundary.
+
+Integration guardrail: do not replace the application cookie-aware cache check with the path-only Caddy rule. Both layers are intentional; Dev2's configured-cookie contract is preserved without adopting a competing appearance resolver or changing identity/Workspace authority.
+
+Second-remediation gate evidence:
+
+- Diff check, ESLint, TypeScript, Caddy validation, and Next production build: pass.
+- Unit/boundary suite: 63 pass; 119 database-gated tests remain skipped by default. Focused boundary/theme files: 11 pass.
+- Focused browser gate: 4 pass, covering the previous authority/CSP/visual journey plus both-theme navigation states and representative keyboard focus.
+- Production response with `SESSION_COOKIE_NAME=uat_session_cookie` and a stale value: HTTP 200, `Cache-Control: private, no-store`, matching response/bootstrap CSP nonce, no `unsafe-inline` in `script-src`, and anonymous-safe `system` resolution.
+- Anonymous production response: HTTP 200, `system` theme, CSP present, and no Session/authentication disclosure header.

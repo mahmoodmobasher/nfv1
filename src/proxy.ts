@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const DEFAULT_SESSION_COOKIE = "nexaflow_session";
+
+export function configuredSessionCookieName(environment: NodeJS.ProcessEnv = process.env) {
+  return environment.SESSION_COOKIE_NAME?.trim() || DEFAULT_SESSION_COOKIE;
+}
+
 export function contentSecurityPolicy(nonce: string, development = process.env.NODE_ENV === "development") {
   return [
     "default-src 'self'",
@@ -23,7 +29,7 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("content-security-policy", policy);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", policy);
-  if (request.cookies.has("nexaflow_session")) response.headers.set("Cache-Control", "private, no-store");
+  if (request.cookies.has(configuredSessionCookieName())) response.headers.set("Cache-Control", "private, no-store");
   return response;
 }
 
