@@ -2,7 +2,7 @@ import type {Pool} from "pg";
 import {writeAudit} from "../security/audit";
 import {TenantAdminError,type TenantContext} from "./permissions";
 
-const allowedReasons=new Set(["permission_required","recent_auth_required","invalid_target","invalid_role","invalid_team","email_mismatch","invitation_expired","invitation_revoked","invitation_consumed","seat_limit_reached","stale_version","last_owner","rate_limited","idempotency_conflict","mutation_failed","authentication_required"]);
+const allowedReasons=new Set(["permission_required","recent_auth_required","invalid_target","invalid_role","invalid_team","email_mismatch","invitation_expired","invitation_revoked","invitation_consumed","seat_limit_reached","stale_version","last_owner","rate_limited","idempotency_conflict","mutation_failed","authentication_required","password_credential_required","invalid_credentials","password_policy"]);
 function reason(error:unknown){if(!(error instanceof TenantAdminError))return"mutation_failed";const map:Record<string,string>={resource_not_found:"invalid_target",validation_failed:"invalid_target",invitation_invalid:"invalid_target",team_exists:"invalid_target",owner_transfer_required:"last_owner"},value=map[error.code]??error.code;return allowedReasons.has(value)?value:"mutation_failed"}
 
 type DenialInput={context?:TenantContext;userId?:string;sessionId?:string;action:string;targetType:string;targetId?:string;requestId?:string;correlationId?:string;error:unknown};
