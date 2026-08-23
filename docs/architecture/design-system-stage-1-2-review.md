@@ -182,3 +182,59 @@ The current CSP negative test at `tests/e2e/local-identity.spec.ts:115-118` prov
 ### Re-review disposition
 
 **REJECT.** Dev1 owns DS-ARCH-03, with Dev2's `bf22546` proxy boundary as the accepted reference. Architecture will issue ACCEPT after a new immutable candidate proves configured-cookie private/no-store behavior while retaining the closed first-paint, CSP, listener, and Workspace/security boundaries.
+
+---
+
+## Closing re-review — Dev1 commit `d322b7c`
+
+Closing review date: 2026-08-23
+
+Reviewed candidate: `d322b7ca8407f156864be176e2382904e6e6448a` on `codex/design-system-stage12`
+
+Verdict: **ACCEPT — no material Architecture blockers**
+
+### DS-ARCH-03 closure
+
+The configured Session-cookie cache blocker is closed:
+
+- `src/proxy.ts:3-7` resolves `SESSION_COOKIE_NAME`, trims it, and uses `nexaflow_session` only as the established fallback.
+- `src/proxy.ts:25-35` preserves the per-request nonce/CSP path and marks any document carrying the configured cookie `Cache-Control: private, no-store` before Session resolution.
+- `tests/design-system-boundary.test.ts:6-24` proves a non-default configured cookie with a stale or invalid value remains private/no-store and retains matching request/response CSP nonce state.
+- `tests/design-system-boundary.test.ts:26-31` proves an anonymous document is not marked private and exposes no Session/authentication-disclosure header.
+- `tests/design-system-boundary.test.ts:33-38` proves the default cookie fallback and production prohibition on `unsafe-inline` and `unsafe-eval` remain intact.
+- `deploy/uat/Caddyfile:23-24` retains the authenticated-route private/no-store override as defense in depth; it does not replace the application-owned cookie-aware boundary.
+
+The closing handoff additionally records a production response using `SESSION_COOKIE_NAME=uat_session_cookie` with a stale value: HTTP 200, private/no-store, matching response/bootstrap nonce, no `unsafe-inline` in `script-src`, and anonymous-safe System resolution.
+
+### Previously closed findings retained
+
+- Authenticated server preference remains the initial-document authority. The bootstrap does not read browser storage and performs only allowlisted System media-query resolution.
+- Empty, correct, stale, and unavailable client cache cannot override server-rendered preference.
+- Theme preview remains ephemeral until server success; a failed save restores the last confirmed preference and cannot survive reload as authority.
+- The fixed bootstrap remains nonce-bound under the application-owned CSP. Production script policy contains neither `unsafe-inline` nor `unsafe-eval`.
+- System media-query subscription remains active only for System, without duplicates, and is removed on explicit preference or unmount.
+- Preferences API success and failure responses remain private/no-store.
+- Caddy forwards the application CSP unchanged and retains independent protected-document cache defense.
+- Theme state remains global User presentation state only. It does not establish or modify identity, Session, Active Workspace, Membership, RBAC, ownership, Team, visibility, Audit, or Entitlement authority.
+- No schema, migration, identity, tenant-selection, or Workspace-authorization change is introduced by the closing remediation.
+
+### Evidence accepted
+
+- Diff check, ESLint, TypeScript, Caddy validation, and Next production build passed.
+- Unit/boundary suite passed 63 tests; focused boundary/theme suite passed 11 tests.
+- Focused browser gate passed four tests covering server authority, CSP/nonce behavior, paired Light/Dark visual states, System response, failed-save rollback, Workspace switching, browser Back, keyboard focus, mobile drawer behavior, 44px targets, 320px reflow, and the recorded 200% zoom proxy.
+- Production-response inspection proved configured-cookie private/no-store, matching response/bootstrap nonce, production CSP restrictions, and anonymous-safe fallback.
+
+### Integration and rollback guardrails
+
+- Integrate the immutable candidate as a whole; do not drop the configured-cookie boundary, nonce propagation, private/no-store API behavior, or Caddy defense-in-depth during conflict resolution.
+- Keep the application proxy's cookie-aware cache rule and Caddy's path rule as independent layers.
+- Preserve the server-authoritative preference and ephemeral preview contract during later route migration.
+- Preserve compatibility aliases until later stages prove all consumers have migrated.
+- Stage 3/4 route redesign and legacy-style deletion remain separately authorized and reviewed work.
+- Rollback may revert the visual bootstrap/shared-style adoption, but must not revert the Feature 3 preference schema, delete stored preferences, or change identity/Workspace authority.
+- Re-run the boundary/theme unit tests, production CSP response inspection, focused browser suite, lint, TypeScript, and build after integration or conflict resolution.
+
+### Final disposition
+
+**ACCEPT — no material Architecture blockers.** DS-ARCH-01, DS-ARCH-02, DS-ARCH-03, the System listener lifecycle correction, and the security/Workspace separation requirements are closed for Design System Stage 1–2 at `d322b7c`. This verdict authorizes Product-controlled integration review; it does not authorize deployment or later design-system stages.
