@@ -75,11 +75,34 @@ test("personal settings are globally scoped and preference changes remain availa
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Personal settings" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Display name" })).toHaveValue("Browser Owner");
+  await expect(page).toHaveScreenshot("design-system-light-personal-settings.png", { fullPage: true, animations: "disabled" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByRole("combobox", { name: "Theme" }).selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-preference", "dark");
   await page.getByRole("button", { name: "Save preferences" }).click();
   await expect(page.getByRole("status")).toContainText("Preferences updated.");
+  await page.goto("/crm");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.goto("/workspace/settings");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const focusColor = await page.getByRole("link", { name: "CRM overview" }).evaluate(element => {
+    element.focus();
+    return getComputedStyle(element).outlineColor;
+  });
+  expect(focusColor).not.toBe("rgba(0, 0, 0, 0)");
   await page.setViewportSize({ width: 320, height: 640 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const menu = page.getByRole("button", { name: "Open workspace navigation" });
+  const box = await menu.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  await expect(page).toHaveScreenshot("design-system-dark-admin-mobile.png", { fullPage: true, animations: "disabled" });
 });
 
 test.beforeEach(async () => {

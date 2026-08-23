@@ -3,14 +3,11 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Brand } from "../onboarding/components";
+import { AccountThemeSync } from "../account-theme-sync";
+import { announceThemePreference } from "../theme";
 
 type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string; version: number };
 const defaults: Preferences = { theme: "light", locale: "en-CA", timezone: "America/Toronto", version: 0 };
-
-function applyTheme(theme: Preferences["theme"]) {
-  const effectiveTheme = theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  document.documentElement.dataset.accountTheme = effectiveTheme;
-}
 
 async function accountMutation(path: string, method: "PATCH" | "POST", body: unknown) {
   const csrf = await fetch("/api/auth/csrf", { cache: "no-store" });
@@ -40,7 +37,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       const payload = await response.json() as { data?: { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number } };
       if (!payload.data) return;
       const next = { theme: payload.data.appearance, locale: payload.data.locale ?? defaults.locale, timezone: payload.data.timeZone ?? defaults.timezone, version: payload.data.version };
-      setPreferences(next); applyTheme(next.theme);
+      setPreferences(next); announceThemePreference(next.theme);
     }).catch(() => undefined);
   }, []);
 
@@ -65,7 +62,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       if (!response.ok || !body?.data || typeof body.data !== "object") throw new Error("preferences_not_saved");
       const data = body.data as { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number };
       const next = { theme: data.appearance, locale: data.locale ?? defaults.locale, timezone: data.timeZone ?? defaults.timezone, version: data.version };
-      setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Preferences updated.");
+      setPreferences(next); announceThemePreference(next.theme); setPreferencesStatus("Preferences updated.");
     } catch { setPreferencesStatus("We couldn’t save your preferences."); }
   }
 
@@ -75,7 +72,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       const payload = await response.json() as { data?: { appearance: Preferences["theme"]; locale: string | null; timeZone: string | null; version: number } };
       if (!response.ok || !payload.data) throw new Error("reload_failed");
       const next = { theme: payload.data.appearance, locale: payload.data.locale ?? defaults.locale, timezone: payload.data.timeZone ?? defaults.timezone, version: payload.data.version };
-      setPreferences(next); applyTheme(next.theme); setPreferencesStatus("Latest preferences loaded.");
+      setPreferences(next); announceThemePreference(next.theme); setPreferencesStatus("Latest preferences loaded.");
     }).catch(() => setPreferencesStatus("We couldn’t load the latest preferences. Try again."));
   }
 
@@ -104,7 +101,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
     } catch { setSecurityStatus("We couldn’t change your password. Confirm your current password and try again."); }
   }
 
-  return <div className="account-shell">
+  return <div className="account-shell"><AccountThemeSync />
     <header className="account-header"><Brand /><nav aria-label="Account navigation"><Link href="/crm">Back to CRM</Link></nav></header>
     <main className="account-content">
       <p className="eyebrow">Account</p>
@@ -120,7 +117,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
       <section className="account-section" aria-labelledby="preferences-heading">
         <div><p className="eyebrow">Preferences</p><h2 id="preferences-heading">Appearance and regional settings</h2><p>Choose how NexaFlow looks and formats information for you.</p></div>
         <form onSubmit={savePreferences} className="account-form-grid">
-          <label className="field"><span>Theme</span><select value={preferences.theme} onChange={event => setPreferences(current => ({ ...current, theme: event.target.value as Preferences["theme"] }))}><option value="light">Light</option><option value="system">Use device setting</option><option value="dark">Dark</option></select></label>
+          <label className="field"><span>Theme</span><select value={preferences.theme} onChange={event => { const theme = event.target.value as Preferences["theme"]; setPreferences(current => ({ ...current, theme })); announceThemePreference(theme); }}><option value="light">Light</option><option value="system">Use device setting</option><option value="dark">Dark</option></select></label>
           <label className="field"><span>Language and region</span><select value={preferences.locale} onChange={event => setPreferences(current => ({ ...current, locale: event.target.value }))}><option value="en-CA">English (Canada)</option><option value="en-US">English (United States)</option><option value="en-GB">English (United Kingdom)</option></select></label>
           <label className="field"><span>Time zone</span><select value={preferences.timezone} onChange={event => setPreferences(current => ({ ...current, timezone: event.target.value }))}><option value="America/Toronto">Toronto (Eastern)</option><option value="America/Vancouver">Vancouver (Pacific)</option><option value="Europe/London">London</option><option value="UTC">UTC</option></select></label>
           <button className="primary">Save preferences</button>

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Suspense } from "react";
 import { TitleUpdater } from "./onboarding/title-updater";
+import { themeBootstrapScript } from "./theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased"><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
+    <html lang="en" data-theme="light" data-theme-preference="system" suppressHydrationWarning>
+      <body className="antialiased"><Script id="nexaflow-theme" strategy="beforeInteractive">{themeBootstrapScript}</Script><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
     </html>
   );
 }
