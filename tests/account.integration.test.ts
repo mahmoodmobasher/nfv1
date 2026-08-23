@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb } from "../src/server/db/client";
-import { accountProfile, changePassword, updateDisplayName } from "../src/server/account/service";
+import { accountPreferences, accountProfile, changePassword, updateAccountPreferences, updateDisplayName } from "../src/server/account/service";
 import { loginPassword, registerPasswordUser, verifyEmailToken } from "../src/server/identity/service";
 import { decryptEnvelope } from "../src/server/security/crypto";
 import { resolveIdentityContext } from "../src/server/security/session";
@@ -46,6 +46,14 @@ integration("Feature 3 account service", () => {
     expect(await resolveIdentityContext(pool, second.sessionToken, config.secret)).toBeNull();
     expect((await loginPassword(pool, { email: "account@example.test", password: "Changed-password-123!", riskKey: "account-login-changed" }, config)).ok).toBe(true);
     expect((await pool.query("select action,outcome from audit_events where action='identity.password_changed'")).rows).toEqual([{ action: "identity.password_changed", outcome: "success" }]);
+  });
+
+  it("creates, reads, and version-controls only the current user's typed preferences", async () => {
+    const { session } = await activePasswordUser();
+    await expect(accountPreferences(pool, session)).resolves.toEqual({ appearance: "system", locale: null, timeZone: null, version: 0 });
+    await expect(updateAccountPreferences(pool, session, { expectedVersion: 0, appearance: "dark", locale: "en-CA", timeZone: "America/Toronto" })).resolves.toEqual({ appearance: "dark", locale: "en-CA", timeZone: "America/Toronto", version: 1 });
+    await expect(updateAccountPreferences(pool, session, { expectedVersion: 0, appearance: "light" })).rejects.toMatchObject({ status: 409 });
+    expect((await pool.query("select action,metadata from audit_events where action='identity.preferences_updated'")).rows[0]).toEqual({ action: "identity.preferences_updated", metadata: { operation: "identity.preferences_updated", change_fields: ["appearance", "locale", "time_zone"], expected_version: 0, result_version: 1 } });
   });
 
   it("rejects stale recent authentication and weak replacement passwords without changing credentials", async () => {

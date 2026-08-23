@@ -5,12 +5,13 @@ import { revokeAllSessions } from "../security/session";
 import { PasswordPolicyError, assertPasswordPolicy } from "../../shared/password-policy";
 
 export class AccountError extends Error {
-  constructor(public code: "authentication_required" | "recent_auth_required" | "validation_failed" | "password_credential_required" | "invalid_credentials" | "password_policy", public status: number) {
+  constructor(public code: "authentication_required" | "recent_auth_required" | "validation_failed" | "stale_version" | "password_credential_required" | "invalid_credentials" | "password_policy", public status: number) {
     super(code);
   }
 }
 
 type AccountSession = { userId: string; sessionId: string };
+export type AccountPreferences = { appearance: "system" | "light" | "dark"; locale: string | null; timeZone: string | null; version: number };
 
 async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -75,6 +76,86 @@ export async function updateDisplayName(pool: Pool, session: AccountSession, dis
       metadata: { change_fields: ["display_name"] },
     });
     return { displayName: changed.rows[0].display_name };
+  });
+}
+
+function validLocale(value: string | null): boolean {
+  if (value === null) return true;
+  try { return Intl.getCanonicalLocales(value).length === 1; } catch { return false; }
+}
+
+function validTimeZone(value: string | null): boolean {
+  if (value === null) return true;
+  try { Intl.DateTimeFormat(undefined, { timeZone: value }); return true; } catch { return false; }
+}
+
+export async function accountPreferences(pool: Pool, session: AccountSession): Promise<AccountPreferences> {
+  const result = await pool.query<AccountPreferences>(
+    `select p.appearance, p.locale, p.time_zone "timeZone", p.version
+     from user_preferences p join sessions s on s.user_id = p.user_id
+     where p.user_id = $1 and s.id = $2 and s.revoked_at is null`,
+    [session.userId, session.sessionId],
+  );
+  if (result.rows[0]) return result.rows[0];
+  const authenticated = await pool.query("select 1 from sessions where id=$1 and user_id=$2 and revoked_at is null", [session.sessionId, session.userId]);
+  if (!authenticated.rows[0]) throw new AccountError("authentication_required", 401);
+  return { appearance: "system", locale: null, timeZone: null, version: 0 };
+}
+
+export async function updateAccountPreferences(
+  pool: Pool,
+  session: AccountSession,
+  input: Partial<Omit<AccountPreferences, "version">> & { expectedVersion: number },
+): Promise<AccountPreferences> {
+  if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 ||
+    (input.appearance !== undefined && !["system", "light", "dark"].includes(input.appearance)) ||
+    (input.locale !== undefined && (!validLocale(input.locale) || (input.locale !== null && input.locale.length > 35))) ||
+    (input.timeZone !== undefined && (!validTimeZone(input.timeZone) || (input.timeZone !== null && input.timeZone.length > 64)))) {
+    throw new AccountError("validation_failed", 400);
+  }
+  return transaction(pool, async (client) => {
+    const authenticated = await client.query("select 1 from sessions where id=$1 and user_id=$2 and revoked_at is null for update", [session.sessionId, session.userId]);
+    if (!authenticated.rows[0]) throw new AccountError("authentication_required", 401);
+    const existing = await client.query<AccountPreferences>(
+      `select appearance, locale, time_zone "timeZone", version from user_preferences where user_id=$1 for update`,
+      [session.userId],
+    );
+    const prior = existing.rows[0];
+    if (prior && prior.version !== input.expectedVersion) throw new AccountError("stale_version", 409);
+    if (!prior && input.expectedVersion !== 0) throw new AccountError("stale_version", 409);
+    const next = {
+      appearance: input.appearance ?? prior?.appearance ?? "system",
+      locale: input.locale === undefined ? prior?.locale ?? null : input.locale,
+      timeZone: input.timeZone === undefined ? prior?.timeZone ?? null : input.timeZone,
+    } as const;
+    const changedFields = ([
+      input.appearance !== undefined && input.appearance !== prior?.appearance ? "appearance" : null,
+      input.locale !== undefined && input.locale !== prior?.locale ? "locale" : null,
+      input.timeZone !== undefined && input.timeZone !== prior?.timeZone ? "time_zone" : null,
+    ].filter(Boolean) as string[]);
+    const result = prior
+      ? await client.query<AccountPreferences>(
+          `update user_preferences set appearance=$2, locale=$3, time_zone=$4, version=version+1, updated_at=now()
+           where user_id=$1 and version=$5 returning appearance, locale, time_zone "timeZone", version`,
+          [session.userId, next.appearance, next.locale, next.timeZone, input.expectedVersion],
+        )
+      : await client.query<AccountPreferences>(
+          `insert into user_preferences(user_id,appearance,locale,time_zone) values($1,$2,$3,$4)
+           returning appearance, locale, time_zone "timeZone", version`,
+          [session.userId, next.appearance, next.locale, next.timeZone],
+        );
+    const changed = result.rows[0];
+    if (!changed) throw new AccountError("stale_version", 409);
+    await writeAudit(client, {
+      actorUserId: session.userId,
+      sessionId: session.sessionId,
+      action: "identity.preferences_updated",
+      targetType: "user_preference",
+      targetId: session.userId,
+      outcome: "success",
+      metadata: { change_fields: changedFields, expected_version: input.expectedVersion, result_version: changed.version },
+    });
+    return changed;
   });
 }
 
