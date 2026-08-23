@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Brand } from "../onboarding/components";
 
 type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string; version: number };
@@ -31,6 +31,8 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
   const [securityStatus, setSecurityStatus] = useState("");
   const [needsReauth, setNeedsReauth] = useState(false);
   const [fieldError, setFieldError] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const passwordErrorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     fetch("/api/account/preferences", { cache: "no-store" }).then(async response => {
@@ -89,8 +91,8 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
 
   async function changePassword(event: FormEvent) {
     event.preventDefault();
-    if (newPassword.length < 12 || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) { setFieldError("Use 12–256 characters, including a number and a symbol."); return; }
-    if (newPassword !== confirmPassword) { setFieldError("New passwords do not match."); return; }
+    if (newPassword.length < 12 || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) { setFieldError("Use 12–256 characters, including a number and a symbol."); requestAnimationFrame(() => passwordErrorRef.current?.focus()); return; }
+    if (newPassword !== confirmPassword) { setFieldError("New passwords do not match."); requestAnimationFrame(() => passwordErrorRef.current?.focus()); return; }
     setFieldError("");
     setSecurityStatus("Changing password…");
     try {
@@ -128,7 +130,7 @@ export function AccountSettingsClient({ initialName }: { initialName: string }) 
 
       <section className="account-section" aria-labelledby="security-heading">
         <div><p className="eyebrow">Account security</p><h2 id="security-heading">Change your password</h2><p>Confirm your identity before starting a password change. Password recovery completes the change and revokes existing sessions.</p></div>
-        {needsReauth ? <form onSubmit={reauthenticate}><label className="field"><span>Confirm your current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><button className="primary">Confirm identity</button></form> : <form onSubmit={changePassword}><label className="field"><span>Current password</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><label className="field"><span>New password</span><small>Use 12–256 characters, including a number and a symbol.</small><input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} /></label><label className="field"><span>Confirm new password</span><input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} /></label>{fieldError && <p className="alert error" role="alert">{fieldError}</p>}<p>Changing your password signs you out of all devices. Sign in again to continue.</p><button className="primary">Change password</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form>}
+        {needsReauth ? <form onSubmit={reauthenticate}><label className="field"><span>Confirm your current password</span><input type={showPasswords ? "text" : "password"} value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><button className="secondary" type="button" onClick={() => setShowPasswords(value => !value)}>{showPasswords ? "Hide password" : "Show password"}</button><button className="primary">Confirm identity</button></form> : <form onSubmit={changePassword}><label className="field"><span>Current password</span><input type={showPasswords ? "text" : "password"} value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><label className="field"><span>New password</span><small id="password-policy">Use 12–256 characters, including a number and a symbol.</small><input type={showPasswords ? "text" : "password"} value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} aria-describedby={`password-policy${fieldError ? " password-error" : ""}`} /></label><label className="field"><span>Confirm new password</span><input type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} aria-describedby={fieldError ? "password-error" : undefined} /></label><button className="secondary" type="button" onClick={() => setShowPasswords(value => !value)}>{showPasswords ? "Hide passwords" : "Show passwords"}</button>{fieldError && <p ref={passwordErrorRef} id="password-error" className="alert error" role="alert" tabIndex={-1}>{fieldError}</p>}<p>Changing your password signs you out of all devices. Sign in again to continue.</p><button className="primary">Change password</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form>}
         {securityStatus && <p className="alert" role={needsReauth || securityStatus.includes("couldn’t") ? "alert" : "status"}>{securityStatus}</p>}
       </section>
     </main>
