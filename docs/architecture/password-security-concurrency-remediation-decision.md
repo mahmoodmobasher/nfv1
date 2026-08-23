@@ -1,8 +1,8 @@
 # Password security concurrency remediation decision
 
-Date: 2026-08-23  
-Base candidate: `caa1f65308f311ffe3986c5774171398343795c0`  
-Architecture finding: `635c188` P2  
+Date: 2026-08-23
+Base candidate: `caa1f65308f311ffe3986c5774171398343795c0`
+Architecture finding: `635c188` P2
 Candidates: Dev3 `d4f9db99ff5d406d28754063b3d29872ebad4947`; Dev2 `f8b7dfcb1a81254d073953f76811bdf0399c066e`
 
 ## Decision
