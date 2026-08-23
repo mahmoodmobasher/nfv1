@@ -21,4 +21,11 @@ describe("Feature 3 data model", () => {
     expect(Object.keys(identityCredentials)).toContain("userId");
     expect(Object.keys(sessions)).toContain("userId");
   });
+
+  it("locks reset tokens before the password credential during password changes", () => {
+    const service = readFileSync("src/server/account/service.ts", "utf8");
+    const passwordChange = service.slice(service.indexOf("export async function changePassword"));
+    expect(passwordChange.indexOf("update identity_tokens set replaced_at")).toBeGreaterThan(-1);
+    expect(passwordChange.indexOf("update identity_tokens set replaced_at")).toBeLessThan(passwordChange.indexOf("update identity_credentials set password_hash"));
+  });
 });

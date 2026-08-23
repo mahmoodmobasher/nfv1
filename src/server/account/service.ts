@@ -187,13 +187,13 @@ export async function changePassword(
     if (!row.password_hash) throw new AccountError("password_credential_required", 409);
     if (!await verifyPassword(row.password_hash, input.currentPassword)) throw new AccountError("invalid_credentials", 401);
     await client.query(
-      "update identity_credentials set password_hash = $2, updated_at = now() where user_id = $1 and provider = 'password'",
-      [input.userId, passwordHash],
-    );
-    await client.query(
       `update identity_tokens set replaced_at = now(), updated_at = now()
        where user_id = $1 and purpose = 'password_reset' and consumed_at is null and replaced_at is null`,
       [input.userId],
+    );
+    await client.query(
+      "update identity_credentials set password_hash = $2, updated_at = now() where user_id = $1 and provider = 'password'",
+      [input.userId, passwordHash],
     );
     await revokeAllSessions(client, input.userId);
     await writeAudit(client, {
