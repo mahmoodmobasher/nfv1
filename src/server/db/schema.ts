@@ -37,6 +37,24 @@ export const users = pgTable(
   ],
 );
 
+export const userPreferences = pgTable(
+  "user_preferences",
+  {
+    userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+    appearance: text("appearance").notNull().default("system"),
+    locale: text("locale"),
+    timeZone: text("time_zone"),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (table) => [
+    check("user_preferences_appearance_check", sql`${table.appearance} in ('system', 'light', 'dark')`),
+    check("user_preferences_locale_check", sql`${table.locale} is null or length(btrim(${table.locale})) between 2 and 35`),
+    check("user_preferences_time_zone_check", sql`${table.timeZone} is null or length(btrim(${table.timeZone})) between 1 and 64`),
+    check("user_preferences_version_check", sql`${table.version} > 0`),
+  ],
+);
+
 export const identityCredentials = pgTable(
   "identity_credentials",
   {
@@ -50,6 +68,7 @@ export const identityCredentials = pgTable(
   },
   (table) => [
     uniqueIndex("identity_provider_subject_uq").on(table.provider, table.providerSubject),
+    uniqueIndex("identity_password_user_uq").on(table.userId).where(sql`${table.provider} = 'password'`),
     check("identity_credentials_provider_check", sql`${table.provider} in ('password', 'google')`),
   ],
 );
@@ -375,20 +394,27 @@ export const workspaceEntitlementSnapshots = pgTable(
   (table) => [index("entitlement_workspace_idx").on(table.workspaceId)],
 );
 
-export const sessions = pgTable("sessions", {
-  id: id(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  activeWorkspaceId: uuid("active_workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
-  sessionHash: text("session_hash").notNull().unique(),
-  securityVersion: integer("security_version").notNull().default(1),
-  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
-  idleExpiresAt: timestamp("idle_expires_at", { withTimezone: true }).notNull(),
-  absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }).notNull(),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  authenticatedAt: timestamp("authenticated_at", { withTimezone: true }).defaultNow().notNull(),
-  authMethod: text("auth_method").notNull().default("legacy"),
-  ...timestamps,
-}, (table) => [check("sessions_auth_method_check", sql`${table.authMethod} in ('password', 'google', 'fixture', 'legacy')`)]);
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: id(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    activeWorkspaceId: uuid("active_workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+    sessionHash: text("session_hash").notNull().unique(),
+    securityVersion: integer("security_version").notNull().default(1),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    idleExpiresAt: timestamp("idle_expires_at", { withTimezone: true }).notNull(),
+    absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    authenticatedAt: timestamp("authenticated_at", { withTimezone: true }).defaultNow().notNull(),
+    authMethod: text("auth_method").notNull().default("legacy"),
+    ...timestamps,
+  },
+  (table) => [
+    index("sessions_user_active_idx").on(table.userId, table.revokedAt, table.lastSeenAt),
+    check("sessions_auth_method_check", sql`${table.authMethod} in ('password', 'google', 'fixture', 'legacy')`),
+  ],
+);
 
 export const identityTokens = pgTable(
   "identity_tokens",
