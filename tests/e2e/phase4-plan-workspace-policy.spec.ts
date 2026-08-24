@@ -7,8 +7,8 @@ test("plan selection presents server-catalog intent with canonical Workspace and
   await expect(page.getByRole("radio", { name: "Annual · Selected" })).toHaveAttribute("aria-checked", "true");
   const growth = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Growth" }) });
   await expect(growth).toHaveAttribute("aria-current", "true");
-  await expect(growth).toContainText("1 Owner");
-  await expect(growth).toContainText("Production billing and plan changes are not connected.");
+  await expect(growth).toContainText("Owner included.");
+  await expect(growth).toContainText("Billing and plan changes are not connected in this environment.");
   const enterprise = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Enterprise" }) });
   await expect(enterprise.getByRole("link", { name: "Contact Sales" })).toHaveAttribute("href", /mailto:/);
   await expect(page.getByRole("link", { name: /create.*Workspace/i })).toHaveCount(0);
