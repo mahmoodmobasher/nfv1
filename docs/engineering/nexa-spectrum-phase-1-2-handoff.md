@@ -43,11 +43,11 @@ The Light muted role uses neutral 600 rather than the proposal's neutral 500 bec
 - `git diff --check`: pass.
 - `npm run lint`: pass.
 - `npx tsc --noEmit`: pass.
-- `npm test`: 69 passed; 123 database-gated tests skipped by the default command.
+- `npm test`: 72 passed; 123 database-gated tests skipped by the default command.
 - `npm run test:integration`: 123 passed, serial database execution.
 - `npm run build`: pass on Next.js 16.3.1; Inter emitted as `/_next/static/media/*.woff2`.
 - `docker compose -f docker-compose.local.yml config --quiet`: pass.
-- Full Playwright: 31 passed, serial.
+- Full Playwright: 36 passed, serial.
 - Browser evidence covers server-authoritative empty/correct/stale/unavailable cache, Light/Dark/System and OS changes, failed-save rollback/reload, CSP positive/negative nonce behavior, Workspace switch/Back/two-tab reconciliation, logout and protected re-entry, computed navigation and Pipeline contrast, keyboard focus, modal drawer lifecycle, 44px targets, 320px and 640px/200% proxy containment, forced colours, reduced motion, and CSP/hydration console cleanliness.
 - Production `next start` inspection with non-default `SESSION_COOKIE_NAME`: anonymous and configured stale-cookie documents returned 200, `data-theme-preference="system"`, matching response/bootstrap nonce, and no `unsafe-inline`/`unsafe-eval`; stale-cookie response was `Cache-Control: private, no-store`.
 
@@ -69,3 +69,26 @@ Phase 3–6 remain deliberately untouched. Legacy literal/selector cleanup remai
 ## Integration
 
 Cherry-pick the proposal, Architecture authority, backend prerequisite, and implementation commits from this branch in order. Do not deploy directly from this branch. Re-run the full static, integration, build, production header, and Playwright gates after integration; baseline review is required rather than automatic snapshot acceptance.
+
+## Closing-review remediation
+
+Review authorities: Architecture `b03041c`; Graphics `ca34f4d`.
+
+- The modal drawer now applies native `inert` plus an `aria-hidden`/tabindex fallback to every background shell region, records and restores exact prior values, blocks pointer interaction, locks body and root scrolling, and leaves the bounded drawer panel scrollable. Cleanup runs for explicit close, scrim, Escape, route link, pathname/history transition, and unmount. Route-driven closure deliberately does not restore focus into the replaced page.
+- A labelled, visible 44×44 close control is first in the dialog. Tab/Shift+Tab containment, trigger restoration for user dismissal, modal naming, scrim, and Escape remain intact.
+- `product-navigation.ts` is now the server-adapter presentation model. `CrmShell` and `AdminShell` build already-filtered serializable supported items from the trusted persisted Role received from their protected server contexts. `ProductShell` receives items and icon keys only; it contains no Role-to-capability mapping. Route and API authorization remain independently mandatory.
+- The shell's first focusable control is a Spectrum-styled skip link targeting stable `#product-main`. The landmark is programmatically focusable and retains one route H1.
+- Primary, secondary, danger, Google, icon, menu, drawer-close, sign-out, input, select, and textarea disabled states now use explicit semantic foreground, surface, border, opacity `1`, and cursor values. The disabled border is strengthened to neutral 500 to retain a 3:1 essential boundary in both themes.
+- The shell brand mark uses the approved weight 600. Static coverage rejects 700+ weights in migrated shell selectors.
+- Browser coverage adds saved-System transitions to both emulated OS schemes while persisted preference remains `system`; Owner→Member→Admin navigation reconciliation; keyboard skip behavior at desktop/collapsed widths; and the complete phone/tablet modal lifecycle.
+- Responsive coverage now exercises widths 1024, 768, 600, 390, and 360 plus portrait/landscape orientation and existing 320/640 zoom proxies.
+
+Additional paired baselines:
+
+- 320px Personal settings: `spectrum-personal-settings-{light|dark}-mobile-darwin.png`.
+- 320px Pipeline: `spectrum-pipeline-{light|dark}-mobile-darwin.png`.
+- 768px administration closed shell and open modal drawer: `spectrum-admin-shell-{light|dark}-tablet-darwin.png`, `spectrum-admin-drawer-{light|dark}-tablet-darwin.png`.
+- CRM Home desktop: `spectrum-crm-home-{light|dark}-darwin.png`. The server-generated timestamp is normalized to a fixed explicit fixture value before capture; business data is seeded and settled.
+- Shared component states: `spectrum-component-states-{light|dark}-darwin.png`, covering enabled/disabled primary, secondary, danger, icon, menu, field, success, and error presentations.
+
+Closing-remediation focused evidence includes pointer close, in-panel close, scrim, Escape, focus containment/return, accessibility isolation, native/fallback inert state, background wheel lock, panel overflow, route-link closure, history/programmatic closure without stale focus, and exact cleanup at 320px and 768px in both themes. Visual modal captures are viewport captures so the fixed blanket truthfully covers the entire recorded image.

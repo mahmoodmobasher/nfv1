@@ -17,74 +17,30 @@ import {
   Users,
   X,
 } from "lucide-react";
+import type {
+  ProductNavGroup,
+  ProductNavIcon,
+  ProductNavItem,
+} from "./product-navigation";
 import { AccountThemeSync } from "./account-theme-sync";
 import { Brand } from "./onboarding/components";
 import { securePost } from "./onboarding/api";
 import { WorkspaceControl } from "./workspace/workspace-control";
 
 type ShellKind = "crm" | "admin";
-type Icon = React.ComponentType<{ "aria-hidden"?: boolean }>;
-type NavItem = { href: string; label: string; icon: Icon; exact?: boolean };
-
-const crmNavGroups: Array<{ label: string; items: NavItem[] }> = [
-  {
-    label: "Workspace",
-    items: [{ href: "/crm/home", label: "Home", icon: House, exact: true }],
-  },
-  {
-    label: "Customers",
-    items: [
-      { href: "/crm", label: "Leads", icon: Contact, exact: true },
-      { href: "/crm/pipeline", label: "Pipeline", icon: Kanban, exact: true },
-      { href: "/crm/leads/new", label: "Add lead", icon: Plus, exact: true },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      {
-        href: "/workspace/settings/people",
-        label: "People and roles",
-        icon: Users,
-      },
-      {
-        href: "/workspace/settings",
-        label: "Workspace settings",
-        icon: Settings,
-        exact: true,
-      },
-    ],
-  },
-];
-
-const adminNavGroups: Array<{ label: string; items: NavItem[] }> = [
-  {
-    label: "Workspace",
-    items: [{ href: "/crm", label: "CRM overview", icon: House }],
-  },
-  {
-    label: "Administration",
-    items: [
-      {
-        href: "/workspace/settings/people",
-        label: "People and roles",
-        icon: Users,
-      },
-      {
-        href: "/workspace/settings/invitations",
-        label: "Invitations",
-        icon: Mail,
-      },
-      { href: "/workspace/settings/teams", label: "Teams", icon: Contact },
-      {
-        href: "/workspace/settings",
-        label: "Workspace settings",
-        icon: Settings,
-        exact: true,
-      },
-    ],
-  },
-];
+const icons: Record<
+  ProductNavIcon,
+  React.ComponentType<{ "aria-hidden"?: boolean }>
+> = {
+  contact: Contact,
+  home: House,
+  kanban: Kanban,
+  mail: Mail,
+  plus: Plus,
+  settings: Settings,
+  user: UserRound,
+  users: Users,
+};
 
 export function ProductPageHeader({
   title,
@@ -109,33 +65,103 @@ export function ProductPageHeader({
   );
 }
 
+type IsolationState = {
+  element: HTMLElement;
+  inert: boolean;
+  ariaHidden: string | null;
+  tabStops: Array<{ element: HTMLElement; tabindex: string | null }>;
+};
+function isolate(element: HTMLElement): IsolationState {
+  const state: IsolationState = {
+    element,
+    inert: element.inert,
+    ariaHidden: element.getAttribute("aria-hidden"),
+    tabStops: [],
+  };
+  element.inert = true;
+  element.setAttribute("aria-hidden", "true");
+  element
+    .querySelectorAll<HTMLElement>(
+      "a[href],button,input,select,textarea,[tabindex]",
+    )
+    .forEach((node) => {
+      state.tabStops.push({
+        element: node,
+        tabindex: node.getAttribute("tabindex"),
+      });
+      node.setAttribute("tabindex", "-1");
+    });
+  return state;
+}
+function restoreIsolation(state: IsolationState) {
+  state.element.inert = state.inert;
+  if (state.ariaHidden === null) state.element.removeAttribute("aria-hidden");
+  else state.element.setAttribute("aria-hidden", state.ariaHidden);
+  state.tabStops.forEach(({ element, tabindex }) =>
+    tabindex === null
+      ? element.removeAttribute("tabindex")
+      : element.setAttribute("tabindex", tabindex),
+  );
+}
+
 export function ProductShell({
   kind,
   workspace,
   role,
+  navigation,
   banner,
   children,
 }: {
   kind: ShellKind;
   workspace: string;
   role: string;
+  navigation: ProductNavGroup[];
   banner: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname(),
     [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    trigger = useRef<HTMLButtonElement>(null),
-    panel = useRef<HTMLDivElement>(null);
+    [error, setError] = useState("");
+  const trigger = useRef<HTMLButtonElement>(null),
+    panel = useRef<HTMLDivElement>(null),
+    rail = useRef<HTMLElement>(null),
+    topbar = useRef<HTMLElement>(null),
+    mobileContext = useRef<HTMLDivElement>(null),
+    main = useRef<HTMLElement>(null),
+    previousPath = useRef(pathname),
+    openFrame = useRef<number | null>(null),
+    restoreFrame = useRef<number | null>(null);
   function close(focus = true) {
     setOpen(false);
-    if (focus) setTimeout(() => trigger.current?.focus());
+    if (focus)
+      restoreFrame.current = requestAnimationFrame(
+        () => trigger.current?.isConnected && trigger.current.focus(),
+      );
   }
   useEffect(() => {
+    if (pathname === previousPath.current) return;
+    previousPath.current = pathname;
+    if (open) close(false);
+  }, [pathname, open]);
+  useEffect(() => {
     if (!open) return;
-    requestAnimationFrame(() =>
-      panel.current?.querySelector<HTMLElement>("a,button,input")?.focus(),
+    const targets = [
+        rail.current,
+        topbar.current,
+        mobileContext.current,
+        trigger.current,
+        main.current,
+      ].filter((node): node is HTMLElement => Boolean(node)),
+      isolated = targets.map(isolate),
+      bodyOverflow = document.body.style.overflow,
+      htmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    openFrame.current = requestAnimationFrame(() =>
+      panel.current
+        ?.querySelector<HTMLElement>("button,a[href],input,select,textarea")
+        ?.focus(),
     );
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -145,7 +171,7 @@ export function ProductShell({
       }
       if (event.key !== "Tab") return;
       const nodes = panel.current?.querySelectorAll<HTMLElement>(
-        "a[href],button:not([disabled]),input:not([disabled])",
+        "a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
       );
       if (!nodes?.length) return;
       const first = nodes[0],
@@ -159,8 +185,23 @@ export function ProductShell({
       }
     };
     document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("keydown", key);
+      isolated.forEach(restoreIsolation);
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = htmlOverflow;
+      if (openFrame.current !== null) cancelAnimationFrame(openFrame.current);
+      openFrame.current = null;
+    };
   }, [open]);
+  useEffect(
+    () => () => {
+      if (openFrame.current !== null) cancelAnimationFrame(openFrame.current);
+      if (restoreFrame.current !== null)
+        cancelAnimationFrame(restoreFrame.current);
+    },
+    [],
+  );
   async function logout() {
     setBusy(true);
     setError("");
@@ -177,11 +218,11 @@ export function ProductShell({
       setBusy(false);
     }
   }
-  const item = (entry: NavItem) => {
+  const item = (entry: ProductNavItem) => {
     const active = entry.exact
         ? pathname === entry.href
         : pathname === entry.href || pathname.startsWith(`${entry.href}/`),
-      ItemIcon = entry.icon;
+      ItemIcon = icons[entry.icon];
     return (
       <Link
         href={entry.href}
@@ -193,11 +234,7 @@ export function ProductShell({
       </Link>
     );
   };
-  const canAdminister = role === "owner" || role === "admin";
-  const groups = kind === "crm"
-    ? crmNavGroups.filter((group) => group.label !== "Administration" || canAdminister)
-    : adminNavGroups;
-  const navigation = (drawer = false) => (
+  const navigationContent = (drawer = false) => (
     <div
       className={
         drawer ? "product-drawer-content" : "product-navigation-content"
@@ -207,7 +244,7 @@ export function ProductShell({
       <nav
         aria-label={kind === "crm" ? "CRM navigation" : "Workspace navigation"}
       >
-        {groups.map((group) => (
+        {navigation.map((group) => (
           <section
             className="product-nav-group"
             aria-label={group.label}
@@ -219,17 +256,6 @@ export function ProductShell({
             ))}
           </section>
         ))}
-        <section className="product-nav-group" aria-label="Account">
-          <h2>Account</h2>
-          <div>
-            {item({
-              href: "/settings",
-              label: "Personal settings",
-              icon: UserRound,
-              exact: true,
-            })}
-          </div>
-        </section>
         <button className="signout" onClick={logout} disabled={busy}>
           <LogOut aria-hidden={true} />
           <span>{busy ? "Signing out…" : "Sign out"}</span>
@@ -238,17 +264,23 @@ export function ProductShell({
     </div>
   );
   const legacyClass = kind === "crm" ? "crm-preview" : "admin-shell",
-    mobileClass = kind === "crm" ? "mobile-crm" : "admin-mobile";
-  const menuName = kind === "crm" ? "CRM navigation" : "workspace navigation",
+    mobileClass = kind === "crm" ? "mobile-crm" : "admin-mobile",
+    menuName = kind === "crm" ? "CRM navigation" : "workspace navigation",
     menuId = kind === "crm" ? "crm-menu" : "workspace-menu";
   return (
-    <div className={`product-shell ${legacyClass}`}>
+    <div
+      className={`product-shell ${legacyClass}`}
+      data-drawer-open={open || undefined}
+    >
+      <a className="skip-link" href="#product-main">
+        Skip to main content
+      </a>
       <AccountThemeSync />
-      <aside className="product-rail">
+      <aside ref={rail} className="product-rail">
         <Brand />
-        {navigation()}
+        {navigationContent()}
       </aside>
-      <header className="product-topbar">
+      <header ref={topbar} className="product-topbar">
         <WorkspaceControl name={workspace} role={role} />
         <div className="product-topbar-actions">
           <Link
@@ -268,7 +300,7 @@ export function ProductShell({
         </div>
       </header>
       <header className={`${mobileClass} product-mobile`}>
-        <div>
+        <div ref={mobileContext}>
           <Brand />
           <span>{workspace}</span>
         </div>
@@ -294,14 +326,24 @@ export function ProductShell({
               className="mobile-menu-panel"
               role="dialog"
               aria-modal="true"
-              aria-label={menuName}
+              aria-labelledby={`${menuId}-title`}
             >
-              {navigation(true)}
+              <div className="product-drawer-header">
+                <h2 id={`${menuId}-title`}>{menuName}</h2>
+                <button
+                  className="product-drawer-close"
+                  aria-label={`Close ${menuName}`}
+                  onClick={() => close()}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </div>
+              {navigationContent(true)}
             </div>
           </div>
         )}
       </header>
-      <main className="product-main">
+      <main ref={main} id="product-main" tabIndex={-1} className="product-main">
         <div className="preview-banner">{banner}</div>
         {error && (
           <div className="alert error" role="alert">
