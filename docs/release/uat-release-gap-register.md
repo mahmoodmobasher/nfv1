@@ -234,6 +234,28 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - The focused evidence retains the prior 78 cases and passes 100/100 total fixtures. Lint, direct TypeScript, and 244/244 executable direct tests passed; 124 PostgreSQL-gated cases remained skipped as designed. The correction changes no application, Proxy, Caddy, configuration, database, provider, infrastructure, UAT, tag, or main state.
 - Status remains P2/open blocking pending entirely fresh Backend/Security and Architecture review, controlled integration authority, and a separately authorized immutable attempt no earlier than `.6`. `.1` through `.5` remain permanently rejected and unmoved.
 
+#### v0.5.0-uat.7 operational update — validator available, acceptance interrupted
+
+- The accepted validator is present in exact source `386d10c` and `.7` provenance passed. The disposable rebuild did not reach a generated redirect probe because bounded tenant/API admission found separate P1 `UAT-GAP-013` before approved-recipient identity authority existed.
+- Status remains operationally open. No validator bypass or ad hoc redirect equality was used, and no `.7` evidence is claimed for generated verification/reset redirects.
+
+### UAT-GAP-013 — Unauthenticated Workspace-settings denial returns HTTP 500
+
+- Date/environment/release/commit: 2026-08-24; public UAT `v0.5.0-uat.7`; `386d10c5cc8eee9ff9f6d622d1a1e1a144c06ef2`.
+- Category: Application / Security / Database / Test evidence.
+- Observed versus expected: three unauthenticated GET requests to the exact Workspace-settings API route returned HTTP 500 with an empty body; the accepted contract requires bounded HTTP 401 `authentication_required` and safe denial handling.
+- Severity: P1 provisional.
+- Affected journeys/tenants/data: Workspace settings and confidence in tenant-admin denial paths. The fresh database contained no tenants or application data; no cross-tenant read occurred, no public body disclosure was observed, and no mutation committed.
+- Evidence and reproduction: request `GET /api/workspaces/<synthetic-unknown-workspace>/settings` without a Session. Each request returned 500; bounded application logs recorded `Cannot use a pool after calling end on the pool`. Comparable unauthenticated account and leads routes returned bounded 401/403 outcomes. Public evidence suppresses the synthetic identifier and all headers/bodies except safe status/cache summaries.
+- Root cause/current hypothesis: `src/app/api/workspaces/[workspaceId]/settings/route.ts` returns asynchronous `auditedFailure(...)` without awaiting it, while `finally` closes the PostgreSQL pool. The pending denial Audit then calls `pool.connect()` after shutdown. Source search finds the same lifecycle form in additional tenant-admin routes, so final scope requires Architecture authority.
+- Containment/rollback: stopped before tester admission, email, cohort creation, CRM mutation, or full UAT. `.7` remains operationally healthy with an empty fresh database for bounded diagnosis only; retained `.4` files/image and rebuild inputs remain available. No live patch was made.
+- Fall-forward owner/target: Backend + Security + Architecture + Release Engineering; a new reviewed application increment and immutable UAT attempt later than `.7`.
+- Acceptance criteria: deterministic route reproduction on freshly migrated PostgreSQL; intended bounded 401 response with no identifier/body/header disclosure; exactly one required system denial Audit completed before pool close; no successful Audit/Outbox or business mutation; no pool-shutdown error; focused route and serialized PostgreSQL regression; Architecture-defined coverage of every materially identical lifecycle pattern; independent Backend/Security and Architecture acceptance; controlled integration and a new immutable UAT attempt.
+- Dependencies: Product scope authorization, Architecture lifecycle/audit decision, Backend implementation, independent reviews, integration, and separate release authorization. Approved controlled-recipient mailbox authority remains independently required for email gates.
+- Status and verification: open blocking; `v0.5.0-uat.7` is permanently rejected and must not be moved or reused.
+- Residual risk: unbounded 500 denial behavior and missing denial Audit can recur on other tenant-admin routes with the same asynchronous pool-close pattern until the bounded family is reviewed and corrected.
+- Blocks: UAT acceptance, Phase 5, and production readiness.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
@@ -264,6 +286,11 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Initial Workspace lifecycle probes exposed repeated raw cache fields only as identical `private, no-store`; combined parsing found no public/shared-cache, positive-age, stale-serving, unknown, or weakened directive.
 - Status remains P3/non-blocking and unnormalized. `.4` failed for unrelated `UAT-GAP-011`.
 
+#### v0.5.0-uat.7 public evidence
+
+- Across 22 no-token cells on the eleven exact protected paths, raw repeated Cache-Control fields occurred only as identical/effectively `private,no-store`; no public/shared cache, positive-age, stale-serving, unknown, or weakened directive was accepted.
+- Status remains P3/non-blocking and deliberately unnormalized. `.7` failed for unrelated P1 `UAT-GAP-013`.
+
 ### UAT-GAP-005 — Release evidence commands remain partly ad hoc
 
 - Date/environment/release/commit: 2026-08-24; UAT release engineering; `v0.5.0-uat.2`; `05c4c02`.
@@ -280,6 +307,11 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status and verification: open non-blocking.
 - Residual risk: repeat operator friction or ambiguous logs; existing stop conditions contain state risk.
 - Blocks: none, provided reviewed commands and stop conditions remain enforced.
+
+#### v0.5.0-uat.7 recurrence
+
+- One read-only PostgreSQL count probe supplied a nonexistent database name and produced one bounded `FATAL: database ... does not exist` server-log entry. A corrected command consumed the protected container environment without printing it and proved the exact 12/head ledger plus zero application rows.
+- Status remains P3/non-blocking. The error did not change schema/data, health, or live authority, but reinforces the need for one reviewed secret-safe database evidence command.
 
 ## Explicitly deferred or out of scope
 
@@ -299,3 +331,9 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status and verification: explicitly deferred because the prerequisite failed; not represented as passed.
 - Residual risk: Spectrum release behavior remains unaccepted in live UAT.
 - Blocks: UAT acceptance, Phase 5, and production readiness.
+
+#### v0.5.0-uat.7 disposable-rebuild update
+
+- Exact provenance/config, bounded target destruction, fresh migrations, health/TLS/proxy/OIDC-disabled, protected-path/default/static/cache evidence, and empty-database/log checks passed as recorded in `docs/release/nexa-spectrum-phase-1-4-uat7-deployment-result.md`.
+- Approved-recipient email, supported-workflow cohort, authenticated Workspace/CRM/settings, Owner/seat/invitation acceptance, generated token journey, and complete Audit/Outbox delivery evidence did not run. A signed-in approved mailbox or secure handoff was unavailable, and execution then stopped on P1 `UAT-GAP-013`.
+- Status remains blocking missing acceptance evidence. No unexecuted cell is represented as passed; a later immutable attempt must restart the affected runtime admission gates after the application defect is accepted and integrated.
