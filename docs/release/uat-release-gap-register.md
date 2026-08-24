@@ -227,6 +227,13 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Deterministic evidence passed 78/78 focused fixtures covering verification and reset destinations, lint, direct TypeScript, and 222/222 executable direct tests. No application, Proxy, Caddy, provider/configuration, database, infrastructure, or live-UAT behavior changed or was accessed.
 - Status remains P2/open blocking. Fresh distinct Backend/Security and Architecture acceptance of the new immutable candidate are mandatory before controlled integration or any separately authorized immutable attempt no earlier than `.6`. `.1` through `.5` remain permanently rejected and unmoved.
 
+#### Second Architecture rejection and bounded status-line remediation — fresh reviews pending
+
+- Architecture review `16122427324ccd574ba4fafbe3dcf514aea92617` rejected candidate `0f65d0887e178c379b0bd37e24e6a0e22095e9f0` at P2 after demonstrating acceptance of malformed status lines including alphabetic/arbitrary HTTP versions, lowercase protocol, Unicode whitespace, `HTTP/2.0`, and `HTTP/999`. Prior Backend/Security acceptance `3b62423` does not carry forward.
+- Remediation implementation `12e7f76f38e43666ce3dee4b074d2a3acdcef09e` restricts status evidence to uppercase `HTTP/1.0`, `HTTP/1.1`, `HTTP/2`, or `HTTP/3`, literal ASCII separators, status 100–599, and an optional bounded printable-ASCII reason phrase. Malformed punctuation, unsupported versions, Unicode/tab separators, invalid status widths/ranges, invalid trailing syntax, non-ASCII/control reasons, and oversized reasons fail closed.
+- The focused evidence retains the prior 78 cases and passes 100/100 total fixtures. Lint, direct TypeScript, and 244/244 executable direct tests passed; 124 PostgreSQL-gated cases remained skipped as designed. The correction changes no application, Proxy, Caddy, configuration, database, provider, infrastructure, UAT, tag, or main state.
+- Status remains P2/open blocking pending entirely fresh Backend/Security and Architecture review, controlled integration authority, and a separately authorized immutable attempt no earlier than `.6`. `.1` through `.5` remain permanently rejected and unmoved.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields

@@ -86,3 +86,25 @@ Verification on `a6290dd31ca103717d80172a2058c37c0bab9836`:
 No production build, PostgreSQL, browser, Caddy, Compose, provider, UAT, or external-state gate was run because this correction remains byte-bounded to the release validator and deterministic fixtures. Architecture `99ab72d` explicitly does not require those suites for this isolated tooling delta unless later integration introduces a semantic application or configuration conflict.
 
 Status: **GO for fresh, distinct Backend/Security review and then Architecture review of the new immutable candidate; NO-GO for integration, main push, tagging, deployment, UAT access, email, or release publication.** Reviewers must verify the exact remediation implementation and the candidate documentation commit containing this update. `UAT-GAP-012` remains P2/open blocking until both reviews accept, Product authorizes controlled integration, and a separately authorized release no earlier than `v0.5.0-uat.6` passes the complete public-edge matrix from probe one.
+
+## Superseding status-line remediation after second Architecture rejection
+
+Architecture review `16122427324ccd574ba4fafbe3dcf514aea92617` rejected candidate `0f65d0887e178c379b0bd37e24e6a0e22095e9f0` at P2 because its case-insensitive, arbitrary-version status prefix could accept malformed evidence. Backend/Security acceptance `3b62423` does not carry forward. All preceding candidate status statements remain append-only history and are superseded by this update.
+
+Status-line remediation implementation: `12e7f76f38e43666ce3dee4b074d2a3acdcef09e`
+
+The validator now accepts only uppercase `HTTP/` with the explicit versions `HTTP/1.0`, `HTTP/1.1`, `HTTP/2`, and `HTTP/3`; one literal ASCII space; a status from 100 through 599; and an optional reason phrase introduced by one ASCII space. When present, the reason is 1–128 printable ASCII characters, begins and ends with a non-space printable character, and contains no Unicode, control, leading-extra-space, trailing-space, or unbounded syntax.
+
+The deterministic gate retains all previous 78 cases and adds four supported positive forms plus negatives for alphabetic/arbitrary versions, lowercase protocol, NBSP/EM SPACE/tab separators, `HTTP/2.0`, `HTTP/999`, malformed and missing version punctuation, out-of-range/short/long statuses, doubled/trailing separators, control-tailed/non-ASCII reasons, and an overlong reason. Every prior Location, response ordering, malformed block/header, safe-probe, and output-suppression boundary remains unchanged.
+
+Verification on `12e7f76f38e43666ce3dee4b074d2a3acdcef09e`:
+
+- `git diff --check`: passed.
+- `npm run test:uat-edge-location`: **100/100 passed** in one file.
+- `npm run lint`: passed.
+- `npx tsc --noEmit`: passed.
+- `npm test`: **244/244 executable tests passed across 22 files**; 124 PostgreSQL-gated tests remained skipped by the direct suite as designed.
+
+No application build, PostgreSQL, browser, Caddy, Compose, provider, UAT, or external-state gate was run because the exact delta remains limited to the release validator and deterministic fixtures. No application, Proxy, route, Caddy, configuration, database, provider, infrastructure, UAT, tag, or main state changed.
+
+Status: **GO only for entirely fresh Backend/Security and Architecture review of the immutable candidate containing `12e7f76f`; NO-GO for integration, main push, tagging, deployment, UAT access, email, or release publication.** Review must confirm the exact status grammar, preservation of all 100 focused cases and suppression boundaries, and the tooling-only inventory. `UAT-GAP-012` remains P2/open blocking through independent acceptance, separately authorized integration, and live edge-first closure in a separately authorized immutable release no earlier than `v0.5.0-uat.6`.
