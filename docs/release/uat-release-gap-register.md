@@ -181,6 +181,14 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: token-bearing redirect Location may expose a bearer token to client history, intermediaries, or downstream requests despite strict Referrer-Policy/cache headers.
 - Blocks: UAT acceptance, Phase 5, and production readiness.
 
+#### Bounded capture-before-framework implementation update — review pending
+
+- Backend implementation `47efe632f07be09b5d0da552f86727f27ddea346` on `codex/generated-token-rsc-capture-remediation` removes the two prefetch matcher omissions and captures the exact generated plus legacy verification/reset entries in Proxy before filesystem/framework routing. Invitation capture is preserved and receives the same presentation-independent coverage.
+- GET with one valid-shape token returns a clean 303 and opaque purpose-bound intent. HEAD returns a bodyless clean 303 without sealing. Unsupported methods return generic bodyless 405. Duplicate, empty, malformed, oversized, and undecodable inputs clear stale authority. Every handled outcome is private/no-store, no-referrer, nonce-CSP protected, and token-free outside the opaque HttpOnly cookie.
+- Official shipped Next matcher evidence passed for HTML, RSC, `_rsc`, router/purpose prefetch, router-state, and combined shapes. Immutable production evidence passed for real encrypted Outbox/template verification/reset links plus synthetic mapping/method/query tables and browser history/storage/outbound/referrer checks. Direct/unit passed 144/144, PostgreSQL passed 124/124 serialized, production capture passed 4/4, and focused token/invitation browser security passed 4/4.
+- Status: implementation-remediated, still P1/open blocking pending distinct Backend/Security and Architecture acceptance, controlled integration, separate Product authorization, and a newly started public-edge matrix. No live service, release tag, email/provider, Caddy, secret, database schema, or infrastructure state changed.
+- `v0.5.0-uat.1`, `.2`, `.3`, and `.4` remain permanently retired. No `.5` was created or authorized by this implementation.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
