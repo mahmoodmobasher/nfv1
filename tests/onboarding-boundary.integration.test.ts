@@ -5,6 +5,8 @@ import { loginPassword, registerPasswordUser, verifyEmailToken } from "../src/se
 import { crmHome } from "../src/server/crm/home";
 import { keyedHash } from "../src/server/security/crypto";
 import { provisionWorkspace, requireWorkspaceAuthorization, savePlanSelection } from "../src/server/workspaces/provision";
+import { POST as loginRoute } from "../src/app/api/auth/login/route";
+import { INVITATION_RETURN_COOKIE, sealInvitationReturn } from "../src/server/invitations/intent";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
@@ -134,6 +136,18 @@ suite("onboarding/workspace boundary validation", () => {
       { action: "workspace.created", outcome: "success", count: 1 },
       { action: "workspace.initial_owner_assigned", outcome: "success", count: 1 },
     ]);
+  });
+
+  it("resumes only an exact invitation path backed by a valid server-owned return marker", async () => {
+    await passwordUser("invitation-return@test.example");
+    const mutationHeaders={origin:config.appOrigin,cookie:`nexaflow_csrf=csrf; ${INVITATION_RETURN_COOKIE}=${encodeURIComponent(sealInvitationReturn(secret))}`,"x-csrf-token":"csrf","content-type":"application/json"};
+    const accepted=await loginRoute(new Request(`${config.appOrigin}/api/auth/login`,{method:"POST",headers:mutationHeaders,body:JSON.stringify({email:"invitation-return@test.example",password:"Local-password-123!",next:"/workspace/invitations/accept"})}));
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({next:"/workspace/invitations/accept"});
+    expect(accepted.headers.get("set-cookie")).toContain(`${INVITATION_RETURN_COOKIE}=`);
+    const rejected=await loginRoute(new Request(`${config.appOrigin}/api/auth/login`,{method:"POST",headers:{...mutationHeaders,cookie:"nexaflow_csrf=csrf"},body:JSON.stringify({email:"invitation-return@test.example",password:"Local-password-123!",next:"https://attacker.invalid"})}));
+    expect(rejected.status).toBe(200);
+    expect(await rejected.json()).toMatchObject({next:"/workspace/create"});
   });
 
   it("denies CRM home for missing, suspended, and cross-tenant memberships", async () => {

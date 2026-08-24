@@ -7,6 +7,11 @@ export async function revokeInvitation(pool:Pool,input:{context:TenantContext;in
 export const normalizeInvitationDestination=(email:string)=>email.trim().toLowerCase();
 export async function invitationDestinationById(pool:Pool,workspaceId:string,invitationId:string){return(await pool.query<{email_normalized:string}>(`select email_normalized from workspace_invitations where id=$1 and workspace_id=$2`,[invitationId,workspaceId])).rows[0]?.email_normalized??"unknown"}
 export async function invitationDestinationByToken(pool:Pool,token:string,secret:string){return(await pool.query<{email_normalized:string}>(`select email_normalized from workspace_invitations where token_hash=$1`,[tokenHash(token,secret)])).rows[0]?.email_normalized??"unknown"}
+export type InvitationAcceptancePreview={workspaceName:string;role:RoleCode;expiresAt:Date};
+export async function invitationAcceptancePreview(pool:Pool,token:string,secret:string):Promise<InvitationAcceptancePreview|null>{
+  const row=(await pool.query<InvitationAcceptancePreview>(`select w.name "workspaceName",r.code role,i.expires_at "expiresAt" from workspace_invitations i join roles r on r.id=i.role_id and r.workspace_id=i.workspace_id and r.is_system=true and r.code in ('admin','member') join workspaces w on w.id=i.workspace_id and w.status='active' where i.token_hash=$1 and i.status='pending' and i.expires_at>now()`,[tokenHash(token,secret)])).rows[0];
+  return row??null;
+}
 export async function acceptInvitation(pool:Pool,input:{userId:string;sessionId:string;token:string;idempotencyKey:string;secret:string}){
   const audit={userId:input.userId,sessionId:input.sessionId,action:"workspace.invitation_accept_denied",targetType:"invitation",correlationId:auditCorrelation("invite_accept",input.idempotencyKey)};
   try{return await withDenialAudit(pool,audit,async()=>{
