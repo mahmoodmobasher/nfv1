@@ -385,3 +385,9 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status and verification: open non-blocking; deployment remains GO.
 - Residual risk: minor public-copy polish and reduced confidence, with no authorization or capacity impact.
 - Blocks: none.
+
+#### v0.5.0-uat.10 closure
+
+- Exact source `eee6638201996dc05c6d4e5c53ca59fa04f96fa8` is live under immutable tag `v0.5.0-uat.10` as recorded in `docs/release/nexa-spectrum-homepage-uat10-deployment-result.md`.
+- Public homepage evidence renders `1 active seat, Owner included`; 5 and 15 remain plural. Exact commercial values, Workspace-subscription wording, Enterprise guidance, billing-disconnected truth, responsive Light/Dark/System behavior, focus/contrast, overflow, and malformed-catalog fail-closed behavior passed.
+- Status: **closed**. No seat, entitlement, tenant, billing, provider, schema, or backend authority changed.
