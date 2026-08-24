@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { changeMembership } from "../src/server/tenant-admin/administration";
 import type { TenantContext } from "../src/server/tenant-admin/permissions";
 import { provisionWorkspace } from "../src/server/workspaces/provision";
+import { resolveSelectedCommercialPlan } from "../src/server/commercial/catalog";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
@@ -69,11 +70,30 @@ suite("versioned commercial catalog authority", () => {
     await pool.query(`insert into onboarding_progress(user_id,selected_plan_code,billing_cadence,current_step) values($1,'growth','monthly','workspace')`,[user.id]);
     await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,feature_flags,trial_days,effective_from) values('growth',$1,'Untyped Growth','active','["monthly","annual"]',5,'{}',14,now()-interval '1 second')`,[`test-commercial-untyped-${crypto.randomUUID()}`]);
 
+    await expect(resolveSelectedCommercialPlan(pool,"growth","monthly")).rejects.toThrow("commercial_catalog_unavailable");
     await expect(provisionWorkspace(pool,{userId:user.id,sessionId:session.id,name:"Must Not Exist",idempotencyKey:crypto.randomUUID()})).rejects.toMatchObject({code:"invalid_plan"});
     expect((await pool.query(`select selected_plan_code,billing_cadence,current_step,workspace_id from onboarding_progress where user_id=$1`,[user.id])).rows[0]).toEqual({selected_plan_code:"growth",billing_cadence:"monthly",current_step:"workspace",workspace_id:null});
     expect((await pool.query(`select active_workspace_id from sessions where id=$1`,[session.id])).rows[0].active_workspace_id).toBeNull();
     for(const table of ["workspaces","workspace_memberships","workspace_entitlement_snapshots","pipeline_stages","audit_events","outbox_messages","idempotency_records"]){
       expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count,table).toBe(0);
+    }
+  });
+
+  it("rejects an in-place malformed accepted-version row for creation and provisioning without side effects", async () => {
+    const user=(await pool.query<{id:string}>(`insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at) values($1,$1,'Malformed Candidate','active',now()) returning id`,[`malformed-${crypto.randomUUID()}@catalog.test`])).rows[0];
+    const session=(await pool.query<{id:string}>(`insert into sessions(user_id,session_hash,security_version,idle_expires_at,absolute_expires_at,authenticated_at,auth_method) values($1,$2,1,now()+interval '1 hour',now()+interval '1 day',now(),'password') returning id`,[user.id,crypto.randomUUID()])).rows[0];
+    await pool.query(`insert into onboarding_progress(user_id,selected_plan_code,billing_cadence,current_step) values($1,'growth','monthly','workspace')`,[user.id]);
+    await pool.query(`update plan_catalog_entries set name='Malformed Growth' where code='growth' and catalog_version=$1`,[catalogVersion]);
+    try {
+      await expect(resolveSelectedCommercialPlan(pool,"growth","monthly")).rejects.toThrow("commercial_catalog_unavailable");
+      await expect(provisionWorkspace(pool,{userId:user.id,sessionId:session.id,name:"Must Not Exist",idempotencyKey:crypto.randomUUID()})).rejects.toMatchObject({code:"invalid_plan"});
+      expect((await pool.query(`select selected_plan_code,billing_cadence,current_step,workspace_id from onboarding_progress where user_id=$1`,[user.id])).rows[0]).toEqual({selected_plan_code:"growth",billing_cadence:"monthly",current_step:"workspace",workspace_id:null});
+      expect((await pool.query(`select active_workspace_id from sessions where id=$1`,[session.id])).rows[0].active_workspace_id).toBeNull();
+      for(const table of ["workspaces","workspace_memberships","workspace_entitlement_snapshots","pipeline_stages","audit_events","outbox_messages","idempotency_records"]){
+        expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count,table).toBe(0);
+      }
+    } finally {
+      await pool.query(`update plan_catalog_entries set name='Growth' where code='growth' and catalog_version=$1`,[catalogVersion]);
     }
   });
 });
