@@ -17,6 +17,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { activeCommercialCatalog } from "@/server/commercial/catalog";
+import { activeSeatCopy } from "./marketing-seat-copy";
 
 const appUrl = "https://app.nexaflowsystems.com/login";
 const demoEmail =
@@ -269,7 +270,7 @@ export default async function Home() {
                   <h3>{plan.name}</h3>
                   <p className="marketing-pricing-copy">{plan.copy}</p>
                   <p className="marketing-pricing-price"><b>{plan.price}</b><span> / month</span></p>
-                  <p className="marketing-pricing-seats">One Workspace subscription includes {plan.seats} active seats, Owner included.</p>
+                  <p className="marketing-pricing-seats">{activeSeatCopy(plan.seats)}</p>
                   <ul>
                     <li><CircleCheck aria-hidden="true" /> One company Workspace</li>
                     <li><CircleCheck aria-hidden="true" /> 14-day trial at creation</li>
