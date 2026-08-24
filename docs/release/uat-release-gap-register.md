@@ -189,6 +189,30 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status: implementation-remediated, still P1/open blocking pending distinct Backend/Security and Architecture acceptance, controlled integration, separate Product authorization, and a newly started public-edge matrix. No live service, release tag, email/provider, Caddy, secret, database schema, or infrastructure state changed.
 - `v0.5.0-uat.1`, `.2`, `.3`, and `.4` remain permanently retired. No `.5` was created or authorized by this implementation.
 
+#### v0.5.0-uat.5 deployment update — implementation signal positive, live closure incomplete
+
+- Accepted candidate `0da5caa`, Architecture `32a38a9`, and Backend/Security `9d22612` were integrated and promoted at `bb5bd5d`; Architecture release-readiness GO was recorded at `bb50cd7`.
+- All artifact, Option A, backup/restore, migration, Caddy/Compose, app/worker readiness, health, and rollback prerequisites passed. The first public generated-verification HTML probe returned HTTP 303 with clean relative `Location: /verify-email`.
+- The release harness incorrectly required the equivalent absolute same-origin form and failed before completing the response-privacy assertions. Automatic rollback restored `e58c22a`; `.5` is permanently rejected under fall-forward policy.
+- Exact-image diagnosis retained HTTP 303, clean token-free Location, no-referrer, private/no-store, nonce CSP, and an opaque bounded cookie. No application regression was reproduced, but `UAT-GAP-011` remains operationally open because RSC/prefetch/combined and the remainder of the public matrix did not run.
+
+### UAT-GAP-012 — Public-edge harness rejects valid relative clean Location
+
+- Date/environment/release/commit: 2026-08-24; public UAT rejected `v0.5.0-uat.5`; `bb5bd5d6e513cf61ecd17b6aaef668264df1b344`.
+- Category: Test evidence / Operations.
+- Observed versus expected: the first generated verification capture probe received HTTP 303 with `Location: /verify-email`; the harness expected only `https://app.nexaflowsystems.com/verify-email`. The accepted security contract requires the exact token-free same-origin clean destination and permits the relative network serialization after normal same-origin resolution.
+- Severity: P2.
+- Affected journeys/tenants/data: release evidence and UAT availability only. One synthetic verification capture request ran. No personal recipient, credential, production token, tenant mutation, or controlled email journey was involved.
+- Evidence and reproduction: deploy exact `.5`, issue the first redirect-disabled synthetic verification capture request, and compare the raw Location. Offline exact-image diagnosis returned 303/relative-clean with no-referrer, private/no-store, nonce CSP, opaque bounded cookie, and token absence. The original harness exited at Location equality before recording later assertions.
+- Root cause/current hypothesis: the ad hoc shell harness compared raw Location text to one absolute representation rather than resolving the value against the request origin and enforcing the canonical origin/path/query/fragment tuple. Its `ERR` trap also lacked function inheritance, so the safe probe label was not emitted before rollback.
+- Containment/rollback: the fail-closed wrapper immediately restored `v0.4.0-uat.1` / `e58c22a`; five services are healthy with zero restarts, ledger 12/head `1787501845245`, public smoke green, and bounded logs clean. `.5` will not be moved or reused.
+- Fall-forward owner/target: Release Engineering with Backend/Security and Architecture review; reviewed harness-only correction and a new immutable UAT attempt no earlier than `v0.5.0-uat.6`.
+- Acceptance criteria: normalize relative or absolute Location against the request origin; accept only exact expected origin and pathname with empty query/fragment; reject scheme-relative, cross-origin, userinfo, encoded-path ambiguity, 307/308, query-bearing, fragment-bearing, missing, duplicate, comma-joined, or token-bearing values; inherit/report safe probe identifiers on every failure; rerun direct negative fixtures and the complete public matrix from probe one.
+- Dependencies: Product authorization for a tooling/evidence increment, independent Backend/Security review, Architecture acceptance, immutable integration/provenance, and separate `.6` deployment authorization.
+- Status and verification: open blocking. Application code is unchanged and no application defect is currently indicated; `.5` remains rejected because its live acceptance sequence did not complete.
+- Residual risk: another false stop or, if normalization is implemented loosely, acceptance of a cross-origin or token-bearing redirect. Fail-closed rollback contained the current attempt.
+- Blocks: UAT acceptance, Phase 5, and production readiness evidence; does not independently block the retained healthy `e58c22a` service.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
