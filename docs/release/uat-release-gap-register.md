@@ -213,6 +213,13 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: another false stop or, if normalization is implemented loosely, acceptance of a cross-origin or token-bearing redirect. Fail-closed rollback contained the current attempt.
 - Blocks: UAT acceptance, Phase 5, and production readiness evidence; does not independently block the retained healthy `e58c22a` service.
 
+#### Bounded release-harness remediation update — review pending
+
+- Release Engineering implementation `b5654dd6862f046d3f4889073987d75fd310ff0e` adds one repository-owned, token-blind header-file validator and a named deterministic gate. It changes no application, Proxy, Caddy, provider/configuration, database, or live-UAT behavior.
+- The validator resolves relative or absolute Location against one canonical request origin and accepts only status 303, one exact same-origin expected pathname, and empty query/fragment. It rejects 307/308, response chains, missing/empty/duplicate/comma-joined fields, scheme-relative/cross-origin/userinfo, whitespace/control/backslash/percent-encoded ambiguity, ambiguous relative values, wrong paths, and query/fragment/token-bearing values.
+- CLI evidence is limited to fixed pass/fail and reason labels plus a validated bounded probe identifier; raw Location, headers, tokens, recipients, file paths, origins, and expected paths are suppressed. Focused fixtures passed 34/34; lint, TypeScript, and the 178-test direct suite passed.
+- Status: implementation-remediated, still P2/open blocking pending distinct Backend/Security and Architecture acceptance, controlled integration, separate immutable release authorization no earlier than `.6`, and a fully restarted public-edge matrix. `.1` through `.5` remain permanently rejected and unmoved.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
