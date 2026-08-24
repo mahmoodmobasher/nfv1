@@ -32,7 +32,11 @@ export function openInvitationIntent(value: string | undefined, secret: string, 
 }
 
 export function invitationIntentFromRequest(request: Request, secret: string): string | null {
-  return openInvitationIntent(parseCookies(request.headers.get("cookie"))[INVITATION_INTENT_COOKIE], secret);
+  try {
+    return openInvitationIntent(parseCookies(request.headers.get("cookie"))[INVITATION_INTENT_COOKIE], secret);
+  } catch {
+    return null;
+  }
 }
 
 export function invitationIntentCookie(value: string, secure: boolean, maxAge = INVITATION_INTENT_MAX_AGE_SECONDS): string {
@@ -50,9 +54,9 @@ export function sealInvitationReturn(secret: string, now = Date.now()): string {
 }
 
 export function hasValidInvitationReturn(request: Request, secret: string, now = Date.now()): boolean {
-  const value = parseCookies(request.headers.get("cookie"))[INVITATION_RETURN_COOKIE];
-  if (!value) return false;
   try {
+    const value = parseCookies(request.headers.get("cookie"))[INVITATION_RETURN_COOKIE];
+    if (!value) return false;
     const intent = decryptEnvelope<InvitationReturnEnvelope>(value, secret);
     return intent.purpose === "workspace_invitation_return" && intent.expiresAt > now;
   } catch {

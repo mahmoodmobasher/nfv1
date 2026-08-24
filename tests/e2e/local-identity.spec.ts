@@ -2279,6 +2279,57 @@ test("Owner invites a verified Member through server settings, Mailpit, and toke
       /http:\/\/127\.0\.0\.1:3000\/workspace\/invitations\/accept\?token=[^\s]+/,
     )![0];
   expect(inviteLink).toContain("token=");
+  const generatedToken = new URL(inviteLink).searchParams.get("token")!;
+  const captureResponse = await page.request.get(inviteLink, {
+    maxRedirects: 0,
+    headers: { RSC: "1" },
+  });
+  expect(captureResponse.status()).toBe(303);
+  expect(captureResponse.headers()["location"]).toBe(
+    "/workspace/invitations/accept",
+  );
+  expect(captureResponse.headers()["cache-control"]).toBe("private, no-store");
+  expect(captureResponse.headers()["referrer-policy"]).toBe("no-referrer");
+  for (const output of [
+    await captureResponse.text(),
+    captureResponse.headers()["location"] ?? "",
+    captureResponse.headers()["set-cookie"] ?? "",
+  ]) {
+    expect(output).not.toContain(generatedToken);
+    expect(output).not.toContain(encodeURIComponent(generatedToken));
+  }
+
+  await page.context().clearCookies();
+  await page.goto(inviteLink);
+  await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
+  await expect(
+    page.getByRole("heading", { name: "Join Slice 4 Browser?" }),
+  ).toBeVisible();
+  expect(await page.content()).not.toContain(generatedToken);
+  expect(JSON.stringify(await page.evaluate(() => history.state))).not.toContain(
+    generatedToken,
+  );
+  expect(
+    JSON.stringify(
+      await page.evaluate(() => ({
+        local: Object.entries(localStorage),
+        session: Object.entries(sessionStorage),
+      })),
+    ),
+  ).not.toContain(generatedToken);
+  await page.getByRole("link", { name: "Sign in to continue" }).click();
+  await expect(page).toHaveURL(
+    /\/login\?next=\/workspace\/invitations\/accept$/,
+  );
+  expect(page.url()).not.toContain(generatedToken);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
+  await page.getByRole("link", { name: "Create account to continue" }).click();
+  await expect(page).toHaveURL(
+    /\/register\?next=\/workspace\/invitations\/accept$/,
+  );
+  expect(page.url()).not.toContain(generatedToken);
+
   const inviteeToken = `invitee-${crypto.randomUUID()}`;
   await database.query(
     `insert into sessions(user_id,session_hash,security_version,idle_expires_at,absolute_expires_at,authenticated_at,auth_method)values($1,$2,1,now()+interval '1 hour',now()+interval '1 day',now(),'password')`,

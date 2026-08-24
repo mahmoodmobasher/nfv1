@@ -316,6 +316,6 @@ describe("design-system document boundary", () => {
       expect(response.headers.get("referrer-policy"), path).toBe("no-referrer");
       expect(response.headers.get("content-security-policy"), path).toContain("'nonce-");
     }
-    for(const path of ["/verify-email","/reset-password"]){const raw="opaque-token-value-long-enough-123456",response=proxy(new NextRequest(`https://app.nexaflowsystems.com${path}?token=${raw}`));expect(response.status,path).toBe(303);expect(response.headers.get("location"),path).toBe(`https://app.nexaflowsystems.com${path}`);expect(response.headers.get("location"),path).not.toContain(raw);expect(response.headers.get("set-cookie"),path).not.toContain(raw)}
+    for(const path of ["/verify-email","/reset-password","/workspace/invitations/accept"]){const raw="opaque-token-value-long-enough-123456",response=proxy(new NextRequest(`https://app.nexaflowsystems.com${path}?token=${raw}`));expect(response.status,path).toBe(303);expect(response.headers.get("location"),path).toBe(`https://app.nexaflowsystems.com${path}`);expect(response.headers.get("location"),path).not.toContain(raw);expect(response.headers.get("set-cookie"),path).not.toContain(raw)}
   });
 });

@@ -10,5 +10,6 @@ export async function POST(request: Request) {
   const env = getServerEnv(), response = privateWorkspaceResponse(NextResponse.json({ cleared: true }));
   response.headers.set("Set-Cookie", clearInvitationIntentCookie(env.APP_ORIGIN.startsWith("https://")));
   response.headers.append("Set-Cookie", clearInvitationReturnCookie(env.APP_ORIGIN.startsWith("https://")));
+  response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }

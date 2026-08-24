@@ -11,6 +11,7 @@ const sessionSecret = "local-only-session-secret-change-me-32chars";
 
 async function screenshot(page: Page, name: string) {
   await page.evaluate(() => document.fonts.ready);
+  await page.addStyleTag({ content: "nextjs-portal{display:none!important}" });
   await page
     .locator("nextjs-portal")
     .evaluateAll((portals) => portals.forEach((portal) => portal.remove()));
@@ -51,6 +52,48 @@ async function expectFocusAndReflow(page: Page, target: Locator) {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+}
+
+async function assertNoDocumentOverflow(page: Page) {
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+}
+
+async function captureAcceptanceMutationStates(
+  page: Page,
+  theme: "light" | "dark",
+  size: "desktop" | "mobile",
+) {
+  let releaseResponse: (() => void) | undefined;
+  await page.route(
+    "**/workspace/invitations/accept/complete",
+    async (route) => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: { workspaceName: "Northstar Studio", role: "member" },
+        }),
+      });
+    },
+    { times: 1 },
+  );
+  const click = page.getByRole("button", { name: "Accept invitation" }).click();
+  await expect(page.getByRole("button", { name: "Joining Workspace…" })).toBeDisabled();
+  await screenshot(page, `spectrum-p4-invitation-accept-busy-${theme}-${size}.png`);
+  expect(releaseResponse).toBeDefined();
+  releaseResponse!();
+  await click;
+  await expect(
+    page.getByRole("heading", { name: "You joined Northstar Studio as Member" }),
+  ).toBeVisible();
+  await screenshot(page, `spectrum-p4-invitation-accept-success-${theme}-${size}.png`);
 }
 
 async function cleanAcceptanceFixture() {
@@ -104,16 +147,16 @@ async function seedAcceptance() {
   );
   const invitationToken =
     "p4-visual-invitation-token-000000000000000000000000";
-  await database.query(
+  const invitation = (await database.query<{ id: string }>(
     `insert into workspace_invitations(workspace_id,email_normalized,email_display,role_id,token_hash,expires_at,last_sent_at,invited_by_membership_id)
-     values($1,'p4-visual-invitee@example.test','p4-visual-invitee@example.test',$2,$3,'2030-09-15T12:00:00Z','2026-08-24T12:00:00Z',$4)`,
+     values($1,'p4-visual-invitee@example.test','p4-visual-invitee@example.test',$2,$3,'2030-09-15T12:00:00Z','2026-08-24T12:00:00Z',$4) returning id`,
     [
       workspace.id,
       role("member"),
       keyedHash(`workspace_invitation:v1:${invitationToken}`, sessionSecret),
       owner.id,
     ],
-  );
+  )).rows[0];
   const sessionToken =
     "p4-visual-session-token-0000000000000000000000000000";
   await database.query(
@@ -125,7 +168,7 @@ async function seedAcceptance() {
     "insert into user_preferences(user_id,appearance) values($1,'light')",
     [users[1].id],
   );
-  return { invitationToken, sessionToken, inviteeId: users[1].id };
+  return { invitationId: invitation.id, invitationToken, sessionToken, inviteeId: users[1].id, ownerMembershipId: owner.id };
 }
 
 test.beforeAll(async () => {
@@ -179,6 +222,41 @@ test("invitation preview has paired responsive Light and Dark evidence", async (
   }
 });
 
+test("invitation preview validation and recovery states have deterministic Light and Dark pairs", async ({
+  page,
+}) => {
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme, forcedColors: "none" });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/invite?plan=growth");
+    await page.getByRole("button", { name: "Preview invitation result" }).click();
+    await expect(page.locator(".alert[role='alert']")).toContainText("Add at least one work email");
+    await screenshot(page, `spectrum-p4-invitation-preview-validation-${theme}-desktop.png`);
+
+    await page.goto("/invite?plan=growth");
+    for (const email of ["alex.preview@example.test", "jamie.preview@example.test"]) {
+      await page.getByLabel("Work email").fill(email);
+      await page.getByRole("button", { name: "Add preview entry" }).click();
+    }
+    await page.getByRole("button", { name: "Preview partial result" }).click();
+    await expect(page.getByText("Partial-result preview.")).toBeVisible();
+    await screenshot(page, `spectrum-p4-invitation-preview-partial-${theme}-desktop.png`);
+
+    await page.getByRole("button", { name: "Preview network failure" }).click();
+    await expect(page.getByText("Network-failure preview.")).toBeVisible();
+    await screenshot(page, `spectrum-p4-invitation-preview-network-${theme}-desktop.png`);
+
+    await page.getByRole("button", { name: "Preview partial result" }).click();
+    await page.getByRole("button", { name: "Preview retry" }).click();
+    await expect(page.getByText("Success-result preview.")).toBeVisible();
+    await screenshot(page, `spectrum-p4-invitation-preview-success-${theme}-desktop.png`);
+
+    await page.setViewportSize({ width: 320, height: 700 });
+    await assertNoDocumentOverflow(page);
+    await screenshot(page, `spectrum-p4-invitation-preview-recovery-${theme}-mobile.png`);
+  }
+});
+
 test("invitation acceptance has paired, unavailable, capacity, and forced-colors evidence", async ({
   page,
 }) => {
@@ -205,6 +283,13 @@ test("invitation acceptance has paired, unavailable, capacity, and forced-colors
       "update user_preferences set appearance=$2,version=version+1,updated_at=now() where user_id=$1",
       [fixture.inviteeId, theme],
     );
+    await database.query(
+      "update workspace_invitations set token_hash=$2,status='pending',expires_at='2030-09-15T12:00:00Z',revoked_at=null,revoked_by_membership_id=null where id=$1",
+      [
+        fixture.invitationId,
+        keyedHash(`workspace_invitation:v1:${fixture.invitationToken}`, sessionSecret),
+      ],
+    );
     for (const [size, viewport] of [
       ["desktop", { width: 1280, height: 900 }],
       ["mobile", { width: 320, height: 700 }],
@@ -219,6 +304,24 @@ test("invitation acceptance has paired, unavailable, capacity, and forced-colors
         `spectrum-p4-invitation-accept-${theme}-${size}.png`,
       );
     }
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.reload();
+    await screenshot(page, `spectrum-p4-invitation-accept-${theme}-tablet.png`);
+
+    await page.setViewportSize({ width: 640, height: 720 });
+    await page.reload();
+    await tabTo(page, accept);
+    await expectFocusAndReflow(page, accept);
+    await screenshot(page, `spectrum-p4-invitation-accept-${theme}-zoom200.png`);
+
+    for (const [size, viewport] of [
+      ["desktop", { width: 1280, height: 900 }],
+      ["mobile", { width: 320, height: 700 }],
+    ] as const) {
+      await page.setViewportSize(viewport);
+      await page.reload();
+      await captureAcceptanceMutationStates(page, theme, size);
+    }
   }
 
   await page.emulateMedia({ forcedColors: "active" });
@@ -229,26 +332,53 @@ test("invitation acceptance has paired, unavailable, capacity, and forced-colors
   await screenshot(page, "spectrum-p4-invitation-accept-forced-colors.png");
   await page.emulateMedia({ forcedColors: "none" });
 
-  await database.query(
-    "update user_preferences set appearance='light',version=version+1,updated_at=now() where user_id=$1",
-    [fixture.inviteeId],
-  );
-  await page.setViewportSize({ width: 768, height: 900 });
-  await page.reload();
-  await accept.click();
-  await expect(
-    page.getByText(
-      "This Workspace has no available active seats. Ask its Owner or an authorized Admin to make capacity available.",
-    ),
-  ).toBeVisible();
-  await screenshot(page, "spectrum-p4-invitation-seat-unavailable-light.png");
+  for (const theme of ["light", "dark"] as const) {
+    await database.query(
+      "update user_preferences set appearance=$2,version=version+1,updated_at=now() where user_id=$1",
+      [fixture.inviteeId, theme],
+    );
+    await database.query(
+      "update workspace_invitations set token_hash=$2,status='pending',expires_at='2030-09-15T12:00:00Z',revoked_at=null,revoked_by_membership_id=null where id=$1",
+      [
+        fixture.invitationId,
+        keyedHash(`workspace_invitation:v1:${fixture.invitationToken}`, sessionSecret),
+      ],
+    );
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/workspace/invitations/accept?token=${fixture.invitationToken}`);
+    await accept.click();
+    await expect(
+      page.getByText(
+        "This Workspace has no available active seats. Ask its Owner or an authorized Admin to make capacity available.",
+      ),
+    ).toBeVisible();
+    await screenshot(page, `spectrum-p4-invitation-seat-exhausted-${theme}-desktop.png`);
 
-  const invalidToken = "p4-visual-invalid-token-00000000000000000000000000";
-  await page.goto(`/workspace/invitations/accept?token=${invalidToken}`);
-  await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
-  await expect(
-    page.getByRole("heading", { name: "This invitation isn’t available" }),
-  ).toBeVisible();
-  await expect(accept).toHaveCount(0);
-  await screenshot(page, "spectrum-p4-invitation-unavailable-light.png");
+    const unavailableStates = [
+      ["invalid", "p4-visual-invalid-token-00000000000000000000000000", "pending", "2030-09-15T12:00:00Z", false],
+      ["expired", "p4-visual-expired-token-0000000000000000000000000", "pending", "2020-09-15T12:00:00Z", true],
+      ["revoked", "p4-visual-revoked-token-0000000000000000000000000", "revoked", "2030-09-15T12:00:00Z", true],
+    ] as const;
+    for (const [state, stateToken, status, expiresAt, persisted] of unavailableStates) {
+      if (persisted) {
+        await database.query(
+          "update workspace_invitations set token_hash=$2,status=$3,created_at=case when $3='pending' and $4::timestamptz<now() then $4::timestamptz-interval '7 days' else created_at end,expires_at=$4,revoked_at=case when $3='revoked' then now() else null end,revoked_by_membership_id=case when $3='revoked' then $5::uuid else null end where id=$1",
+          [
+            fixture.invitationId,
+            keyedHash(`workspace_invitation:v1:${stateToken}`, sessionSecret),
+            status,
+            expiresAt,
+            fixture.ownerMembershipId,
+          ],
+        );
+      }
+      await page.goto(`/workspace/invitations/accept?token=${stateToken}`);
+      await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
+      await expect(
+        page.getByRole("heading", { name: "This invitation isn’t available" }),
+      ).toBeVisible();
+      await expect(accept).toHaveCount(0);
+      await screenshot(page, `spectrum-p4-invitation-${state}-${theme}-desktop.png`);
+    }
+  }
 });

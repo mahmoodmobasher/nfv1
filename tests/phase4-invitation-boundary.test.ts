@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
+import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
-import { POST as captureInvitationIntent } from "../src/app/workspace/invitations/accept/intent/route";
-import { INVITATION_ACCEPT_DESTINATION, INVITATION_INTENT_COOKIE, INVITATION_INTENT_PATH, INVITATION_RETURN_COOKIE, INVITATION_RETURN_PATH, clearInvitationIntentCookie, hasValidInvitationReturn, invitationContinuation, invitationIntentCookie, invitationReturnCookie, openInvitationIntent, sealInvitationIntent, sealInvitationReturn } from "../src/server/invitations/intent";
+import { GET as clearTerminalInvitation } from "../src/app/workspace/invitations/accept/terminal/route";
+import { POST as retiredClientCapture } from "../src/app/workspace/invitations/accept/intent/route";
+import { proxy } from "../src/proxy";
+import { INVITATION_ACCEPT_DESTINATION, INVITATION_INTENT_COOKIE, INVITATION_INTENT_PATH, INVITATION_RETURN_COOKIE, INVITATION_RETURN_PATH, clearInvitationIntentCookie, hasValidInvitationReturn, invitationContinuation, invitationIntentCookie, invitationIntentFromRequest, invitationReturnCookie, openInvitationIntent, sealInvitationIntent, sealInvitationReturn } from "../src/server/invitations/intent";
 
 const secret = "phase-four-invitation-test-secret-32-characters";
 const token = "invitation-token-value-that-is-long-enough-123456";
-const headers = { origin: "http://127.0.0.1:3000", cookie: "nexaflow_csrf=csrf-token", "x-csrf-token": "csrf-token", "content-type": "application/json" };
 
 describe("Phase 4 invitation privacy and presentation boundary", () => {
   it("seals a short-lived purpose-bound invitation intent without exposing its token", () => {
@@ -40,24 +42,79 @@ describe("Phase 4 invitation privacy and presentation boundary", () => {
     expect(cookie).toContain("HttpOnly");
   });
 
-  it("captures through same-origin CSRF, returns private no-store, and never reflects the raw token", async () => {
-    const response = await captureInvitationIntent(new Request("http://127.0.0.1:3000/workspace/invitations/accept/intent", { method: "POST", headers, body: JSON.stringify({ token }) }));
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(response.headers.get("set-cookie")).toContain(`${INVITATION_INTENT_COOKIE}=`);
-    expect(response.headers.get("set-cookie")).toContain(`${INVITATION_RETURN_COOKIE}=`);
-    expect(response.headers.get("set-cookie")).not.toContain(token);
-    expect(await response.json()).toEqual({ captured: true });
+  it("fails malformed intent and return cookies closed without throwing", () => {
+    const malformedIntent = new Request(`http://127.0.0.1:3000${INVITATION_ACCEPT_DESTINATION}`, {
+      headers: { cookie: `${INVITATION_INTENT_COOKIE}=%E0%A4%A` },
+    });
+    const malformedReturn = new Request("http://127.0.0.1:3000/api/auth/login", {
+      headers: { cookie: `${INVITATION_RETURN_COOKIE}=%E0%A4%A` },
+    });
+    expect(() => invitationIntentFromRequest(malformedIntent, secret)).not.toThrow();
+    expect(invitationIntentFromRequest(malformedIntent, secret)).toBeNull();
+    expect(() => hasValidInvitationReturn(malformedReturn, secret)).not.toThrow();
+    expect(hasValidInvitationReturn(malformedReturn, secret)).toBe(false);
   });
 
-  it("keeps invalid and cross-origin capture outcomes private and cookie-free", async () => {
-    const invalid = await captureInvitationIntent(new Request("http://127.0.0.1:3000/workspace/invitations/accept/intent", { method: "POST", headers, body: JSON.stringify({ token: "short" }) }));
-    const crossOrigin = await captureInvitationIntent(new Request("http://127.0.0.1:3000/workspace/invitations/accept/intent", { method: "POST", headers: { ...headers, origin: "https://attacker.invalid" }, body: JSON.stringify({ token }) }));
-    expect([invalid.status, crossOrigin.status]).toEqual([400, 403]);
-    for (const response of [invalid, crossOrigin]) {
-      expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(response.headers.has("set-cookie")).toBe(false);
+  it("captures the exact invitation document before rendering and never reflects raw or encoded tokens", async () => {
+    const encoded = encodeURIComponent(token);
+    const previousOrigin = process.env.APP_ORIGIN;
+    process.env.APP_ORIGIN = "https://app.nexaflowsystems.com";
+    const response = proxy(new NextRequest(`https://app.nexaflowsystems.com/workspace/invitations/accept?token=${encoded}`));
+    if (previousOrigin === undefined) delete process.env.APP_ORIGIN;
+    else process.env.APP_ORIGIN = previousOrigin;
+    const body = await response.text();
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://app.nexaflowsystems.com/workspace/invitations/accept");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("set-cookie")).toContain(`${INVITATION_INTENT_COOKIE}=`);
+    expect(response.headers.get("set-cookie")).toContain(`${INVITATION_RETURN_COOKIE}=`);
+    expect(response.headers.get("set-cookie")).toContain(`Path=${INVITATION_INTENT_PATH}`);
+    expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+    expect(response.headers.get("set-cookie")).toContain("SameSite=Lax");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=900");
+    expect(response.headers.get("set-cookie")).toContain("Secure");
+    for (const output of [body, response.headers.get("location") ?? "", response.headers.get("set-cookie") ?? ""]) {
+      expect(output).not.toContain(token);
+      expect(output).not.toContain(encoded);
     }
+  });
+
+  it("replaces stale authority for empty or malformed capture and ignores non-exact routes", () => {
+    for (const suffix of ["?token=", "?token=short"]) {
+      const response = proxy(new NextRequest(`https://app.nexaflowsystems.com/workspace/invitations/accept${suffix}`, { headers: { cookie: `${INVITATION_INTENT_COOKIE}=stale-valid-authority` } }));
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("https://app.nexaflowsystems.com/workspace/invitations/accept");
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("set-cookie")).toContain(`${INVITATION_INTENT_COOKIE}=`);
+      expect(response.headers.get("set-cookie")).toContain(`${INVITATION_RETURN_COOKIE}=`);
+      expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    }
+    const outside = proxy(new NextRequest(`https://app.nexaflowsystems.com/workspace/invitations/accept/extra?token=${token}`));
+    expect(outside.status).toBe(200);
+    expect(outside.headers.has("location")).toBe(false);
+    expect(outside.headers.has("set-cookie")).toBe(false);
+  });
+
+  it("keeps the former post-render capture endpoint fail-closed and token-free", async () => {
+    const response = retiredClientCapture();
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(await response.text()).not.toContain(token);
+    expect(response.headers.has("set-cookie")).toBe(false);
+  });
+
+  it("clears terminal server-owned authority with an exact private redirect", () => {
+    const response = clearTerminalInvitation(new Request("https://app.nexaflowsystems.com/workspace/invitations/accept/terminal"));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://app.nexaflowsystems.com/workspace/invitations/accept");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("set-cookie")).toContain(`${INVITATION_INTENT_COOKIE}=`);
+    expect(response.headers.get("set-cookie")).toContain(`${INVITATION_RETURN_COOKIE}=`);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
   it("separates the non-persistent preview from operational Admin/Member acceptance", () => {
@@ -66,10 +123,14 @@ describe("Phase 4 invitation privacy and presentation boundary", () => {
     expect(preview).toContain("This preview did not send email or create Memberships.");
     expect(preview).toContain("<option>Member</option><option>Admin</option>");
     expect(preview).not.toMatch(/sessionStorage|localStorage|<option>Owner<\/option>/);
-    expect(acceptance).toContain('replaceState(null, "", "/workspace/invitations/accept")');
     expect(acceptance).toContain('href="/login?next=/workspace/invitations/accept"');
     expect(acceptance).toContain('securePost<Envelope>("/workspace/invitations/accept/complete", {}');
-    expect(acceptance).not.toMatch(/sessionStorage|localStorage|token=[${]/);
+    expect(acceptance).not.toMatch(/InvitationIntentCapture|replaceState|sessionStorage|localStorage|token=[${]/);
+    const api=readFileSync(new URL("../src/app/api/invitations/accept/route.ts",import.meta.url),"utf8");
+    expect(api).toContain('pathname==="/api/invitations/accept"');
+    expect(api).toContain("intentToken??(directApi?");
+    const page=readFileSync(new URL("../src/app/workspace/invitations/accept/page.tsx",import.meta.url),"utf8");
+    expect(page).not.toMatch(/searchParams|queryToken|InvitationIntentCapture/);
     const login=readFileSync(new URL("../src/app/api/auth/login/route.ts",import.meta.url),"utf8"),forms=readFileSync(new URL("../src/app/onboarding/forms.tsx",import.meta.url),"utf8");
     expect(login).toContain("hasValidInvitationReturn(request,env.SESSION_SECRET)");
     expect(forms).toContain('params.get("next")==="/workspace/invitations/accept"');
