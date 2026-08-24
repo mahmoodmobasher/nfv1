@@ -220,6 +220,13 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - CLI evidence is limited to fixed pass/fail and reason labels plus a validated bounded probe identifier; raw Location, headers, tokens, recipients, file paths, origins, and expected paths are suppressed. Focused fixtures passed 34/34; lint, TypeScript, and the 178-test direct suite passed.
 - Status: implementation-remediated, still P2/open blocking pending distinct Backend/Security and Architecture acceptance, controlled integration, separate immutable release authorization no earlier than `.6`, and a fully restarted public-edge matrix. `.1` through `.5` remain permanently rejected and unmoved.
 
+#### Architecture rejection and second tooling remediation — fresh reviews pending
+
+- Architecture review `99ab72db72f9208e8c4be997f5d58d72fb53d5b3` rejected candidate `32d601ec1792309570bcb600545be7cf4fc3bcb9` at P2. It demonstrated fail-open acceptance of raw empty query/fragment delimiters, raw dot segments erased by URL normalization, whitespace before the header colon, malformed response blocks, informational responses after the final response, and controls in other response-header values. Prior Backend/Security acceptance `57d4133d8e213547ddd1c7cda0db178f7778a6be` does not carry forward.
+- Remediation implementation `a6290dd31ca103717d80172a2058c37c0bab9836` rejects those representations before or during strict response parsing, requires informational blocks to precede exactly one final 303, and retains the clean relative/canonical absolute same-origin destination, single-Location, encoding/backslash, safe-probe, and output-suppression contract.
+- Deterministic evidence passed 78/78 focused fixtures covering verification and reset destinations, lint, direct TypeScript, and 222/222 executable direct tests. No application, Proxy, Caddy, provider/configuration, database, infrastructure, or live-UAT behavior changed or was accessed.
+- Status remains P2/open blocking. Fresh distinct Backend/Security and Architecture acceptance of the new immutable candidate are mandatory before controlled integration or any separately authorized immutable attempt no earlier than `.6`. `.1` through `.5` remain permanently rejected and unmoved.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields

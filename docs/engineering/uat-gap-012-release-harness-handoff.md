@@ -57,3 +57,32 @@ Architecture must review the same immutable candidate plus Backend/Security evid
 4. issue ACCEPT/REJECT for controlled fresh-main integration only. A new identifier no earlier than `v0.5.0-uat.6` still requires separate Product artifact/deployment authorization and must restart public-edge evidence from probe one.
 
 Rollback before integration is omission of this tooling-only candidate. No data, configuration, image, provider, or infrastructure rollback exists or is required.
+
+## Superseding remediation after Architecture rejection
+
+Architecture review `99ab72db72f9208e8c4be997f5d58d72fb53d5b3` rejected candidate `32d601ec1792309570bcb600545be7cf4fc3bcb9` at P2 because URL normalization and permissive response parsing could erase or ignore malformed raw evidence. Backend/Security acceptance `57d4133d8e213547ddd1c7cda0db178f7778a6be` does not carry forward. The preceding handoff remains historical evidence only and is superseded by this append-only update.
+
+Remediation implementation: `a6290dd31ca103717d80172a2058c37c0bab9836`
+
+The tooling-only remediation now:
+
+- rejects raw `?` and `#` delimiters whether empty or populated before URL parsing;
+- rejects raw `.` and `..` path segments in relative and absolute inputs before normalization;
+- validates the untrimmed response-header field name, so space or tab before `:` fails;
+- rejects every non-empty unrecognized or malformed response block and every prohibited control in status lines or response-header values;
+- permits informational responses only before exactly one final response, which must remain one 303 with one clean Location; and
+- retains the existing origin/path equality, encoding, backslash, scheme-relative, userinfo, status, duplicate/comma-joined Location, safe-probe, and output-suppression boundaries.
+
+Deterministic fixtures cover the Architecture examples symmetrically for `/verify-email` and `/reset-password`, including empty and populated delimiters, relative and absolute dot segments, malformed preamble/suffix/whitespace blocks, invalid field names, prohibited controls, informational ordering, and clean relative/absolute destinations following ordered informational responses.
+
+Verification on `a6290dd31ca103717d80172a2058c37c0bab9836`:
+
+- `git diff --check`: passed.
+- `npm run test:uat-edge-location`: **78/78 passed** in one file.
+- `npm run lint`: passed.
+- `npx tsc --noEmit`: passed. The repository has no `typecheck` npm script; `npm run typecheck` therefore returned `Missing script: "typecheck"` before the direct command was used.
+- `npm test`: **222/222 executable tests passed across 22 files**; 124 PostgreSQL-gated tests remained skipped by the direct suite as designed.
+
+No production build, PostgreSQL, browser, Caddy, Compose, provider, UAT, or external-state gate was run because this correction remains byte-bounded to the release validator and deterministic fixtures. Architecture `99ab72d` explicitly does not require those suites for this isolated tooling delta unless later integration introduces a semantic application or configuration conflict.
+
+Status: **GO for fresh, distinct Backend/Security review and then Architecture review of the new immutable candidate; NO-GO for integration, main push, tagging, deployment, UAT access, email, or release publication.** Reviewers must verify the exact remediation implementation and the candidate documentation commit containing this update. `UAT-GAP-012` remains P2/open blocking until both reviews accept, Product authorizes controlled integration, and a separately authorized release no earlier than `v0.5.0-uat.6` passes the complete public-edge matrix from probe one.
