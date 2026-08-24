@@ -299,4 +299,22 @@ describe("design-system document boundary", () => {
     expect(policy).toContain("'nonce-boundary-nonce'");
     expect(policy).not.toMatch(/unsafe-inline|unsafe-eval/);
   });
+
+  it("renders Phase 4 through one server website shell and semantic configuration", () => {
+    const shell = readFileSync(new URL("../src/app/onboarding/website-shell.tsx", import.meta.url), "utf8");
+    expect(shell).not.toContain('"use client"');
+    expect(shell).toContain('className="experience-website website-root"');
+    expect(shell).toContain('href="#website-main"');
+    expect(shell).toContain('id="website-main"');
+    expect(shell).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|data-theme|fontFamily|borderRadius|boxShadow/i);
+  });
+
+  it("keeps anonymous token documents private and prevents referrer disclosure", () => {
+    for (const path of ["/verify-email?token=opaque", "/reset-password?token=opaque", "/workspace/invitations/accept?token=opaque"]) {
+      const response = proxy(new NextRequest(`https://app.nexaflowsystems.com${path}`));
+      expect(response.headers.get("cache-control"), path).toBe("private, no-store");
+      expect(response.headers.get("referrer-policy"), path).toBe("no-referrer");
+      expect(response.headers.get("content-security-policy"), path).toContain("'nonce-");
+    }
+  });
 });

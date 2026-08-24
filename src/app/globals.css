@@ -478,6 +478,48 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .experience-product { background: var(--nx-canvas); color: var(--nx-text-strong); }
 .experience-website { background: var(--nx-canvas); color: var(--nx-text-strong); }
 
+/* Nexa Spectrum — Phase 4 website authentication and onboarding */
+.website-root { min-height: 100vh; background: var(--nx-canvas); color: var(--nx-text-strong); }
+.website-header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: var(--nf-space-5); padding: 10px max(var(--nf-space-5),calc((100vw - 1120px)/2)); border-bottom: 1px solid var(--nx-border-subtle); background: var(--nx-surface-primary); }
+.website-brand>span { width: 36px; height: 36px; border-radius: var(--nf-radius-control); background: var(--nx-action-primary); color: var(--nx-action-primary-text); font-weight: 600; }
+.website-brand b { font-size: 16px; font-weight: 600; }
+.website-brand small { color: var(--nx-text-muted); font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.website-header-action { color: var(--nx-text-muted); font-size: 13px; }
+.website-header-action a,.website-footer a,.website-root .below a,.website-root .field-row a,.website-root .plan-summary a { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-link); font-weight: 600; }
+.website-environment { padding: 10px var(--nf-space-5); border-bottom: 1px solid var(--nx-info); background: var(--nx-info-surface); color: var(--nx-info); text-align: center; font-size: 13px; }
+.website-root>.skip-link { color: var(--nx-link); }
+.website-root>main { width: 100%; }
+.website-footer { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: var(--nf-space-5); padding: var(--nf-space-6) var(--nf-space-5); color: var(--nx-text-muted); font-size: 12px; }
+.website-root .onboarding-page { min-height: 0; background: transparent; color: inherit; }
+.website-root .onboarding-page>.onboarding-header,.website-root .onboarding-page>.onboarding-footer,.website-root .onboarding-page>.preview-banner,.website-root .onboarding-page::before { display: none; }
+.website-root .onboarding-layout { max-width: 1120px; grid-template-columns: minmax(0,680px) minmax(280px,360px); gap: var(--nf-space-8); }
+.website-root .onboarding-narrow { max-width: 600px; }
+.website-root .flow-card,.website-root .plan-summary,.website-root .plan-card,.website-root .ready-summary,.website-root .owner-panel { border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); color: var(--nx-text-strong); box-shadow: var(--nf-shadow-1); }
+.website-root .flow-card { padding: var(--nf-space-8); }
+.website-root .plan-summary { padding: var(--nf-space-6); }
+.website-root .flow-card h1,.website-root .pricing h1 { margin: var(--nf-space-2) 0 var(--nf-space-3); font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -.02em; }
+.website-root .lead,.website-root .plan-card>p,.website-root .trial,.website-root .reassurance,.website-root .helper { color: var(--nx-text-muted); }
+.website-root .primary,.website-root .secondary,.website-root .google-button { border-radius: var(--nf-radius-control); font-weight: 600; }
+.website-root .field input,.website-root .field select { background: var(--nx-surface-primary); color: var(--nx-text-strong); border-color: var(--nx-border-emphasis); border-radius: var(--nf-radius-control); }
+.website-root .input-wrap button { min-width: 44px; min-height: 44px; color: var(--nx-text); }
+.website-root .progress li { color: var(--nx-text-muted); font-weight: 500; }
+.website-root .progress li span { border-color: var(--nx-border-emphasis); border-radius: var(--nf-radius-control); }
+.website-root .progress li.active { color: var(--nx-text-strong); }
+.website-root .progress li.active span { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); color: var(--nx-selected-text); }
+.website-root .pricing { max-width: 1120px; }
+.website-root .plan-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.website-root .plan-card.selected { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }
+.website-root .selected-label { color: var(--nx-selected-text); font-weight: 600; }
+.website-root .cadence { border-color: var(--nx-border-emphasis); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }
+.website-root .cadence a { border-radius: var(--nf-radius-control); color: var(--nx-text); font-weight: 600; }
+.website-root .cadence a.active { background: var(--nx-selected-surface); color: var(--nx-selected-text); }
+.website-root .workspace-choice-list li.current { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }
+.website-root .workspace-choice-list strong { color: var(--nx-selected-text); }
+@media (max-width: 900px) { .website-root .onboarding-layout { grid-template-columns: minmax(0,680px); justify-content: center; } .website-root .onboarding-layout>.plan-summary { grid-row: 1; position: static; } .website-root .onboarding-layout>.flow-card { grid-row: 2; } .website-root .plan-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 600px) { .website-header { min-height: 56px; padding-inline: 16px; } .website-header-action { font-size: 0; } .website-header-action a { font-size: 13px; } .website-root .onboarding-layout,.website-root .onboarding-narrow,.website-root .pricing { padding-inline: 16px; } .website-root .flow-card,.website-root .plan-summary,.website-root .plan-card { padding: var(--nf-space-5); } .website-root .flow-card h1,.website-root .pricing h1 { font-size: 28px; line-height: 36px; } .website-root .plan-grid { grid-template-columns: 1fr; } .website-root .primary,.website-root .secondary,.website-root .google-button { width: 100%; } }
+@media (max-width: 340px) { .website-header,.website-root .onboarding-layout,.website-root .onboarding-narrow,.website-root .pricing { padding-inline: 12px; } .website-brand small { display: none; } }
+@media (forced-colors: active) { .website-root .plan-card.selected,.website-root .cadence a.active,.website-root .progress li.active span,.website-root .workspace-choice-list li.current { border: 2px solid Highlight; } }
+
 /* Spectrum representative preview region — semantic containment, not a route theme. */
 .demo-region { border-color: var(--nx-border-emphasis); }
 .demo-region .dashboard-section-heading>p { color: var(--nx-text-muted); }

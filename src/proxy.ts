@@ -29,7 +29,9 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("content-security-policy", policy);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", policy);
-  if (request.cookies.has(configuredSessionCookieName())) response.headers.set("Cache-Control", "private, no-store");
+  const tokenDocument = ["/verify-email", "/reset-password", "/workspace/invitations/accept"].includes(request.nextUrl.pathname);
+  if (request.cookies.has(configuredSessionCookieName()) || tokenDocument) response.headers.set("Cache-Control", "private, no-store");
+  if (tokenDocument) response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }
 
