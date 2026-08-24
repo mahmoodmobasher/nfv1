@@ -7,6 +7,7 @@ import { resolveSelectedCommercialPlan } from "../src/server/commercial/catalog"
 import { keyedHash } from "../src/server/security/crypto";
 import { POST as savePlanRoute } from "../src/app/api/onboarding/plan/route";
 import { POST as registerRoute } from "../src/app/api/auth/register/route";
+import { seedCanonicalCommercialCatalog } from "./helpers/commercial-catalog";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
@@ -34,7 +35,7 @@ async function authorityState(userId:string,sessionId:string){return (await pool
 suite("versioned commercial catalog authority", () => {
   beforeAll(async () => pool.query("select 1"));
   afterAll(async () => pool.end());
-  beforeEach(async () => {await pool.query("truncate workspace_invitation_teams,team_memberships,teams,workspace_invitations,audit_events,outbox_messages,idempotency_records,workspace_entitlement_snapshots,workspace_memberships,roles,sessions,identity_credentials,identity_tokens,onboarding_progress,workspaces,users restart identity cascade");await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,currency_code,billing_unit,monthly_price_cents,annual_monthly_equivalent_price_cents,feature_flags,trial_days,effective_from,effective_to) values('essentials',$1,'Essentials','active','["monthly","annual"]',1,'USD','workspace_subscription',6999,2400,'{"crm":true}',14,'2026-08-24T00:00:00Z',null),('growth',$1,'Growth','active','["monthly","annual"]',5,'USD','workspace_subscription',8999,5700,'{"crm":true,"automation":true}',14,'2026-08-24T00:00:00Z',null),('scale',$1,'Scale','active','["monthly","annual"]',15,'USD','workspace_subscription',11999,10700,'{"crm":true,"automation":true,"advanced_roles":true}',14,'2026-08-24T00:00:00Z',null) on conflict(code,catalog_version) do update set name=excluded.name,status='active',allowed_cadences=excluded.allowed_cadences,included_active_seats=excluded.included_active_seats,currency_code=excluded.currency_code,billing_unit=excluded.billing_unit,monthly_price_cents=excluded.monthly_price_cents,annual_monthly_equivalent_price_cents=excluded.annual_monthly_equivalent_price_cents,feature_flags=excluded.feature_flags,trial_days=excluded.trial_days,effective_from=excluded.effective_from,effective_to=null`,[catalogVersion]);});
+  beforeEach(async () => {await pool.query("truncate workspace_invitation_teams,team_memberships,teams,workspace_invitations,audit_events,outbox_messages,idempotency_records,workspace_entitlement_snapshots,workspace_memberships,roles,sessions,identity_credentials,identity_tokens,onboarding_progress,workspaces,users restart identity cascade");await seedCanonicalCommercialCatalog(pool);});
   afterEach(async () => pool.query("delete from plan_catalog_entries where catalog_version like 'test-commercial-untyped-%'"));
 
   it("selects exactly one effective typed USD Workspace-subscription row per plan", async () => {

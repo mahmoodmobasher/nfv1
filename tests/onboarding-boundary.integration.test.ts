@@ -7,6 +7,7 @@ import { keyedHash } from "../src/server/security/crypto";
 import { provisionWorkspace, requireWorkspaceAuthorization, savePlanSelection } from "../src/server/workspaces/provision";
 import { POST as loginRoute } from "../src/app/api/auth/login/route";
 import { INVITATION_RETURN_COOKIE, sealInvitationReturn } from "../src/server/invitations/intent";
+import { seedCanonicalCommercialCatalog } from "./helpers/commercial-catalog";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
@@ -30,12 +31,10 @@ suite("onboarding/workspace boundary validation", () => {
   beforeAll(async () => pool.query("select 1"));
   afterAll(async () => pool.end());
   beforeEach(async () => {
+    await pool.query("drop trigger if exists nexaflow_test_boundary_fail_outbox on outbox_messages");
+    await pool.query("drop function if exists nexaflow_test_boundary_fail_outbox()");
     await pool.query("truncate lead_activities,lead_visible_teams,leads,pipeline_stages,team_memberships,teams,workspace_invitations,audit_events,outbox_messages,idempotency_records,workspace_entitlement_snapshots,workspace_memberships,roles,oidc_transactions,identity_tokens,sessions,identity_credentials,onboarding_progress,workspaces,users,rate_limit_windows restart identity cascade");
-    await pool.query(`update plan_catalog_entries set status='retired',effective_to=greatest(now(),effective_from+interval '1 microsecond') where code in('growth','scale') and catalog_version<>'2026-08-commercial-v1' and status='active'`);
-    await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,currency_code,billing_unit,monthly_price_cents,annual_monthly_equivalent_price_cents,feature_flags,trial_days,effective_from,effective_to)
-      values ('growth','2026-08-commercial-v1','Growth','active','["monthly","annual"]',5,'USD','workspace_subscription',8999,5700,'{"crm":true,"automation":true}',14,'2026-08-24T00:00:00Z',null),
-             ('scale','2026-08-commercial-v1','Scale','active','["monthly","annual"]',15,'USD','workspace_subscription',11999,10700,'{"crm":true,"automation":true,"advanced_roles":true}',14,'2026-08-24T00:00:00Z',null)
-      on conflict(code,catalog_version) do update set name=excluded.name,status='active',allowed_cadences=excluded.allowed_cadences,included_active_seats=excluded.included_active_seats,currency_code=excluded.currency_code,billing_unit=excluded.billing_unit,monthly_price_cents=excluded.monthly_price_cents,annual_monthly_equivalent_price_cents=excluded.annual_monthly_equivalent_price_cents,feature_flags=excluded.feature_flags,trial_days=excluded.trial_days,effective_from=excluded.effective_from,effective_to=null`);
+    await seedCanonicalCommercialCatalog(pool);
   });
 
   it("persists selection before provisioning and snapshots exact workspace entitlement values only on provisioning", async () => {
@@ -75,14 +74,19 @@ suite("onboarding/workspace boundary validation", () => {
 
   it("keeps verified signup retryable after a provisioning rollback and succeeds on retry", async () => {
     const actor = await passwordUser("retry@test.example");
-    await pool.query(`create function boundary_fail_outbox() returns trigger language plpgsql as $$ begin if new.topic='workspace.provisioned' then raise exception 'injected boundary failure'; end if; return new; end $$`);
-    await pool.query("create trigger boundary_fail_outbox before insert on outbox_messages for each row execute function boundary_fail_outbox()");
     const input = { ...actor, name: "Retry Workspace", idempotencyKey: crypto.randomUUID() };
-    await expect(provisionWorkspace(pool, input)).rejects.toThrow("injected boundary failure");
-    expect((await pool.query("select current_step,workspace_id from onboarding_progress where user_id=$1", [actor.userId])).rows[0]).toEqual({ current_step: "workspace", workspace_id: null });
-    expect((await pool.query("select (select count(*)::int from workspaces) workspaces,(select count(*)::int from roles) roles,(select count(*)::int from workspace_memberships) memberships,(select count(*)::int from workspace_entitlement_snapshots) entitlements,(select count(*)::int from audit_events where workspace_id is not null) workspace_audits,(select count(*)::int from outbox_messages where topic='workspace.provisioned') provision_outbox,(select count(*)::int from idempotency_records where operation='workspace.provision') idempotency")).rows[0]).toEqual({ workspaces: 0, roles: 0, memberships: 0, entitlements: 0, workspace_audits: 0, provision_outbox: 0, idempotency: 0 });
-    await pool.query("drop trigger boundary_fail_outbox on outbox_messages");
-    await pool.query("drop function boundary_fail_outbox()");
+    await pool.query("drop trigger if exists nexaflow_test_boundary_fail_outbox on outbox_messages");
+    await pool.query("drop function if exists nexaflow_test_boundary_fail_outbox()");
+    try {
+      await pool.query(`create function nexaflow_test_boundary_fail_outbox() returns trigger language plpgsql as $$ begin if new.topic='workspace.provisioned' then raise exception 'injected boundary failure'; end if; return new; end $$`);
+      await pool.query("create trigger nexaflow_test_boundary_fail_outbox before insert on outbox_messages for each row execute function nexaflow_test_boundary_fail_outbox()");
+      await expect(provisionWorkspace(pool, input)).rejects.toThrow("injected boundary failure");
+      expect((await pool.query("select current_step,workspace_id from onboarding_progress where user_id=$1", [actor.userId])).rows[0]).toEqual({ current_step: "workspace", workspace_id: null });
+      expect((await pool.query("select (select count(*)::int from workspaces) workspaces,(select count(*)::int from roles) roles,(select count(*)::int from workspace_memberships) memberships,(select count(*)::int from workspace_entitlement_snapshots) entitlements,(select count(*)::int from audit_events where workspace_id is not null) workspace_audits,(select count(*)::int from outbox_messages where topic='workspace.provisioned') provision_outbox,(select count(*)::int from idempotency_records where operation='workspace.provision') idempotency")).rows[0]).toEqual({ workspaces: 0, roles: 0, memberships: 0, entitlements: 0, workspace_audits: 0, provision_outbox: 0, idempotency: 0 });
+    } finally {
+      await pool.query("drop trigger if exists nexaflow_test_boundary_fail_outbox on outbox_messages");
+      await pool.query("drop function if exists nexaflow_test_boundary_fail_outbox()");
+    }
     await expect(provisionWorkspace(pool, input)).resolves.toMatchObject({ workspaceId: expect.any(String) });
     expect((await pool.query("select current_step,workspace_id is not null complete from onboarding_progress where user_id=$1", [actor.userId])).rows[0]).toEqual({ current_step: "complete", complete: true });
   });
