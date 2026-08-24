@@ -43,6 +43,6 @@ export function Footer() { return <footer className="onboarding-footer"><span>Pr
 
 export function Requirements({value}:{value:string}){const rows=[[value.length>=12,"At least 12 characters"],[/\d/.test(value),"Includes a number"],[/[^A-Za-z0-9]/.test(value),"Includes a symbol"]] as const;return <ul className="requirements" aria-label="Password requirements">{rows.map(([ok,text])=><li className={ok?"met":""} key={text}><Check/> {text}</li>)}</ul>}
 
-export function GoogleUnavailable() { return <div><a className="google-button link-button" href="/api/auth/oidc/start">Continue with local Google fixture <small>Non-production</small></a><div className="divider"><span>or continue with email</span></div></div>; }
+export function ProviderControl({mode}:{mode:"disabled"|"fixture"}) { return mode==="fixture"?<div><a className="google-button link-button" href="/api/auth/oidc/start">Continue with local Google fixture <small>Non-production</small></a><div className="divider"><span>or continue with email</span></div></div>:<Alert>Google sign-in isn’t available in this environment. Use email and password.</Alert>; }
 
 export function Alert({ children, kind = "info" }: { children: React.ReactNode; kind?: "info" | "success" | "error" }) { return <div className={`alert ${kind}`} role={kind === "error" ? "alert" : "status"}>{children}</div>; }
