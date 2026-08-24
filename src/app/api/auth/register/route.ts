@@ -5,7 +5,7 @@ import { meetsPasswordPolicy } from "@/shared/password-policy";
 import { privateIdentityJson, privateIdentityResponse } from "@/server/identity/http";
 
 const input = z.object({ email: z.string().email(), displayName: z.string().trim().min(1).max(120), password: z.string().refine(meetsPasswordPolicy),
-  planCode: z.enum(["essentials", "growth", "scale"]).optional(), cadence: z.enum(["monthly", "annual"]).optional() });
+  planCode: z.enum(["essentials", "growth", "scale"]).optional(), cadence: z.enum(["monthly", "annual"]).optional(), continuation:z.literal("/workspace/invitations/accept").optional() });
 export async function POST(request: Request) {
   const rejected = mutationGuard(request); if (rejected) return privateIdentityResponse(rejected);
   const parsed = input.safeParse(await request.json().catch(() => null));

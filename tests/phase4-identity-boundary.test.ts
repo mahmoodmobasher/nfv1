@@ -44,12 +44,13 @@ describe("Phase 4 identity presentation boundary",()=>{
     expect(forms).not.toMatch(/I agree to the Terms|required.*terms/i);
   });
 
-  it("cleans token URLs before the bounded verification mutation and never stores tokens",()=>{
+  it("keeps raw identity tokens out of Client Components and browser storage",()=>{
     const verify=source("../src/app/verify-email/verify-client.tsx");
     const reset=source("../src/app/onboarding/forms.tsx");
-    expect(verify.indexOf("history.replaceState")).toBeGreaterThan(-1);
-    expect(verify.indexOf("history.replaceState")).toBeLessThan(verify.indexOf('securePost("/api/auth/verify"'));
-    expect(reset).toContain('history.replaceState(null,"","/reset-password")');
+    expect(verify).toContain('securePost("/verify-email/complete",{})');
+    expect(reset).toContain('securePost("/reset-password/complete",{password})');
+    expect(verify).not.toMatch(/\btoken\b/);
+    expect(reset).not.toMatch(/ResetForm\(\{token\}|password\/complete",\{token/);
     expect(verify).not.toMatch(/(?:local|session)Storage\.setItem\([^)]*token/i);
     expect(reset).not.toMatch(/(?:local|session)Storage\.setItem\([^)]*token/i);
   });

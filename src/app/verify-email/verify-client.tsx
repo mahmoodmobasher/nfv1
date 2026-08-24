@@ -8,24 +8,23 @@ import { Alert, PlanSummary, Shell } from "../onboarding/components";
 
 type VerificationState="waiting"|"checking"|"verified"|"invalid"|"resent"|"delivery-error";
 
-export function VerifyClient({token,continuation}:{token:string|null;continuation:string|null}) {
+export function VerifyClient({hasIntent,invalidIntent,continuation}:{hasIntent:boolean;invalidIntent:boolean;continuation:string|null}) {
   const started=useRef(false);
-  const[email,setEmail]=useState(""),[busy,setBusy]=useState(false),[state,setState]=useState<VerificationState>(token?"checking":"waiting");
+  const[email,setEmail]=useState(""),[busy,setBusy]=useState(false),[state,setState]=useState<VerificationState>(hasIntent?"checking":invalidIntent?"invalid":"waiting");
 
   useEffect(()=>setEmail(sessionStorage.getItem("nexaDemoEmail")??""),[]);
   useEffect(()=>{
-    if(!token||started.current)return;
+    if(!hasIntent||started.current)return;
     started.current=true;
-    window.history.replaceState(null,"","/verify-email");
-    securePost("/api/auth/verify",{token})
+    securePost("/verify-email/complete",{})
       .then(({response})=>setState(response.ok?"verified":"invalid"))
       .catch(()=>setState("invalid"));
-  },[token]);
+  },[hasIntent]);
 
   async function resend(){
     if(!email){setState("delivery-error");return}
     setBusy(true);
-    try{const {response}=await securePost("/api/auth/resend-verification",{email});if(!response.ok)throw new Error("delivery_unavailable");setState("resent")}
+    try{const {response}=await securePost("/api/auth/resend-verification",{email,...(continuation?{continuation}:{})});if(!response.ok)throw new Error("delivery_unavailable");setState("resent")}
     catch{setState("delivery-error")}
     finally{setBusy(false)}
   }

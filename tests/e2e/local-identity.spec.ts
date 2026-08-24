@@ -34,13 +34,13 @@ async function mailLink(
           data.messages.find(
             (message) =>
               message.To.some((recipient) => recipient.Address === email) &&
-              message.Snippet.includes(`/${path}?token=`),
+              message.Snippet.includes(`/${path}/capture?token=`),
           )?.Snippet ?? ""
         );
       },
       { timeout: 10_000 },
     )
-    .toContain(`/${path}?token=`);
+    .toContain(`/${path}/capture?token=`);
   const response = await fetch("http://127.0.0.1:8025/api/v1/messages");
   const data = (await response.json()) as {
     messages: Array<{ To: Array<{ Address: string }>; Snippet: string }>;
@@ -48,7 +48,7 @@ async function mailLink(
   const snippet = data.messages.find(
     (message) =>
       message.To.some((recipient) => recipient.Address === email) &&
-      message.Snippet.includes(`/${path}?token=`),
+      message.Snippet.includes(`/${path}/capture?token=`),
   )!.Snippet;
   return snippet.match(/http:\/\/127\.0\.0\.1:3000\/[^\s]+/)![0];
 }
@@ -2005,12 +2005,19 @@ test("registration survives an interrupted worker lease, verifies once, logs in,
 test("rejects invalid and expired verification and reset links", async ({
   page,
 }) => {
-  await page.goto(`/verify-email?token=${"x".repeat(43)}`);
+  const invalidVerification="x".repeat(43);
+  await page.goto("/login");
+  await page.goto(`/verify-email?token=${invalidVerification}`);
+  await expect(page).toHaveURL(/\/verify-email$/);
+  expect(await page.content()).not.toContain(invalidVerification);
+  expect(await page.evaluate(token=>![...Object.values(localStorage),...Object.values(sessionStorage)].includes(token),invalidVerification)).toBe(true);
   await expect(
     page.getByRole("heading", {
       name: "This verification link is no longer valid",
     }),
   ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/login$/);
 
   const email = `e2e-expired-${Date.now()}@example.test`;
   await register(page, email);
@@ -2027,13 +2034,20 @@ test("rejects invalid and expired verification and reset links", async ({
     }),
   ).toBeVisible();
 
-  await page.goto(`/reset-password?token=${"y".repeat(43)}`);
+  const invalidReset="y".repeat(43);
+  await page.goto(`/reset-password?token=${invalidReset}`);
+  await expect(page).toHaveURL(/\/reset-password$/);
+  expect(await page.content()).not.toContain(invalidReset);
+  const resetIntent=(await page.context().cookies()).find(cookie=>cookie.name==="nexaflow_password_reset_intent");
+  expect(resetIntent).toMatchObject({httpOnly:true,path:"/reset-password"});
+  expect(resetIntent?.value).not.toContain(invalidReset);
   await page.locator("#password").fill("Changed-password-123!");
   await page.getByLabel("Confirm new password").fill("Changed-password-123!");
   await page.getByRole("button", { name: "Save new password" }).click();
   await expect(page.locator(".alert.error:not(.error-summary)")).toContainText(
-    "invalid, expired, or already used",
+    "invalid, expired, replaced, or already used",
   );
+  expect((await page.context().cookies()).some(cookie=>cookie.name==="nexaflow_password_reset_intent")).toBe(false);
 
   const resetEmail = `e2e-reset-expired-${Date.now()}@example.test`;
   await activate(page, resetEmail);
@@ -2052,7 +2066,7 @@ test("rejects invalid and expired verification and reset links", async ({
   await page.getByLabel("Confirm new password").fill("Changed-password-123!");
   await page.getByRole("button", { name: "Save new password" }).click();
   await expect(page.locator(".alert.error:not(.error-summary)")).toContainText(
-    "invalid, expired, or already used",
+    "invalid, expired, replaced, or already used",
   );
 });
 
@@ -2134,7 +2148,9 @@ test("session expiry and successful reset revoke protected access; reset token r
   await page.getByLabel("Confirm new password").fill("Changed-password-123!");
   await page.getByRole("button", { name: "Save new password" }).click();
   await expect(
-    page.getByText("Password updated and existing sessions revoked."),
+    page.getByText("Password updated. Existing sessions were revoked.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await page.goto("/workspace/create");
   await expect(page).toHaveURL(/\/login/);
@@ -2143,7 +2159,7 @@ test("session expiry and successful reset revoke protected access; reset token r
   await page.getByLabel("Confirm new password").fill("Another-password-123!");
   await page.getByRole("button", { name: "Save new password" }).click();
   await expect(page.locator(".alert.error:not(.error-summary)")).toContainText(
-    "invalid, expired, or already used",
+    "invalid, expired, replaced, or already used",
   );
 });
 

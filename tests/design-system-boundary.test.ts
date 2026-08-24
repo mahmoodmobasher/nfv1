@@ -310,11 +310,12 @@ describe("design-system document boundary", () => {
   });
 
   it("keeps anonymous token documents private and prevents referrer disclosure", () => {
-    for (const path of ["/verify-email?token=opaque", "/reset-password?token=opaque", "/workspace/invitations/accept?token=opaque"]) {
+    for (const path of ["/verify-email?token=opaque", "/verify-email/capture?token=opaque", "/reset-password?token=opaque", "/reset-password/capture?token=opaque", "/workspace/invitations/accept?token=opaque"]) {
       const response = proxy(new NextRequest(`https://app.nexaflowsystems.com${path}`));
       expect(response.headers.get("cache-control"), path).toBe("private, no-store");
       expect(response.headers.get("referrer-policy"), path).toBe("no-referrer");
       expect(response.headers.get("content-security-policy"), path).toContain("'nonce-");
     }
+    for(const path of ["/verify-email","/reset-password"]){const raw="opaque-token-value-long-enough-123456",response=proxy(new NextRequest(`https://app.nexaflowsystems.com${path}?token=${raw}`));expect(response.status,path).toBe(303);expect(response.headers.get("location"),path).toBe(`https://app.nexaflowsystems.com${path}`);expect(response.headers.get("location"),path).not.toContain(raw);expect(response.headers.get("set-cookie"),path).not.toContain(raw)}
   });
 });

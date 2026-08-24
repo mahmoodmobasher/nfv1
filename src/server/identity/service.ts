@@ -42,19 +42,19 @@ async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<
   } finally { client.release(); }
 }
 
-function tokenEmail(purpose: "email_verification" | "password_reset", email: string, token: string, appOrigin: string) {
-  const path = purpose === "email_verification" ? "/verify-email?token=" : "/reset-password?token=";
+function tokenEmail(purpose: "email_verification" | "password_reset", email: string, token: string, appOrigin: string, continuation?:"/workspace/invitations/accept") {
+  const path = purpose === "email_verification" ? "/verify-email/capture?token=" : "/reset-password/capture?token=";
   const action = purpose === "email_verification" ? "Verify your NexaFlow account" : "Reset your NexaFlow password";
   return {
     to: email,
     subject: action,
-    text: `${action}: ${appOrigin}${path}${encodeURIComponent(token)}`,
+    text: `${action}: ${appOrigin}${path}${encodeURIComponent(token)}${purpose==="email_verification"&&continuation?`&next=${encodeURIComponent(continuation)}`:""}`,
   };
 }
 
 async function issueIdentityToken(
   client: PoolClient,
-  input: { userId: string; email: string; purpose: "email_verification" | "password_reset"; lifetimeMs: number; config: IdentityConfig },
+  input: { userId: string; email: string; purpose: "email_verification" | "password_reset"; lifetimeMs: number; config: IdentityConfig; continuation?:"/workspace/invitations/accept" },
 ): Promise<string> {
   const token = randomOpaqueToken();
   await client.query(
@@ -66,7 +66,7 @@ async function issueIdentityToken(
      values ($1, $2, $3, $4)`,
     [input.userId, input.purpose, keyedHash(token, input.config.secret), new Date(Date.now() + input.lifetimeMs)],
   );
-  const email = tokenEmail(input.purpose, input.email, token, input.config.appOrigin);
+  const email = tokenEmail(input.purpose, input.email, token, input.config.appOrigin,input.continuation);
   await client.query(
     `insert into outbox_messages (topic, aggregate_type, aggregate_id, payload)
      values ($1, 'user', $2, $3)`,
@@ -77,7 +77,7 @@ async function issueIdentityToken(
 
 export async function registerPasswordUser(
   pool: Pool,
-  input: { email: string; displayName: string; password: string; planCode?: string; cadence?: string; riskKey: string | RequestRiskContext; requestId?: string },
+  input: { email: string; displayName: string; password: string; planCode?: string; cadence?: string; continuation?:"/workspace/invitations/accept"; riskKey: string | RequestRiskContext; requestId?: string },
   config: IdentityConfig,
 ) {
   const email = normalizeEmail(input.email);
@@ -101,7 +101,7 @@ export async function registerPasswordUser(
          values ($1, $2, $3, 'identity_verification')`,
         [userId, input.planCode ?? null, input.cadence ?? null],
       );
-      await issueIdentityToken(client, { userId, email, purpose: "email_verification", lifetimeMs: 86_400_000, config });
+      await issueIdentityToken(client, { userId, email, purpose: "email_verification", lifetimeMs: 86_400_000, config,continuation:input.continuation });
       await writeAudit(client, { actorUserId: userId, action: "identity.registered", targetType: "user", targetId: userId,
         outcome: "success", requestId: input.requestId, metadata: { auth_method: "password", operation: "register" } });
     });
@@ -130,7 +130,7 @@ export async function verifyEmailToken(pool: Pool, token: string, config: Identi
   });
 }
 
-export async function resendVerification(pool: Pool, emailInput: string, riskKey: string | RequestRiskContext, config: IdentityConfig) {
+export async function resendVerification(pool: Pool, emailInput: string, riskKey: string | RequestRiskContext, config: IdentityConfig,continuation?:"/workspace/invitations/accept") {
   const email = normalizeEmail(emailInput);
   if (!await allowDimensions(pool, "verification_resend", riskKey, email, 3, 3600, config.secret)) return acceptedResponse;
   await transaction(pool, async (client) => {
@@ -139,7 +139,7 @@ export async function resendVerification(pool: Pool, emailInput: string, riskKey
     );
     if (!user.rows[0]) return;
     await issueIdentityToken(client, { userId: user.rows[0].id, email: user.rows[0].primary_email_display,
-      purpose: "email_verification", lifetimeMs: 86_400_000, config });
+      purpose: "email_verification", lifetimeMs: 86_400_000, config,continuation });
     await writeAudit(client, { actorUserId: user.rows[0].id, action: "identity.verification_resent", targetType: "user",
       targetId: user.rows[0].id, outcome: "success", metadata: { operation: "verification_resend" } });
   });
