@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { changeMembership } from "../src/server/tenant-admin/administration";
 import type { TenantContext } from "../src/server/tenant-admin/permissions";
@@ -24,6 +24,7 @@ suite("versioned commercial catalog authority", () => {
   beforeAll(async () => pool.query("select 1"));
   afterAll(async () => pool.end());
   beforeEach(async () => pool.query("truncate workspace_invitation_teams,team_memberships,teams,workspace_invitations,audit_events,outbox_messages,idempotency_records,workspace_entitlement_snapshots,workspace_memberships,roles,sessions,identity_credentials,identity_tokens,onboarding_progress,workspaces,users restart identity cascade"));
+  afterEach(async () => pool.query("delete from plan_catalog_entries where catalog_version like 'test-commercial-untyped-%'"));
 
   it("selects exactly one effective typed USD Workspace-subscription row per plan", async () => {
     const rows = (await pool.query(`select code,included_active_seats seats,currency_code currency,billing_unit,monthly_price_cents monthly,annual_monthly_equivalent_price_cents annual_equivalent from plan_catalog_entries where status='active' and effective_from<=now() and(effective_to is null or effective_to>now()) and code in('essentials','growth','scale') order by code,effective_from desc,created_at desc,id desc`)).rows;
@@ -66,7 +67,7 @@ suite("versioned commercial catalog authority", () => {
     const user=(await pool.query<{id:string}>(`insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at) values($1,$1,'Untyped Candidate','active',now()) returning id`,[`untyped-${crypto.randomUUID()}@catalog.test`])).rows[0];
     const session=(await pool.query<{id:string}>(`insert into sessions(user_id,session_hash,security_version,idle_expires_at,absolute_expires_at,authenticated_at,auth_method) values($1,$2,1,now()+interval '1 hour',now()+interval '1 day',now(),'password') returning id`,[user.id,crypto.randomUUID()])).rows[0];
     await pool.query(`insert into onboarding_progress(user_id,selected_plan_code,billing_cadence,current_step) values($1,'growth','monthly','workspace')`,[user.id]);
-    await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,feature_flags,trial_days,effective_from) values('growth',$1,'Untyped Growth','active','["monthly","annual"]',5,'{}',14,now()-interval '1 second')`,[`future-untyped-${crypto.randomUUID()}`]);
+    await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,feature_flags,trial_days,effective_from) values('growth',$1,'Untyped Growth','active','["monthly","annual"]',5,'{}',14,now()-interval '1 second')`,[`test-commercial-untyped-${crypto.randomUUID()}`]);
 
     await expect(provisionWorkspace(pool,{userId:user.id,sessionId:session.id,name:"Must Not Exist",idempotencyKey:crypto.randomUUID()})).rejects.toMatchObject({code:"invalid_plan"});
     expect((await pool.query(`select selected_plan_code,billing_cadence,current_step,workspace_id from onboarding_progress where user_id=$1`,[user.id])).rows[0]).toEqual({selected_plan_code:"growth",billing_cadence:"monthly",current_step:"workspace",workspace_id:null});
