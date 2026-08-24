@@ -1,7 +1,7 @@
 # Fast delivery and disposable UAT runbook
 
-Date: 2026-08-24  
-Status: proposed forward-looking authority; effective only after Product accepts it  
+Date: 2026-08-24
+Status: proposed forward-looking authority; effective only after Product accepts it
 Scope: NexaFlow development, integration, and UAT; production is excluded
 
 ## Decision
@@ -118,4 +118,3 @@ Authorization is explicit and separate:
 - Product authorizes each `main` integration/push, each immutable UAT tag/artifact, and each UAT deployment/tester admission.
 - Operations executes only the authorized UAT scope.
 - Production always requires a separate Product decision, production-specific Architecture/Backend/Security review, data-preservation/backup/rollback plan, provider/secrets approval, and deployment authorization. This runbook never authorizes production.
-
