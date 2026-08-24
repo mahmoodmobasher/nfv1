@@ -15,6 +15,6 @@ export async function POST(request:Request,{params}:{params:Promise<{workspaceId
     await enforceTenantRate(pool,request,"invite_resend",context,await invitationDestinationById(pool,workspaceId,invitationId));
     const key=idempotencyKey(request);serviceOwnsDenial=true;
     return success(await resendInvitation(pool,{context,invitationId,...parsed.data,idempotencyKey:key,secret:env.SESSION_SECRET,appOrigin:env.APP_ORIGIN,ttlHours:env.INVITATION_TTL_HOURS}),202);
-  }catch(error){return serviceOwnsDenial?failure(error):auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation",targetId:invitationId})}
+  }catch(error){return serviceOwnsDenial?failure(error):await auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation",targetId:invitationId})}
   finally{await pool.end()}
 }

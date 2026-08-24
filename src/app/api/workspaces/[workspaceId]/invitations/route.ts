@@ -9,7 +9,7 @@ import {TenantAdminError} from "@/server/tenant-admin/permissions";
 export async function GET(request:Request,{params}:{params:Promise<{workspaceId:string}>}){
   const{workspaceId}=await params,{pool}=localDatabase(),env=getServerEnv();
   try{return success(await invitationsPage(pool,await tenant(pool,request,workspaceId),pageOptions(request,env.SESSION_SECRET)))}
-  catch(error){return auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation"})}
+  catch(error){return await auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation"})}
   finally{await pool.end()}
 }
 
@@ -23,6 +23,6 @@ export async function POST(request:Request,{params}:{params:Promise<{workspaceId
     await enforceTenantRate(pool,request,"invite_create",context,normalizeInvitationDestination(parsed.data.email));
     const key=idempotencyKey(request);serviceOwnsDenial=true;
     return success(await createInvitation(pool,{context,...parsed.data,idempotencyKey:key,secret:env.SESSION_SECRET,appOrigin:env.APP_ORIGIN,ttlHours:env.INVITATION_TTL_HOURS}),202);
-  }catch(error){return serviceOwnsDenial?failure(error):auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation"})}
+  }catch(error){return serviceOwnsDenial?failure(error):await auditedFailure(pool,request,error,{action:"workspace.invitation_admin_denied",targetType:"invitation"})}
   finally{await pool.end()}
 }

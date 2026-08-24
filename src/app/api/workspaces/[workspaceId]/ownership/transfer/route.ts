@@ -20,6 +20,6 @@ export async function POST(request:Request,{params}:{params:Promise<{workspaceId
     serviceOwnsDenial=true;
     const result=await transferOwner(pool,{context,successorId:parsed.data.successorMembershipId,actorExpectedVersion:parsed.data.actorExpectedVersion,successorExpectedVersion:parsed.data.successorExpectedVersion,key,recentMinutes:env.RECENT_AUTH_MINUTES,sessionSecret:env.SESSION_SECRET,oldSessionToken});
     const response=success({priorOwner:result.priorOwner,owner:result.owner});response.headers.set("Set-Cookie",cookie(env.SESSION_COOKIE_NAME,result.sessionToken,{secure:env.APP_ORIGIN.startsWith("https://"),maxAge:env.SESSION_ABSOLUTE_HOURS*3600}));return response;
-  }catch(error){return serviceOwnsDenial?failure(error):auditedFailure(pool,request,error,{action:"workspace.ownership_transfer_denied",targetType:"membership",context})}
+  }catch(error){return serviceOwnsDenial?failure(error):await auditedFailure(pool,request,error,{action:"workspace.ownership_transfer_denied",targetType:"membership",context})}
   finally{await pool.end()}
 }
