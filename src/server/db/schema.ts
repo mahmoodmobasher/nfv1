@@ -359,6 +359,10 @@ export const planCatalogEntries = pgTable(
     status: text("status").notNull(),
     allowedCadences: jsonb("allowed_cadences").notNull(),
     includedActiveSeats: integer("included_active_seats").notNull(),
+    currencyCode: text("currency_code"),
+    billingUnit: text("billing_unit"),
+    monthlyPriceCents: integer("monthly_price_cents"),
+    annualMonthlyEquivalentPriceCents: integer("annual_monthly_equivalent_price_cents"),
     featureFlags: jsonb("feature_flags").notNull(),
     trialDays: integer("trial_days").notNull(),
     effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull(),
@@ -370,6 +374,27 @@ export const planCatalogEntries = pgTable(
     check("plan_catalog_status_check", sql`${table.status} in ('draft', 'active', 'retired')`),
     check("plan_catalog_seats_check", sql`${table.includedActiveSeats} > 0`),
     check("plan_catalog_trial_days_check", sql`${table.trialDays} >= 0`),
+    check(
+      "plan_catalog_pricing_tuple_check",
+      sql`num_nonnulls(
+        ${table.currencyCode},
+        ${table.billingUnit},
+        ${table.monthlyPriceCents},
+        ${table.annualMonthlyEquivalentPriceCents}
+      ) = 0 or (
+        num_nonnulls(
+          ${table.currencyCode},
+          ${table.billingUnit},
+          ${table.monthlyPriceCents},
+          ${table.annualMonthlyEquivalentPriceCents}
+        ) = 4
+        and
+        ${table.currencyCode} ~ '^[A-Z]{3}$'
+        and ${table.billingUnit} = 'workspace_subscription'
+        and ${table.monthlyPriceCents} > 0
+        and ${table.annualMonthlyEquivalentPriceCents} > 0
+      )`,
+    ),
     check("plan_catalog_effective_dates_check", sql`${table.effectiveTo} is null or ${table.effectiveTo} > ${table.effectiveFrom}`),
     check(
       "plan_catalog_allowed_cadences_check",

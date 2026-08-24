@@ -18,7 +18,7 @@ export async function provisionWorkspace(pool:Pool,input:{userId:string;sessionI
     if(old){if(old.request_hash!==hash)throw new ProvisioningError("idempotency_conflict");return old.outcome}
     const onboarding=(await client.query(`select o.*,u.status,u.email_verified_at from onboarding_progress o join users u on u.id=o.user_id where o.user_id=$1 for update`,[input.userId])).rows[0];
     if(!onboarding||onboarding.status!=="active"||!onboarding.email_verified_at||onboarding.workspace_id)throw new ProvisioningError("not_eligible");
-    const plan=(await client.query(`select * from plan_catalog_entries where code=$1 and status='active' and effective_from<=now()and(effective_to is null or effective_to>now())and allowed_cadences?$2 order by effective_from desc limit 1`,[onboarding.selected_plan_code,onboarding.billing_cadence])).rows[0];
+    const plan=(await client.query(`select * from plan_catalog_entries where code=$1 and status='active' and effective_from<=now()and(effective_to is null or effective_to>now())and allowed_cadences?$2 order by effective_from desc,created_at desc,id desc limit 1`,[onboarding.selected_plan_code,onboarding.billing_cadence])).rows[0];
     if(!plan)throw new ProvisioningError("invalid_plan");
     const start=new Date(),end=new Date(start.getTime()+plan.trial_days*86_400_000);
     const workspace=(await client.query(`insert into workspaces(name,slug,status,plan_code,billing_cadence,trial_started_at,trial_ends_at,created_by_user_id)values($1,$2,'provisioning',$3,$4,$5,$6,$7)returning id,slug`,[input.name.trim(),slug(input.name),onboarding.selected_plan_code,onboarding.billing_cadence,start,end,input.userId])).rows[0];
