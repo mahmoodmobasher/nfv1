@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { GET as csrf } from "../src/app/api/auth/csrf/route";
+import { privateSessionJson } from "../src/server/identity/http";
 import { POST as register } from "../src/app/api/auth/register/route";
 import { POST as resetComplete } from "../src/app/api/auth/reset-complete/route";
 import { requestRiskContext } from "../src/server/http";
@@ -19,6 +20,13 @@ function mutation(headers: Record<string, string> = {}, body = "{") {
 }
 
 describe("authentication route boundary", () => {
+  it("keeps session status minimal and private on both outcomes", async () => {
+    for (const authenticated of [true, false]) {
+      const response = privateSessionJson(authenticated);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(await response.json()).toEqual({ authenticated });
+    }
+  });
   it("rejects malformed JSON after valid same-origin CSRF", async () => {
     const response = await register(mutation({ origin: "http://127.0.0.1:3000", cookie: "nexaflow_csrf=token", "x-csrf-token": "token" }));
     expect(response.status).toBe(400);
