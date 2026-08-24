@@ -2100,6 +2100,9 @@ test("current-device logout preserves another device; all-device logout and back
   await second.goto("/workspace/create");
   await expect(second).toHaveURL(/\/login/);
   await second.goBack();
+  expect(second.url()).not.toMatch(/\/(?:workspace\/create|crm(?:\/|$))/);
+  await expect(second.getByRole("heading", { name: "Create your company Workspace", exact: true })).toHaveCount(0);
+  await second.goto("/workspace/create");
   await expect(second).toHaveURL(/\/login/);
   await secondContext.close();
 });
