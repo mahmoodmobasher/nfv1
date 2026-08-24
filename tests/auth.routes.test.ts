@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { GET as csrf } from "../src/app/api/auth/csrf/route";
+import { privateSessionJson } from "../src/server/identity/http";
 import { POST as register } from "../src/app/api/auth/register/route";
 import { POST as resetComplete } from "../src/app/api/auth/reset-complete/route";
 import { requestRiskContext } from "../src/server/http";
@@ -19,9 +20,17 @@ function mutation(headers: Record<string, string> = {}, body = "{") {
 }
 
 describe("authentication route boundary", () => {
+  it("keeps session status minimal and private on both outcomes", async () => {
+    for (const authenticated of [true, false]) {
+      const response = privateSessionJson(authenticated);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(await response.json()).toEqual({ authenticated });
+    }
+  });
   it("rejects malformed JSON after valid same-origin CSRF", async () => {
     const response = await register(mutation({ origin: "http://127.0.0.1:3000", cookie: "nexaflow_csrf=token", "x-csrf-token": "token" }));
     expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await response.json()).toMatchObject({ code: "invalid_request" });
   });
 
@@ -30,6 +39,8 @@ describe("authentication route boundary", () => {
     const weakRegistration = await register(new Request("http://127.0.0.1:3000/api/auth/register", { method: "POST", headers, body: JSON.stringify({ email: "weak@example.test", displayName: "Weak", password: "abcdefghijkl" }) }));
     const weakReset = await resetComplete(new Request("http://127.0.0.1:3000/api/auth/reset-complete", { method: "POST", headers, body: JSON.stringify({ token: "x".repeat(43), password: "abcdefghijkl" }) }));
     expect([weakRegistration.status, weakReset.status]).toEqual([400, 400]);
+    expect(weakRegistration.headers.get("cache-control")).toBe("private, no-store");
+    expect(weakReset.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("ignores spoofed forwarding headers unless authenticated trusted-proxy mode is configured", () => {
@@ -47,6 +58,8 @@ describe("authentication route boundary", () => {
     const missing = await register(mutation({ origin: "http://127.0.0.1:3000" }));
     const mismatched = await register(mutation({ origin: "http://127.0.0.1:3000", cookie: "nexaflow_csrf=one", "x-csrf-token": "two" }));
     expect([missing.status, mismatched.status]).toEqual([403, 403]);
+    expect(missing.headers.get("cache-control")).toBe("private, no-store");
+    expect(mismatched.headers.get("cache-control")).toBe("private, no-store");
     expect(await missing.json()).toMatchObject({ code: "request_rejected" });
   });
 

@@ -5,6 +5,8 @@ import { loginPassword, registerPasswordUser, verifyEmailToken } from "../src/se
 import { crmHome } from "../src/server/crm/home";
 import { keyedHash } from "../src/server/security/crypto";
 import { provisionWorkspace, requireWorkspaceAuthorization, savePlanSelection } from "../src/server/workspaces/provision";
+import { POST as loginRoute } from "../src/app/api/auth/login/route";
+import { INVITATION_RETURN_COOKIE, sealInvitationReturn } from "../src/server/invitations/intent";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
@@ -63,8 +65,11 @@ suite("onboarding/workspace boundary validation", () => {
     const secondRole = (await pool.query<{ id: string }>("select id from roles where workspace_id=$1 and code='member'", [second.workspaceId])).rows[0];
     await expect(pool.query("insert into workspace_memberships(workspace_id,user_id,role_id) values($1,$2,$3)", [first.workspaceId, actor.userId, firstRole.id])).rejects.toMatchObject({ code: "23505" });
     await expect(pool.query("insert into workspace_memberships(workspace_id,user_id,role_id) values($1,$2,$3)", [first.workspaceId, secondUser.userId, secondRole.id])).rejects.toMatchObject({ code: "23503" });
-    expect((await requireWorkspaceAuthorization(pool, actor.userId, first.workspaceId))?.role).toBe("owner");
     expect(await requireWorkspaceAuthorization(pool, secondUser.userId, first.workspaceId)).toBeNull();
+    await pool.query("insert into workspace_memberships(workspace_id,user_id,role_id) values($1,$2,$3)", [first.workspaceId, secondUser.userId, firstRole.id]);
+    expect((await pool.query("select count(*)::int count from workspace_memberships where user_id=$1 and status='active'", [secondUser.userId])).rows[0].count).toBe(2);
+    expect((await requireWorkspaceAuthorization(pool, actor.userId, first.workspaceId))?.role).toBe("owner");
+    expect((await requireWorkspaceAuthorization(pool, secondUser.userId, first.workspaceId))?.role).toBe("member");
   });
 
   it("keeps verified signup retryable after a provisioning rollback and succeeds on retry", async () => {
@@ -85,6 +90,8 @@ suite("onboarding/workspace boundary validation", () => {
     const actor = await passwordUser("plan-change@test.example");
     await expect(savePlanSelection(pool, actor.userId, "scale", "annual")).resolves.toEqual({ planCode: "scale", cadence: "annual" });
     const workspace = await provisionWorkspace(pool, { ...actor, name: "Plan Locked", idempotencyKey: crypto.randomUUID() });
+    await expect(provisionWorkspace(pool, { ...actor, name: "Second Self-Service Workspace", idempotencyKey: crypto.randomUUID() })).rejects.toMatchObject({ code: "not_eligible" });
+    expect((await pool.query("select count(*)::int count from workspaces where created_by_user_id=$1", [actor.userId])).rows[0].count).toBe(1);
     await expect(savePlanSelection(pool, actor.userId, "growth", "monthly")).rejects.toMatchObject({ code: "not_eligible" });
     expect((await pool.query("select plan_code,billing_cadence from workspaces where id=$1", [workspace.workspaceId])).rows[0]).toEqual({ plan_code: "scale", billing_cadence: "annual" });
     expect((await pool.query("select selected_plan_code,billing_cadence from onboarding_progress where user_id=$1", [actor.userId])).rows[0]).toEqual({ selected_plan_code: "scale", billing_cadence: "annual" });
@@ -129,6 +136,18 @@ suite("onboarding/workspace boundary validation", () => {
       { action: "workspace.created", outcome: "success", count: 1 },
       { action: "workspace.initial_owner_assigned", outcome: "success", count: 1 },
     ]);
+  });
+
+  it("resumes only an exact invitation path backed by a valid server-owned return marker", async () => {
+    await passwordUser("invitation-return@test.example");
+    const mutationHeaders={origin:config.appOrigin,cookie:`nexaflow_csrf=csrf; ${INVITATION_RETURN_COOKIE}=${encodeURIComponent(sealInvitationReturn(secret))}`,"x-csrf-token":"csrf","content-type":"application/json"};
+    const accepted=await loginRoute(new Request(`${config.appOrigin}/api/auth/login`,{method:"POST",headers:mutationHeaders,body:JSON.stringify({email:"invitation-return@test.example",password:"Local-password-123!",next:"/workspace/invitations/accept"})}));
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({next:"/workspace/invitations/accept"});
+    expect(accepted.headers.get("set-cookie")).toContain(`${INVITATION_RETURN_COOKIE}=`);
+    const rejected=await loginRoute(new Request(`${config.appOrigin}/api/auth/login`,{method:"POST",headers:{...mutationHeaders,cookie:"nexaflow_csrf=csrf"},body:JSON.stringify({email:"invitation-return@test.example",password:"Local-password-123!",next:"https://attacker.invalid"})}));
+    expect(rejected.status).toBe(200);
+    expect(await rejected.json()).toMatchObject({next:"/workspace/create"});
   });
 
   it("denies CRM home for missing, suspended, and cross-tenant memberships", async () => {

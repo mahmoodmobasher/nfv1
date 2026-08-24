@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { Suspense } from "react";
 import { getServerEnv } from "@/server/env";
@@ -9,6 +10,8 @@ import { accountPreferences } from "@/server/account/service";
 import { TitleUpdater } from "./onboarding/title-updater";
 import { isThemePreference, themeBootstrapScript, type ThemePreference } from "./theme";
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "NexaFlow | Connected B2B Sales & Delivery CRM",
@@ -44,7 +47,7 @@ export default async function RootLayout({
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
   return (
     <html lang="en" data-theme={preference === "dark" ? "dark" : "light"} data-theme-preference={preference} suppressHydrationWarning>
-      <body className="antialiased"><Script id="nexaflow-theme" strategy="beforeInteractive" nonce={nonce}>{themeBootstrapScript}</Script><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
+      <body className={`${inter.variable} antialiased`}><Script id="nexaflow-theme" strategy="beforeInteractive" nonce={nonce}>{themeBootstrapScript}</Script><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
     </html>
   );
 }
