@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerEnv } from "@/server/env";
-import { identityTokenIntentCookie, sealIdentityTokenIntent, type IdentityTokenIntentPurpose } from "@/server/identity/token-intent";
+import {
+  clearIdentityTokenIntentCookie,
+  identityTokenIntentCookie,
+  sealIdentityTokenIntent,
+  type IdentityTokenIntentPurpose,
+} from "@/server/identity/token-intent";
 import {
   clearInvitationIntentCookie,
   clearInvitationReturnCookie,
@@ -13,6 +18,36 @@ import {
 } from "@/server/invitations/intent";
 
 export const DEFAULT_SESSION_COOKIE = "nexaflow_session";
+
+export type IdentityTokenCaptureEntry = Readonly<{
+  purpose: IdentityTokenIntentPurpose;
+  destination: "/verify-email" | "/reset-password";
+}>;
+
+export const IDENTITY_TOKEN_CAPTURE_ENTRIES = Object.freeze({
+  "/verify-email/capture": Object.freeze({
+    purpose: "email_verification",
+    destination: "/verify-email",
+  }),
+  "/verify-email": Object.freeze({
+    purpose: "email_verification",
+    destination: "/verify-email",
+  }),
+  "/reset-password/capture": Object.freeze({
+    purpose: "password_reset",
+    destination: "/reset-password",
+  }),
+  "/reset-password": Object.freeze({
+    purpose: "password_reset",
+    destination: "/reset-password",
+  }),
+} satisfies Readonly<Record<string, IdentityTokenCaptureEntry>>);
+
+export function identityTokenCaptureEntry(pathname: string): IdentityTokenCaptureEntry | null {
+  return Object.prototype.hasOwnProperty.call(IDENTITY_TOKEN_CAPTURE_ENTRIES, pathname)
+    ? IDENTITY_TOKEN_CAPTURE_ENTRIES[pathname as keyof typeof IDENTITY_TOKEN_CAPTURE_ENTRIES]
+    : null;
+}
 
 export const PROTECTED_TOKEN_LIFECYCLE_PATHS = Object.freeze([
   "/verify-email",
@@ -60,20 +95,75 @@ export function contentSecurityPolicy(nonce: string, development = process.env.N
   ].join("; ");
 }
 
+function setCaptureSecurityHeaders(response: NextResponse, policy: string) {
+  response.headers.set("Content-Security-Policy", policy);
+  setProtectedTokenLifecycleHeaders(response.headers);
+}
+
+function cleanDestination(request: NextRequest, pathname: string) {
+  const destination = request.nextUrl.clone();
+  destination.pathname = pathname;
+  destination.search = "";
+  destination.hash = "";
+  return destination;
+}
+
+function unsupportedCaptureMethod(policy: string) {
+  const response = new NextResponse(null, { status: 405 });
+  response.headers.set("Allow", "GET, HEAD");
+  setCaptureSecurityHeaders(response, policy);
+  return response;
+}
+
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const policy = contentSecurityPolicy(nonce);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("content-security-policy", policy);
-  const capturePurpose:IdentityTokenIntentPurpose|null=request.nextUrl.pathname==="/verify-email"?"email_verification":request.nextUrl.pathname==="/reset-password"?"password_reset":null;
-  const rawToken=capturePurpose?request.nextUrl.searchParams.get("token"):null;
-  if(capturePurpose&&rawToken!==null){
-    const env=getServerEnv(),destination=request.nextUrl.clone(),continuation=capturePurpose==="email_verification"&&request.nextUrl.searchParams.get("next")==="/workspace/invitations/accept"?"/workspace/invitations/accept":null;
-    destination.search="";
-    const capture=NextResponse.redirect(destination,303);
-    try{capture.headers.set("Set-Cookie",identityTokenIntentCookie(capturePurpose,sealIdentityTokenIntent(capturePurpose,rawToken,env.SESSION_SECRET,Date.now(),continuation??undefined),env.APP_ORIGIN.startsWith("https://")))}catch{capture.headers.set("Set-Cookie",identityTokenIntentCookie(capturePurpose,"invalid",env.APP_ORIGIN.startsWith("https://")))}
-    capture.headers.set("Content-Security-Policy",policy);setProtectedTokenLifecycleHeaders(capture.headers);return capture;
+  const identityCapture = identityTokenCaptureEntry(request.nextUrl.pathname);
+  if (identityCapture && request.nextUrl.searchParams.has("token")) {
+    const env = getServerEnv();
+    const secure = env.APP_ORIGIN.startsWith("https://");
+    const tokenValues = request.nextUrl.searchParams.getAll("token");
+    const capture = request.method === "GET" || request.method === "HEAD"
+      ? NextResponse.redirect(cleanDestination(request, identityCapture.destination), 303)
+      : unsupportedCaptureMethod(policy);
+
+    if (request.method === "GET" && tokenValues.length === 1) {
+      const continuation = identityCapture.purpose === "email_verification"
+        && request.nextUrl.searchParams.get("next") === "/workspace/invitations/accept"
+        ? "/workspace/invitations/accept"
+        : undefined;
+      try {
+        capture.headers.set(
+          "Set-Cookie",
+          identityTokenIntentCookie(
+            identityCapture.purpose,
+            sealIdentityTokenIntent(
+              identityCapture.purpose,
+              tokenValues[0],
+              env.SESSION_SECRET,
+              Date.now(),
+              continuation,
+            ),
+            secure,
+          ),
+        );
+      } catch {
+        capture.headers.set(
+          "Set-Cookie",
+          clearIdentityTokenIntentCookie(identityCapture.purpose, secure),
+        );
+      }
+    } else {
+      capture.headers.set(
+        "Set-Cookie",
+        clearIdentityTokenIntentCookie(identityCapture.purpose, secure),
+      );
+    }
+    setCaptureSecurityHeaders(capture, policy);
+    return capture;
   }
   const invitationDocument = request.nextUrl.pathname === "/workspace/invitations/accept";
   const invitationToken = invitationDocument
@@ -81,15 +171,18 @@ export function proxy(request: NextRequest) {
     : null;
   if (invitationDocument && invitationToken !== null) {
     const env = getServerEnv();
-    const destination = request.nextUrl.clone();
-    destination.search = "";
-    const capture = NextResponse.redirect(destination, 303);
+    const tokenValues = request.nextUrl.searchParams.getAll("token");
+    const capture = request.method === "GET" || request.method === "HEAD"
+      ? NextResponse.redirect(cleanDestination(request, "/workspace/invitations/accept"), 303)
+      : unsupportedCaptureMethod(policy);
     const secure = env.APP_ORIGIN.startsWith("https://");
     try {
+      if (request.method !== "GET" || tokenValues.length !== 1)
+        throw new Error("invalid_invitation_capture_method_or_token");
       capture.headers.set(
         "Set-Cookie",
         invitationIntentCookie(
-          sealInvitationIntent(invitationToken, env.SESSION_SECRET),
+          sealInvitationIntent(tokenValues[0], env.SESSION_SECRET),
           secure,
         ),
       );
@@ -102,8 +195,7 @@ export function proxy(request: NextRequest) {
       capture.headers.set("Set-Cookie", clearInvitationIntentCookie(secure));
       capture.headers.append("Set-Cookie", clearInvitationReturnCookie(secure));
     }
-    capture.headers.set("Content-Security-Policy", policy);
-    setProtectedTokenLifecycleHeaders(capture.headers);
+    setCaptureSecurityHeaders(capture, policy);
     return capture;
   }
   const response = NextResponse.next({ request: { headers: requestHeaders } });
@@ -128,11 +220,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [{
-    source: "/((?!api|_next/static|_next/image|favicon.ico).*)",
-    missing: [
-      { type: "header", key: "next-router-prefetch" },
-      { type: "header", key: "purpose", value: "prefetch" },
-    ],
-  }],
+  matcher: [{ source: "/((?!api|_next/static|_next/image|favicon.ico).*)" }],
 };
