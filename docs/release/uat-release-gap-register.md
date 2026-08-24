@@ -359,3 +359,29 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Exact provenance, app/worker-only switch, migration no-op, service health, TLS/proxy/OIDC-disabled smoke, the three-route UAT-GAP-013 denial/Audit proof, 25 protected-path/near-miss header cells, and three generated-capture Location-validator cells passed as recorded in `docs/release/nexa-spectrum-phase-1-4-uat8-deployment-result.md`.
 - Product explicitly directed that unavailable controlled-mailbox aliases must not block `.8` deployment completion. No email was sent and no tester/cohort was admitted. Verification/resend, recovery/reset/Session revocation, invitation delivery/acceptance, supported-workflow Company A/Company B cohort creation, authenticated Workspace/CRM/settings, Owner/seat truth, themes, responsive/accessibility, and complete Audit/Outbox delivery remain unexecuted and are not represented as passed.
 - Status: `.8` deployment completion passes, while full Product UAT acceptance, Phase 5, and production readiness remain blocked by the stated pending operational validation.
+
+## v0.5.0-uat.9 commercial catalog deployment update
+
+- Exact integrated source `9da17f91181742c793ce6dd4fec0950016a6b14d` and immutable tag `v0.5.0-uat.9` are live. Migration `0012` applied and reran cleanly; ledger is 13/head `1787603528436`.
+- Exact typed active authority is Essentials 1 seat at USD 6999 monthly/2400 annual monthly-equivalent, Growth 5 at 8999/5700, and Scale 15 at 11999/10700. Predecessors remain retired.
+- App/worker use exact `.9`; retained PostgreSQL, Caddy, Caddy volumes/certificates, Mailpit, protected environment, DNS/TLS, and provider authority were not recreated. All services are healthy/running with zero restarts.
+- Public health/OIDC/TLS, commercial homepage/select/register, settings protection, all eleven lifecycle header paths, three clean capture redirects, near-miss edge default, and bounded log checks passed. Full serialized PostgreSQL passed 152/152; direct passed 250/250; focused commercial/invitation/plan browser evidence passed after one isolated transient browser-history rerun.
+- Product explicitly declared prior UAT application data and personas disposable. Credentialed cohort preservation, authenticated settings/account-menu, end-to-end live invitation acceptance, and external email delivery were not rerun and are not represented as passed. This does not block `.9` deployment completion under the updated Product direction.
+- `UAT-GAP-009` and `UAT-GAP-005` remain P3/non-blocking. No P0–P2 deployment defect was observed.
+
+### UAT-GAP-014 — Homepage one-seat grammar is plural
+
+- Date/environment/release/commit: 2026-08-24; public UAT `v0.5.0-uat.9`; `9da17f91181742c793ce6dd4fec0950016a6b14d`.
+- Category: UX/accessibility / Product copy.
+- Observed versus expected: the homepage Essentials card says `1 active seats`; selected-plan, registration, and Workspace summaries correctly use `1 active seat`.
+- Severity: P3.
+- Affected journeys/tenants/data: public homepage copy only; seat enforcement, entitlement snapshots, Owner inclusion, tenant authority, and persisted data are unaffected.
+- Evidence and reproduction: open the homepage Plans section and inspect the Essentials seat sentence; compare with the server-fed Essentials registration summary.
+- Root cause/current hypothesis: the homepage marketing card uses an unconditional plural while the shared onboarding summaries branch on seat count.
+- Containment/rollback: accepted server authority remains 1 total active seat including Owner; no release rollback is warranted.
+- Fall-forward owner/target: Dev1/Product copy, next bounded presentation increment.
+- Acceptance criteria: render singular `seat` for one and plural `seats` otherwise; retain the canonical one-Workspace and Owner-included policy; run focused homepage/select copy and accessibility smoke.
+- Dependencies: Product authorization for a presentation-only correction and normal Graphics review.
+- Status and verification: open non-blocking; deployment remains GO.
+- Residual risk: minor public-copy polish and reduced confidence, with no authorization or capacity impact.
+- Blocks: none.
