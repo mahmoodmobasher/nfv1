@@ -72,12 +72,14 @@ async function securePost(page: Page, path: string, body: unknown) {
 async function register(page: Page, email: string) {
   await page.goto("/register?plan=growth&cadence=monthly");
   await expect(
-    page.getByText("LOCAL NON-PRODUCTION ENVIRONMENT."),
+    page.getByText(
+      "Identity and password security are server-backed. Do not reuse a password from another service.",
+      { exact: true },
+    ),
   ).toBeVisible();
   await page.getByLabel("Full name").fill("Browser Test");
   await page.getByLabel("Work email").fill(email);
   await page.locator("#password").fill(password);
-  await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(
     page.getByRole("heading", { name: "Check your email" }),
@@ -101,7 +103,10 @@ async function login(page: Page, email: string, value = password) {
   await page.locator("#password").fill(value);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(
-    page.getByRole("heading", { name: "Create your workspace" }),
+    page.getByRole("heading", {
+      name: "Create your company Workspace",
+      exact: true,
+    }),
   ).toBeVisible();
 }
 
@@ -1890,7 +1895,10 @@ test("local OIDC fixture provisions a server-derived sole-Owner workspace and su
     .getByRole("link", { name: /Continue with local Google fixture/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Create your workspace" }),
+    page.getByRole("heading", {
+      name: "Create your company Workspace",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.getByLabel("Company or Workspace name").fill("OIDC Browser Workspace");
   await page.getByRole("button", { name: "Create company Workspace" }).click();
@@ -1987,7 +1995,10 @@ test("registration survives an interrupted worker lease, verifies once, logs in,
   await login(page, email);
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Create your workspace" }),
+    page.getByRole("heading", {
+      name: "Create your company Workspace",
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -2063,7 +2074,10 @@ test("current-device logout preserves another device; all-device logout and back
   await expect(page).toHaveURL(/\/login/);
   await second.goto("/workspace/create");
   await expect(
-    second.getByRole("heading", { name: "Create your workspace" }),
+    second.getByRole("heading", {
+      name: "Create your company Workspace",
+      exact: true,
+    }),
   ).toBeVisible();
 
   expect(
@@ -2263,13 +2277,19 @@ test("Owner invites a verified Member through server settings, Mailpit, and toke
     },
   ]);
   await page.goto(inviteLink);
+  await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
+  await expect(
+    page.getByRole("heading", { name: "Join Slice 4 Browser?" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Accept invitation" }).click();
   await expect(
-    page.getByRole("heading", { name: "You joined Slice 4 Browser." }),
+    page.getByRole("heading", {
+      name: "You joined Slice 4 Browser as Member",
+    }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Open workspace" }).click();
-  await expect(page).toHaveURL(/\/crm$/);
-  await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  await page.getByRole("link", { name: "Open Workspace" }).click();
+  await expect(page).toHaveURL(/\/crm\/home$/);
+  await expect(page.getByRole("heading", { name: "CRM Home" })).toBeVisible();
   expect(
     (
       await database.query(
@@ -2558,10 +2578,11 @@ test("resend invalidates the old link, seat denial stays generic, and fixture re
     },
   ]);
   await page.goto(first);
-  await page.getByRole("button", { name: "Accept invitation" }).click();
+  await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
   await expect(
-    page.getByText("This invitation isn’t available."),
+    page.getByRole("heading", { name: "This invitation isn’t available" }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
   const resentMessages = (await (
     await fetch("http://127.0.0.1:8025/api/v1/messages")
   ).json()) as {
@@ -2577,9 +2598,15 @@ test("resend invalidates the old link, seat denial stays generic, and fixture re
     )
     .find((link) => link && link !== first)!;
   await page.goto(current);
+  await expect(page).toHaveURL(/\/workspace\/invitations\/accept$/);
+  await expect(
+    page.getByRole("heading", { name: "Join Slice 4 Completion?" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Accept invitation" }).click();
   await expect(
-    page.getByText("There are no available seats for this invitation."),
+    page.getByText(
+      "This Workspace has no available active seats. Ask its Owner or an authorized Admin to make capacity available.",
+    ),
   ).toBeVisible();
   await page.context().clearCookies();
   await page.context().addCookies([
