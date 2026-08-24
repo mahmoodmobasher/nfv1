@@ -9,6 +9,10 @@ const origin = "https://app.nexaflowsystems.com";
 const expectedPath = "/verify-email";
 const marker = "SENSITIVE_MARKER_MUST_NOT_APPEAR";
 const temporaryDirectories: string[] = [];
+const destinations = [
+  ["verification", "/verify-email"],
+  ["reset", "/reset-password"],
+] as const;
 
 function headers(status: number, locations: readonly string[] = []) {
   return [
@@ -39,11 +43,11 @@ afterEach(() => {
 });
 
 describe("UAT edge Location contract", () => {
-  it.each([
-    ["relative clean", "/verify-email"],
-    ["absolute same-origin clean", `${origin}/verify-email`],
-  ])("accepts %s redirect", (_label, location) => {
-    expect(validate(headers(303, [location]))).toEqual({
+  it.each(destinations.flatMap(([destination, path]) => [
+    [`${destination} relative clean`, path, path],
+    [`${destination} absolute same-origin clean`, `${origin}${path}`, path],
+  ]))("accepts %s redirect", (_label, location, path) => {
+    expect(validate(headers(303, [location]), { expectedPath: path })).toEqual({
       ok: true,
       probe: "verify-html",
       reason: null,
@@ -76,6 +80,51 @@ describe("UAT edge Location contract", () => {
     ["folded header", "HTTP/2 303\r\nLocation: /verify-email\r\n injected\r\n\r\n", "headers_invalid"],
   ])("rejects %s", (_label, headersText, reason) => {
     expect(validate(headersText)).toEqual({ ok: false, probe: "verify-html", reason });
+  });
+
+  it.each(destinations.flatMap(([destination, path]) => {
+    const leaf = path.slice(1);
+    return [
+      [`${destination} empty query delimiter`, headers(303, [`${path}?`]), "location_query", path],
+      [`${destination} non-empty query delimiter`, headers(303, [`${path}?token=${marker}`]), "location_query", path],
+      [`${destination} absolute empty query delimiter`, headers(303, [`${origin}${path}?`]), "location_query", path],
+      [`${destination} empty fragment delimiter`, headers(303, [`${path}#`]), "location_fragment", path],
+      [`${destination} non-empty fragment delimiter`, headers(303, [`${path}#${marker}`]), "location_fragment", path],
+      [`${destination} absolute empty fragment delimiter`, headers(303, [`${origin}${path}#`]), "location_fragment", path],
+      [`${destination} parent segment`, headers(303, [`/a/../${leaf}`]), "location_dot_segment", path],
+      [`${destination} current segment`, headers(303, [`/./${leaf}`]), "location_dot_segment", path],
+      [`${destination} terminal parent segment`, headers(303, [`/${leaf}/..`]), "location_dot_segment", path],
+      [`${destination} terminal current segment`, headers(303, [`/${leaf}/.`]), "location_dot_segment", path],
+      [`${destination} absolute parent segment`, headers(303, [`${origin}/a/../${leaf}`]), "location_dot_segment", path],
+      [`${destination} spaced field name`, `HTTP/2 303\r\nLocation : ${path}\r\n\r\n`, "headers_invalid", path],
+      [`${destination} tabbed field name`, `HTTP/2 303\r\nLocation\t: ${path}\r\n\r\n`, "headers_invalid", path],
+      [`${destination} malformed preamble`, `unrecognized preamble\r\n\r\n${headers(303, [path])}`, "headers_invalid", path],
+      [`${destination} malformed suffix`, `${headers(303, [path])}unrecognized suffix\r\n\r\n`, "headers_invalid", path],
+      [`${destination} whitespace response block`, ` \r\n\r\n${headers(303, [path])}`, "headers_invalid", path],
+      [`${destination} informational without final`, "HTTP/1.1 103 Early Hints\r\nLink: </asset.css>\r\n\r\n", "response_chain", path],
+      [`${destination} informational after final`, `${headers(303, [path])}HTTP/1.1 103 Early Hints\r\nLink: </asset.css>\r\n\r\n`, "response_order", path],
+      [`${destination} prohibited value control`, `HTTP/2 303\r\nLocation: ${path}\r\nX-Evidence: safe\u0001unsafe\r\n\r\n`, "headers_invalid", path],
+    ];
+  }))("rejects Architecture example: %s", (_label, headersText, reason, path) => {
+    const result = validate(headersText, { expectedPath: path });
+    expect(result).toEqual({ ok: false, probe: "verify-html", reason });
+    expect(JSON.stringify(result)).not.toContain(marker);
+  });
+
+  it.each(destinations.flatMap(([destination, path]) => [
+    [`${destination} relative after informational`, path, path],
+    [`${destination} absolute after informational`, `${origin}${path}`, path],
+  ]))("accepts ordered informational blocks: %s", (_label, location, path) => {
+    const evidence = [
+      "HTTP/1.1 100 Continue\r\nRequest-Id: bounded\r\n\r\n",
+      "HTTP/1.1 103 Early Hints\r\nLink: </asset.css>\r\n\r\n",
+      headers(303, [location]),
+    ].join("");
+    expect(validate(evidence, { expectedPath: path })).toEqual({
+      ok: true,
+      probe: "verify-html",
+      reason: null,
+    });
   });
 
   it("rejects unsafe probe identifiers without reflecting them", () => {

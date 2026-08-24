@@ -21,26 +21,32 @@ function reject(probe, reason) {
 function parseResponseBlocks(headersText) {
   const blocks = headersText
     .split(/\r?\n\r?\n/)
-    .map((block) => block.split(/\r?\n/).filter(Boolean))
-    .filter((lines) => /^HTTP\/\S+\s+\d{3}(?:\s|$)/i.test(lines[0] ?? ""));
+    .filter((block) => block.length > 0)
+    .map((block) => block.split(/\r?\n/));
 
   const responses = [];
   for (const lines of blocks) {
     const statusMatch = /^HTTP\/\S+\s+(\d{3})(?:\s|$)/i.exec(lines[0]);
     if (!statusMatch) return null;
+    const status = Number(statusMatch[1]);
+    if (status < 100 || status > 599) return null;
+    if (/[\u0000-\u001f\u007f-\u009f]/.test(lines[0])) return null;
     const headers = new Map();
     for (const line of lines.slice(1)) {
       if (/^[ \t]/.test(line)) return null;
       const separator = line.indexOf(":");
       if (separator <= 0) return null;
-      const name = line.slice(0, separator).trim().toLowerCase();
-      const value = line.slice(separator + 1).trim();
-      if (!/^[!#$%&'*+.^_`|~0-9a-z-]+$/i.test(name)) return null;
+      const rawName = line.slice(0, separator);
+      const rawValue = line.slice(separator + 1);
+      if (!/^[!#$%&'*+.^_`|~0-9a-z-]+$/i.test(rawName)) return null;
+      if (/[\u0000-\u001f\u007f-\u009f]/.test(rawValue)) return null;
+      const name = rawName.toLowerCase();
+      const value = rawValue.trim();
       const values = headers.get(name) ?? [];
       values.push(value);
       headers.set(name, values);
     }
-    responses.push({ status: Number(statusMatch[1]), headers });
+    responses.push({ status, headers });
   }
   return responses;
 }
@@ -64,6 +70,16 @@ function canonicalExpectedPath(expectedPath) {
   return expectedPath;
 }
 
+function rawPath(raw) {
+  if (raw.startsWith("/")) return raw;
+  const absolute = /^https?:\/\/[^/]*(\/.*)?$/i.exec(raw);
+  return absolute ? absolute[1] ?? "/" : null;
+}
+
+function hasRawDotSegment(pathname) {
+  return pathname.split("/").some((segment) => segment === "." || segment === "..");
+}
+
 export function validateEdgeLocation({ headersText, origin, expectedPath, probe }) {
   if (safeProbe(probe) === "invalid") return reject(probe, "probe_invalid");
   if (typeof headersText !== "string") return reject(probe, "headers_invalid");
@@ -75,9 +91,16 @@ export function validateEdgeLocation({ headersText, origin, expectedPath, probe 
 
   const responses = parseResponseBlocks(headersText);
   if (!responses?.length) return reject(probe, "headers_invalid");
-  const finalResponses = responses.filter(({ status }) => status >= 200);
-  if (finalResponses.length !== 1) return reject(probe, "response_chain");
-  const response = finalResponses[0];
+  let response = null;
+  for (const candidate of responses) {
+    if (candidate.status < 200) {
+      if (response) return reject(probe, "response_order");
+      continue;
+    }
+    if (response) return reject(probe, "response_chain");
+    response = candidate;
+  }
+  if (!response) return reject(probe, "response_chain");
   if (response.status !== 303)
     return reject(probe, response.status === 307 || response.status === 308 ? "redirect_status_unsafe" : "status_not_303");
 
@@ -91,8 +114,13 @@ export function validateEdgeLocation({ headersText, origin, expectedPath, probe 
   if (raw.startsWith("//") || raw.startsWith("\\\\")) return reject(probe, "location_scheme_relative");
   if (raw.includes("\\")) return reject(probe, "location_backslash");
   if (raw.includes("%")) return reject(probe, "location_encoded_ambiguity");
+  if (raw.includes("?")) return reject(probe, "location_query");
+  if (raw.includes("#")) return reject(probe, "location_fragment");
   if (!(raw.startsWith("/") || /^https?:\/\//i.test(raw)))
     return reject(probe, "location_relative_ambiguous");
+  const unnormalizedPath = rawPath(raw);
+  if (!unnormalizedPath) return reject(probe, "location_invalid");
+  if (hasRawDotSegment(unnormalizedPath)) return reject(probe, "location_dot_segment");
 
   let resolved;
   try {
