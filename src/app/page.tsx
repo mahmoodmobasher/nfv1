@@ -260,7 +260,7 @@ export default async function Home() {
             <div className="mx-auto max-w-2xl text-center">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-link)]">Plans</p>
               <h2 className="mt-5 text-4xl font-black tracking-[-0.045em] sm:text-5xl">Choose the plan that fits your team today.</h2>
-              <p className="mt-6 text-lg leading-8 text-[var(--nx-text-muted)]">Every self-service plan includes one company Workspace. Prices shown are per user, per month; included seats count the Workspace Owner.</p>
+              <p className="mt-6 text-lg leading-8 text-[var(--nx-text-muted)]">Every self-service plan is one Workspace subscription. Included active seats count the Workspace Owner.</p>
             </div>
             {marketingPlans ? <div className="marketing-pricing-grid mt-12">
               {marketingPlans.map((plan) => (

@@ -31,7 +31,7 @@ export function PlanSummary({persisted}:{persisted?:{plan:keyof typeof plans;cad
   const params = useSearchParams();
   const { plan, cadence } = persisted??selection(params);
   const item = plans[plan];
-  return <aside className="plan-summary"><p className="eyebrow">Your selection</p><h2>{item.name}</h2><p className="price"><b>${item[cadence]}</b> / user / month</p><p>Billed {cadence}. Includes {item.seats} {item.seats === 1 ? "user" : "users"}.</p><p><Check /> 14-day trial starts when your workspace is created</p><Link href={`/select-plan?${query(plan, cadence)}`}>Change plan</Link></aside>;
+  return <aside className="plan-summary"><p className="eyebrow">Your selection</p><h2>{item.name}</h2><p>One Workspace subscription. Your saved plan details are validated server-side before Workspace creation.</p><p><Check /> 14-day trial starts when your Workspace is created</p><Link href={`/select-plan?${query(plan, cadence)}`}>Change plan</Link></aside>;
 }
 
 export function Field({ label, name, type = "text", hint, required = true, autoComplete = "off", error, onChange }: { label: string; name: string; type?: string; hint?: string; required?: boolean; autoComplete?: string; error?: string; onChange?: (value:string)=>void }) {
