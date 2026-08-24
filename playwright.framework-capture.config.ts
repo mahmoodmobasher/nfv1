@@ -1,0 +1,35 @@
+import { defineConfig } from "playwright/test";
+
+export default defineConfig({
+  testDir: "./tests/e2e",
+  testMatch: "generated-token-capture-security.spec.ts",
+  globalSetup: "./tests/e2e/generated-token-capture.setup.ts",
+  workers: 1,
+  retries: 0,
+  expect: { timeout: 15_000 },
+  use: { baseURL: "http://127.0.0.1:3100" },
+  webServer: {
+    command: [
+      "DATABASE_URL=postgres://framework:framework@db.invalid/framework",
+      "SESSION_COOKIE_NAME=nexaflow_session",
+      "SESSION_SECRET=framework-capture-only-secret-32-characters",
+      "EMAIL_PROVIDER=resend",
+      "RESEND_API_KEY=re_framework_capture_non_delivery_probe",
+      "EMAIL_FROM=synthetic@mail.nexaflowsystems.com",
+      "APP_ORIGIN=https://app.nexaflowsystems.com",
+      "SESSION_IDLE_MINUTES=30",
+      "SESSION_ABSOLUTE_HOURS=24",
+      "SESSION_TOUCH_INTERVAL_SECONDS=60",
+      "TRUSTED_PROXY_ENABLED=false",
+      "OIDC_FIXTURE_SECRET=framework-oidc-disabled-secret-32-chars",
+      "OIDC_MODE=disabled",
+      "OIDC_REDIRECT_URIS=https://app.nexaflowsystems.com/api/auth/oidc/callback,https://app.nexaflowsystems.com/api/auth/recent/oidc/callback",
+      "INVITATION_TTL_HOURS=168",
+      "RECENT_AUTH_MINUTES=10",
+      "npm start -- --hostname 127.0.0.1 --port 3100",
+    ].join(" "),
+    url: "http://127.0.0.1:3100",
+    reuseExistingServer: false,
+    timeout: 120_000,
+  },
+});
