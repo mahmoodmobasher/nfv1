@@ -56,4 +56,31 @@ describe("UAT Caddy Referrer-Policy precedence", () => {
       expect(values[0][1]).not.toContain(",");
     }
   });
+
+  it("retains the non-blocking duplicate private cache defense as an effective private no-store policy", () => {
+    const rawCacheFields = ["private, no-store", "private, no-store"];
+    const effectiveDirectives = rawCacheFields
+      .flatMap((value) => value.split(","))
+      .map((directive) => directive.trim().toLowerCase())
+      .filter(Boolean);
+
+    expect(rawCacheFields).toHaveLength(2);
+    expect(new Set(rawCacheFields)).toEqual(new Set(["private, no-store"]));
+    expect(effectiveDirectives).toEqual([
+      "private",
+      "no-store",
+      "private",
+      "no-store",
+    ]);
+    expect(effectiveDirectives).toContain("private");
+    expect(effectiveDirectives).toContain("no-store");
+    expect(effectiveDirectives).not.toContain("public");
+    expect(effectiveDirectives).not.toContain("immutable");
+    expect(effectiveDirectives.some((value) => /^(?:s-)?max-age=/.test(value))).toBe(
+      false,
+    );
+    expect(effectiveDirectives.some((value) => value.startsWith("stale-"))).toBe(
+      false,
+    );
+  });
 });
