@@ -34,7 +34,8 @@ Phase 3 styles are scoped to the CRM `ProductShell` adapter and consume only can
 - default unit/direct suite: 74 passed; 123 PostgreSQL tests skipped by the default command.
 - serialized PostgreSQL suite: 123 passed.
 - Next.js 16.3.1 production build: pass; all document routes remain dynamic.
-- full Playwright behavior and visual runs reached 36/37 twice for unrelated known fixture timing: one run observed a transient native focus outline after the tablet drawer sequence; the final run timed out because the ownership-transfer fixture left its confirmation button disabled. Each exact test immediately passed in isolation (1/1), including the required 2px/2px focus computation and the complete re-auth/ownership journey. All CRM behavior, contrast, responsive, theme, CSP, Workspace, and security assertions passed in the full runs.
+- final supported serial Playwright run: 37/37 passed in one uninterrupted run after bounded stabilization. The tablet journey now waits for the drawer’s promised trigger-focus restoration before sending Tab. Ownership transfer disables its controlled successor selection until client hydration is ready, and the browser journey asserts the exact selected Membership plus the enabled confirmation state before clicking.
+- focused stability evidence: tablet focus journey 5/5 and ownership re-auth/transfer journey 5/5.
 - the shared S09 component-state sheet passed unchanged after Phase 3 CRM styles were narrowed away from the test sheet.
 
 ## Visual evidence
@@ -54,3 +55,7 @@ The Pipeline baseline contains stable populated and empty stages and a keyboard-
 Phase 3 requires Product, Graphics, and Architecture acceptance before Phase 4 broadening. Phase 4 will migrate plan selection, registration, verification, login, fixture OIDC states, recovery/reset, Workspace creation/selection/ready, and invitation acceptance without altering their security or tenancy contracts. `/invite` must retain unmistakable preview/non-persistence disclosure; billing/upgrades and production Google remain out of scope.
 
 Do not integrate or deploy this branch directly. After acceptance, retain this immutable Phase 3 checkpoint, then continue Phase 4 on top and repeat the complete gate.
+
+## Stabilization checkpoint
+
+The stabilization changes are intentionally bounded to `TransferClient` hydration readiness and browser orchestration. They do not change recent-auth authority, eligible-successor derivation, transfer payloads, confirmation copy, ownership mutation behavior, or focus styling. Lint, TypeScript, the 74-test direct suite, and the Next.js production build passed after the change.

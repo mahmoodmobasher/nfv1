@@ -573,6 +573,10 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
     .last()
     .click();
 
+  const tabletMenu = page.getByRole("button", {
+    name: "Open workspace navigation",
+  });
+  await expect(tabletMenu).toBeFocused();
   await page.keyboard.press("Tab");
   const focused = page.locator(":focus");
   const focusStyle = await focused.evaluate((element) => ({
@@ -2244,10 +2248,16 @@ test("resend invalidates the old link, seat denial stays generic, and fixture re
     .getByRole("link", { name: "Confirm with local Google fixture" })
     .click();
   await expect(page).toHaveURL(/recent=confirmed/);
-  await page
-    .getByLabel("Choose successor")
-    .selectOption({ label: "Browser Member" });
-  await page.getByRole("button", { name: "Continue to confirmation" }).click();
+  await page.waitForLoadState("networkidle");
+  const successor = page.getByLabel("Choose successor"),
+    continueButton = page.getByRole("button", {
+      name: "Continue to confirmation",
+    });
+  await expect(successor).toBeEnabled();
+  await successor.selectOption({ label: "Browser Member" });
+  await expect(successor).toHaveValue(fixture.members[1].id);
+  await expect(continueButton).toBeEnabled();
+  await continueButton.click();
   await page.getByRole("button", { name: "Transfer ownership" }).click();
   await expect(
     page.getByText(/Your refreshed authorization is active/),
