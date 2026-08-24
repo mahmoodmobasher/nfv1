@@ -425,13 +425,6 @@ export function ProductShell({
           >
             <Palette aria-hidden="true" />
           </Link>
-          <Link
-            className="product-icon-action"
-            href="/settings"
-            aria-label="Account settings"
-          >
-            <UserRound aria-hidden="true" />
-          </Link>
           {accountControl("desktop")}
         </div>
       </header>

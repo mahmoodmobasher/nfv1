@@ -73,18 +73,6 @@ const adminCore: ProductNavGroup[] = [
     ],
   },
 ];
-const account: ProductNavGroup = {
-  label: "Account",
-  items: [
-    {
-      href: "/settings",
-      label: "Personal settings",
-      icon: "user",
-      exact: true,
-    },
-  ],
-};
-
 function clone(groups: ProductNavGroup[]) {
   return groups.map((group) => ({
     ...group,
@@ -97,12 +85,11 @@ export function crmNavigationForRole(role: string): ProductNavGroup[] {
   return clone([
     ...crmCore,
     ...(role === "owner" || role === "admin" ? [crmAdministration] : []),
-    account,
   ]);
 }
 
 /** Admin pages are already capability-gated by adminPageContext before this model is built. */
 export function adminNavigationForRole(role: string): ProductNavGroup[] {
-  if (role !== "owner" && role !== "admin") return clone([account]);
-  return clone([...adminCore, account]);
+  if (role !== "owner" && role !== "admin") return [];
+  return clone(adminCore);
 }

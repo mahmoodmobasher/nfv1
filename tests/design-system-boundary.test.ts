@@ -155,12 +155,10 @@ describe("design-system document boundary", () => {
     expect(labels(crmNavigationForRole("member"))).not.toContain(
       "Workspace settings",
     );
-    expect(labels(crmNavigationForRole("member"))).toContain(
+    expect(labels(crmNavigationForRole("member"))).not.toContain(
       "Personal settings",
     );
-    expect(labels(adminNavigationForRole("member"))).toEqual([
-      "Personal settings",
-    ]);
+    expect(adminNavigationForRole("member")).toEqual([]);
     expect(labels(adminNavigationForRole("owner"))).toContain("Invitations");
   });
 

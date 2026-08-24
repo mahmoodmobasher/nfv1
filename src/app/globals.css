@@ -450,6 +450,7 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-account-menu .product-account-signout:hover { background: var(--nx-danger-surface); }
 .product-account-error { margin: var(--nf-space-2) 0 0; padding: var(--nf-space-3); border: 1px solid var(--nx-danger); border-radius: var(--nf-radius-control); background: var(--nx-danger-surface); color: var(--nx-danger); font-size: 13px; }
 .product-shell>.product-main { grid-column: 2; min-width: 0; width: auto; max-width: none; padding: 0 var(--nf-space-8) var(--nf-space-12); overflow-x: hidden; }
+.product-shell .account-content { width: min(100%, 760px); margin: 0 auto; padding: var(--nf-space-8) 0 var(--nf-space-12); }
 .product-shell .preview-banner { margin: 0 calc(-1 * var(--nf-space-8)) var(--nf-space-8); }
 .product-mobile { display: none; }
 .skip-link { position: fixed; z-index: 100; top: 8px; left: 8px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-control); background: var(--nx-surface-overlay); color: var(--nx-link); transform: translateY(calc(-100% - 16px)); }

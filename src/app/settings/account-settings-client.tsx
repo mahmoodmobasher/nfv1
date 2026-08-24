@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, useRef, useState } from "react";
-import { Brand } from "../onboarding/components";
-import { AccountThemeSync } from "../account-theme-sync";
 import { announceThemePreference } from "../theme";
 
 type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string; version: number };
@@ -96,9 +94,7 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
     } catch { setSecurityStatus("We couldn’t change your password. Confirm your current password and try again."); }
   }
 
-  return <div className="account-shell"><AccountThemeSync reconcile={false} />
-    <header className="account-header"><Brand /><nav aria-label="Account navigation"><Link href="/crm">Back to CRM</Link></nav></header>
-    <main className="account-content">
+  return <section className="account-content">
       <p className="eyebrow">Account</p>
       <h1>Personal settings</h1>
       <p className="lead">Manage your personal profile, display preferences, and account security. These settings do not change Workspace administration or your role.</p>
@@ -125,6 +121,5 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
         {needsReauth ? <form onSubmit={reauthenticate}><label className="field"><span>Confirm your current password</span><input type={showPasswords ? "text" : "password"} value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><button className="secondary" type="button" onClick={() => setShowPasswords(value => !value)}>{showPasswords ? "Hide password" : "Show password"}</button><button className="primary">Confirm identity</button></form> : <form onSubmit={changePassword}><label className="field"><span>Current password</span><input type={showPasswords ? "text" : "password"} value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label><label className="field"><span>New password</span><small id="password-policy">Use 12–256 characters, including a number and a symbol.</small><input type={showPasswords ? "text" : "password"} value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} aria-describedby={`password-policy${fieldError ? " password-error" : ""}`} /></label><label className="field"><span>Confirm new password</span><input type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" required aria-invalid={Boolean(fieldError)} aria-describedby={fieldError ? "password-error" : undefined} /></label><button className="secondary" type="button" onClick={() => setShowPasswords(value => !value)}>{showPasswords ? "Hide passwords" : "Show passwords"}</button>{fieldError && <p ref={passwordErrorRef} id="password-error" className="alert error" role="alert" tabIndex={-1}>{fieldError}</p>}<p>Changing your password signs you out of all devices. Sign in again to continue.</p><button className="primary">Change password</button><Link className="text-button" href="/forgot-password">I need account recovery</Link></form>}
         {securityStatus && <p className="alert" role={needsReauth || securityStatus.includes("couldn’t") ? "alert" : "status"}>{securityStatus}</p>}
       </section>
-    </main>
-  </div>;
+    </section>;
 }

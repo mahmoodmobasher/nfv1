@@ -445,14 +445,16 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
       .locator("#nexaflow-theme")
       .evaluate((script: HTMLScriptElement) => script.nonce),
   ).toBe(nonce);
-  await expect(
-    page.getByRole("link", { name: "Personal settings" }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Personal settings" }).click();
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page
+    .getByRole("menu", { name: "Account menu" })
+    .getByRole("menuitem", { name: "Personal settings" })
+    .click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(
     page.getByRole("heading", { name: "Personal settings" }),
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Personal settings" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Display name" })).toHaveValue(
     "Browser Owner",
   );
@@ -641,6 +643,34 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   expect(consoleFailures).toEqual([]);
 });
 
+test("authenticated users without a Workspace retain complete account settings", async ({ page }) => {
+  const email = `account-only-${crypto.randomUUID()}@example.test`;
+  const user = (await database.query(
+    "insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at) values($1,$1,'Account Only','active',now()) returning id",
+    [email],
+  )).rows[0];
+  const token = `account-only-${crypto.randomUUID()}`;
+  await database.query(
+    "insert into sessions(user_id,session_hash,security_version,idle_expires_at,absolute_expires_at,authenticated_at,auth_method) values($1,$2,1,now()+interval '1 hour',now()+interval '1 day',now(),'password')",
+    [user.id, keyedHash(token, "local-only-session-secret-change-me-32chars")],
+  );
+  await page.context().addCookies([{ name: "nexaflow_session", value: token, url: "http://127.0.0.1:3000" }]);
+  await page.goto("/settings");
+  await expect(page.locator(".product-shell")).toHaveCount(0);
+  await expect(page.getByRole("main")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Personal settings" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Theme" }).selectOption("dark");
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const accountMenu = page.getByRole("button", { name: "Account menu" });
+  await accountMenu.click();
+  await expect(page.getByRole("menuitem", { name: "Personal settings" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(accountMenu).toBeFocused();
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("Workspace navigation states and representative controls retain keyboard focus in both themes", async ({
   page,
 }) => {
@@ -758,9 +788,9 @@ test("Workspace navigation states and representative controls retain keyboard fo
     await expect(
       page.getByRole("heading", { name: "Personal settings" }),
     ).toBeVisible();
-    const pageSurface = page.locator(".account-shell");
+    const pageSurface = page.locator(".product-shell");
     const targets = [
-      page.getByRole("link", { name: "Back to CRM" }),
+      page.getByRole("button", { name: "Account menu" }),
       page.getByRole("textbox", { name: "Display name" }),
       page.getByRole("button", { name: "Save profile" }),
       page.getByRole("combobox", { name: "Theme" }),
@@ -814,7 +844,7 @@ test("Workspace navigation states and representative controls retain keyboard fo
     await page.goto("/settings");
     const zoomProxyInput = page.getByRole("textbox", { name: "Display name" });
     await tabTo(page, zoomProxyInput);
-    await expectVisibleFocus(zoomProxyInput, page.locator(".account-shell"));
+    await expectVisibleFocus(zoomProxyInput, page.locator(".product-shell"));
     await zoomProxyInput.scrollIntoViewIfNeeded();
     const zoomProxyBox = await zoomProxyInput.evaluate((element) => {
       const box = element.getBoundingClientRect();
@@ -848,7 +878,7 @@ test("server-filtered navigation reconciles persisted Owner, Member, and Admin r
     page.getByRole("link", { name: "Workspace settings" }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: "Personal settings" }),
+    page.getByRole("button", { name: "Account menu" }),
   ).toBeVisible();
   await database.query(
     "update workspace_memberships set role_id=$1,version=version+1 where id=$2",
