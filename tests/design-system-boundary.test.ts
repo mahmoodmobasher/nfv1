@@ -177,6 +177,51 @@ describe("design-system document boundary", () => {
     expect(shell).toContain("font-weight: 600");
   });
 
+  it("keeps Phase 3 CRM presentation on the centralized semantic contract", () => {
+    const css = readFileSync(
+      new URL("../src/app/globals.css", import.meta.url),
+      "utf8",
+    );
+    const marker = "/* Nexa Spectrum — Phase 3 operational CRM */";
+    const phase3 = css.slice(css.indexOf(marker));
+    expect(phase3).toContain(marker);
+    expect(phase3).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    expect(phase3).not.toMatch(/html\[data-theme|data-account-theme/);
+    expect(phase3).not.toMatch(/font-weight:\s*(?:[789]00|[1-9]\d{3,})/);
+    expect(phase3).not.toMatch(/--(?:nx|nf|spectrum)-[\w-]+\s*:/);
+    for (const property of ["border-radius", "box-shadow"]) {
+      for (const match of phase3.matchAll(
+        new RegExp(`${property}\\s*:\\s*([^;]+)`, "g"),
+      ))
+        expect(match[1].trim(), property).toMatch(/^var\(--/);
+    }
+    for (const file of [
+      "../src/app/crm/page.tsx",
+      "../src/app/crm/home/page.tsx",
+      "../src/app/crm/pipeline/page.tsx",
+      "../src/app/crm/leads/new/page.tsx",
+      "../src/app/crm/leads/[leadId]/page.tsx",
+      "../src/app/crm/leads/lead-editor.tsx",
+    ]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source, file).not.toMatch(
+        /data-theme|data-account-theme|--(?:nx|nf|spectrum)-|#[0-9a-f]{3,8}\b|rgba?\(/i,
+      );
+    }
+    for (const file of [
+      "../src/app/crm/page.tsx",
+      "../src/app/crm/home/page.tsx",
+      "../src/app/crm/pipeline/page.tsx",
+      "../src/app/crm/leads/new/page.tsx",
+      "../src/app/crm/leads/[leadId]/page.tsx",
+    ]) {
+      expect(
+        readFileSync(new URL(file, import.meta.url), "utf8"),
+        file,
+      ).toContain("product-page-header");
+    }
+  });
+
   it("uses explicit semantic disabled states without shared opacity dimming", () => {
     const css = readFileSync(
       new URL("../src/app/globals.css", import.meta.url),
