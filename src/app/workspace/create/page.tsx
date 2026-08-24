@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { WorkspaceForm } from "../../onboarding/forms";
+import { WebsiteShell } from "../../onboarding/website-shell";
+import { WorkspaceForm } from "./workspace-form";
 import { createDb } from "@/server/db/client";
 import { getServerEnv } from "@/server/env";
 import { resolveIdentityContext } from "@/server/security/session";
@@ -19,6 +20,8 @@ export default async function Page() {
     if (state?.workspace_id) redirect("/workspace/ready");
     if (!state?.selected_plan_code||!state?.billing_cadence) redirect("/select-plan?resume=workspace");
     if (!["essentials","growth","scale"].includes(state.selected_plan_code)||!["monthly","annual"].includes(state.billing_cadence)) redirect("/select-plan?resume=workspace&error=selection");
-    return <Suspense fallback={<p role="status">Loading your saved plan…</p>}><WorkspaceForm persisted={{plan:state.selected_plan_code as "essentials"|"growth"|"scale",cadence:state.billing_cadence as "monthly"|"annual"}} /></Suspense>;
+    const catalog=(await pool.query<{code:"essentials"|"growth"|"scale";name:string;included_active_seats:number;trial_days:number}>(`select code,name,included_active_seats,trial_days from plan_catalog_entries where code=$1 and status='active' and effective_from<=now() and (effective_to is null or effective_to>now()) and allowed_cadences?$2 order by effective_from desc limit 1`,[state.selected_plan_code,state.billing_cadence])).rows[0];
+    if (!catalog) redirect("/select-plan?resume=workspace&error=selection");
+    return <WebsiteShell action="help"><Suspense fallback={<p role="status">Loading your saved plan…</p>}><WorkspaceForm plan={{code:catalog.code,name:catalog.name,cadence:state.billing_cadence as "monthly"|"annual",seats:catalog.included_active_seats,trialDays:catalog.trial_days}} /></Suspense></WebsiteShell>;
   } finally { await pool.end(); }
 }

@@ -1892,17 +1892,17 @@ test("local OIDC fixture provisions a server-derived sole-Owner workspace and su
   await expect(
     page.getByRole("heading", { name: "Create your workspace" }),
   ).toBeVisible();
-  await page.getByLabel("Workspace name").fill("OIDC Browser Workspace");
-  await page.getByRole("button", { name: "Create workspace" }).click();
+  await page.getByLabel("Company or Workspace name").fill("OIDC Browser Workspace");
+  await page.getByRole("button", { name: "Create company Workspace" }).click();
   await expect(
-    page.getByRole("heading", { name: "Your workspace is ready" }),
+    page.getByRole("heading", { name: "Your company Workspace is ready" }),
   ).toBeVisible();
   await expect(
     page.getByText("OIDC Browser Workspace", { exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByText("Workspace Owner", { exact: true }),
+    page.getByText("Owner", { exact: true }),
   ).toBeVisible();
   const evidence = await database.query(
     `select count(*)::int owners from workspace_memberships m join roles r on r.id=m.role_id where r.code='owner' and m.status='active' and m.workspace_id=(select id from workspaces where name='OIDC Browser Workspace')`,
