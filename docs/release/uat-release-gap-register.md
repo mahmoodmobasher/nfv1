@@ -256,6 +256,16 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: unbounded 500 denial behavior and missing denial Audit can recur on other tenant-admin routes with the same asynchronous pool-close pattern until the bounded family is reviewed and corrected.
 - Blocks: UAT acceptance, Phase 5, and production readiness.
 
+#### v0.5.0-uat.8 closure evidence
+
+- Exact accepted source `cf30f9fe08f7536d9cc1debf3ad442ca1f35a8b7` was deployed app/worker-only as immutable `v0.5.0-uat.8`; the fresh `.7` PostgreSQL/Caddy environment, schema, protected configuration, provider, DNS, TLS, networks, and volumes were unchanged.
+- Live unauthenticated Workspace-settings GET, invitation-list GET, and trusted-Origin/valid-CSRF invitation POST each returned bounded HTTP 401 `authentication_required`.
+- The three safe request identifiers selected exactly three minimized denial Audits: one settings action and two invitation actions, each with null Workspace/actor/Membership/Session/target authority and only `operation=tenant_admin_denial` metadata. Immediately after the probes, business, Outbox, idempotency, rate-limit, and CRM mutation counts remained zero.
+- App and worker remained healthy/running, non-root, and at zero restarts. App/worker/Caddy logs contained zero `Cannot use a pool after calling end on the pool`, unhandled rejection, SQL/stack disclosure, fatal/panic, generic error, or protected-marker occurrences after switch.
+- Status: **closed for the accepted UAT-GAP-013 scope**. The `.8` deployment gate passes; controlled-mailbox email and supported-workflow cohort acceptance remain pending operational validation and are not part of this defect closure.
+- Residual risk: future route additions must retain the source invariant and PostgreSQL lifecycle suites so route-owned pools cannot close before required denial Audits settle.
+- Blocks: no longer blocks bounded `.8` deployment completion; full Product UAT acceptance remains pending the separately recorded operational journeys.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
@@ -313,6 +323,12 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - One read-only PostgreSQL count probe supplied a nonexistent database name and produced one bounded `FATAL: database ... does not exist` server-log entry. A corrected command consumed the protected container environment without printing it and proved the exact 12/head ledger plus zero application rows.
 - Status remains P3/non-blocking. The error did not change schema/data, health, or live authority, but reinforces the need for one reviewed secret-safe database evidence command.
 
+#### v0.5.0-uat.8 recurrence
+
+- The first read-only post-migration probe queried nonexistent `schema_migrations` instead of repository authority `drizzle.__drizzle_migrations`; two later minimized Audit-shape queries used invalid JSON-function syntax. All failed without mutation. Corrected queries proved 12 migrations/head `1787501845245`, exact Audit cardinality/minimization, and unchanged business/Outbox state.
+- Native curl HTTP/2 evidence serialized the clean 303 status line with a trailing empty reason separator, which the fail-closed Location harness rejected as `headers_invalid`. The prescribed deterministic capture was repeated with explicit HTTP/1.1 and the repository validator passed all three generated capture destinations without bypass or ad hoc equality.
+- Status remains P3/non-blocking. No application/runtime/security gate was weakened, but the recurrence reinforces the need for a single reviewed release-evidence wrapper that fixes protocol capture and repository ledger/Audit queries.
+
 ## Explicitly deferred or out of scope
 
 ### UAT-GAP-006 — Public-edge and full Product smoke for Spectrum remain unexecuted
@@ -337,3 +353,9 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Exact provenance/config, bounded target destruction, fresh migrations, health/TLS/proxy/OIDC-disabled, protected-path/default/static/cache evidence, and empty-database/log checks passed as recorded in `docs/release/nexa-spectrum-phase-1-4-uat7-deployment-result.md`.
 - Approved-recipient email, supported-workflow cohort, authenticated Workspace/CRM/settings, Owner/seat/invitation acceptance, generated token journey, and complete Audit/Outbox delivery evidence did not run. A signed-in approved mailbox or secure handoff was unavailable, and execution then stopped on P1 `UAT-GAP-013`.
 - Status remains blocking missing acceptance evidence. No unexecuted cell is represented as passed; a later immutable attempt must restart the affected runtime admission gates after the application defect is accepted and integrated.
+
+#### v0.5.0-uat.8 bounded-deployment update
+
+- Exact provenance, app/worker-only switch, migration no-op, service health, TLS/proxy/OIDC-disabled smoke, the three-route UAT-GAP-013 denial/Audit proof, 25 protected-path/near-miss header cells, and three generated-capture Location-validator cells passed as recorded in `docs/release/nexa-spectrum-phase-1-4-uat8-deployment-result.md`.
+- Product explicitly directed that unavailable controlled-mailbox aliases must not block `.8` deployment completion. No email was sent and no tester/cohort was admitted. Verification/resend, recovery/reset/Session revocation, invitation delivery/acceptance, supported-workflow Company A/Company B cohort creation, authenticated Workspace/CRM/settings, Owner/seat truth, themes, responsive/accessibility, and complete Audit/Outbox delivery remain unexecuted and are not represented as passed.
+- Status: `.8` deployment completion passes, while full Product UAT acceptance, Phase 5, and production readiness remain blocked by the stated pending operational validation.
