@@ -71,33 +71,32 @@ export default async function Home() {
   try { catalog = await activeCommercialCatalog(); } catch { catalog = null; }
   const marketingPlans = catalog?.map((plan) => ({ ...plan, price: `$${(plan.monthlyCents / 100).toFixed(2)}`, recommended: plan.code === "growth", copy: plan.code === "essentials" ? "A focused CRM foundation for a company getting its process in place." : plan.code === "growth" ? "For a growing revenue team coordinating one pipeline." : "For a larger company using advanced roles and automation." }));
   return (
-    <div className="marketing-site min-h-screen bg-[#f5f3ee] text-[#17201d] selection:bg-[color:var(--nx-action-primary)]/20">
-      <header className="sticky top-0 z-50 border-b border-[#17201d]/10 bg-[#f5f3ee]/95 backdrop-blur-xl">
+    <div className="marketing-site min-h-screen bg-[var(--nx-canvas)] text-[var(--nx-text-strong)] selection:bg-[color:var(--nx-selected-surface)]">
+      <header className="sticky top-0 z-50 border-b border-[var(--nx-border-subtle)] bg-[color:var(--nx-surface-primary)]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
           <Link href="#top" className="flex items-center gap-3" aria-label="NexaFlow home">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[#17201d] text-sm font-black text-white">
+            <span className="grid h-10 w-10 place-items-center rounded-[var(--nf-radius-control)] bg-[var(--nx-action-primary)] text-sm font-black text-[var(--nx-action-primary-text)]">
               NF
             </span>
             <span>
               <span className="block text-lg font-black tracking-[-0.03em]">NexaFlow</span>
-              <span className="block text-[10px] font-bold uppercase tracking-[0.22em] text-[#5f6b66]">Sales to delivery CRM</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--nx-text-muted)]">Sales to delivery CRM</span>
             </span>
           </Link>
 
           <nav className="hidden items-center gap-7 text-sm font-semibold lg:flex" aria-label="Primary navigation">
-            <Link href="#workflow" className="transition-colors hover:text-[var(--nx-link)]">How it works</Link>
             <Link href="#product" className="transition-colors hover:text-[var(--nx-link)]">Product</Link>
+            <Link href="#workflow" className="transition-colors hover:text-[var(--nx-link)]">How it works</Link>
             <Link href="#ai" className="transition-colors hover:text-[var(--nx-link)]">Responsible AI</Link>
-            <Link href="#about" className="transition-colors hover:text-[var(--nx-link)]">Why NexaFlow</Link>
             <Link href="#plans" className="transition-colors hover:text-[var(--nx-link)]">Plans</Link>
-            <Link href="#questions" className="transition-colors hover:text-[var(--nx-link)]">Questions</Link>
+            <Link href="#questions" className="transition-colors hover:text-[var(--nx-link)]">FAQ</Link>
           </nav>
 
           <div className="flex items-center gap-3">
             <Link href={appUrl} className="hidden text-sm font-bold sm:block">Sign in</Link>
             <Link
               href={demoEmail}
-              className="inline-flex items-center gap-2 rounded-full bg-[#17201d] px-5 py-3 text-sm font-bold text-white transition-transform hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 rounded-[var(--nf-radius-control)] bg-[var(--nx-action-primary)] px-5 py-3 text-sm font-bold text-[var(--nx-action-primary-text)] transition-transform hover:-translate-y-0.5 hover:bg-[var(--nx-action-primary-hover)]"
             >
               Request a demo <ArrowRight className="h-4 w-4" />
             </Link>
@@ -106,7 +105,7 @@ export default async function Home() {
       </header>
 
       <main id="top">
-        <section className="relative overflow-hidden border-b border-[#17201d]/10">
+        <section className="relative overflow-hidden border-b border-[var(--nx-border-subtle)]">
           <div className="absolute -right-40 top-10 h-96 w-96 rounded-full bg-[color:var(--nx-action-primary)]/10 blur-3xl" />
           <div className="mx-auto grid max-w-7xl gap-14 px-5 py-20 lg:grid-cols-[1.05fr_.95fr] lg:px-8 lg:py-28">
             <div className="relative z-10 self-center">
@@ -117,51 +116,51 @@ export default async function Home() {
               <h1 className="max-w-3xl text-5xl font-black leading-[0.98] tracking-[-0.055em] sm:text-6xl lg:text-[5.2rem]">
                 Keep the whole customer journey in view.
               </h1>
-              <p className="mt-8 max-w-2xl text-lg leading-8 text-[#53605b] sm:text-xl">
+              <p className="mt-8 max-w-2xl text-lg leading-8 text-[var(--nx-text-muted)] sm:text-xl">
                 NexaFlow connects sales, customer communication, and post-sale delivery in one practical workspace—so the context behind a deal stays with the people responsible for the outcome.
               </p>
               <div className="mt-10 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href={demoEmail}
+                  href="#plans"
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--nx-action-primary)] px-7 py-4 font-black text-[var(--nx-action-primary-text)] shadow-lg transition-transform hover:-translate-y-0.5"
                 >
-                  Book a guided walkthrough <ArrowRight className="h-5 w-5" />
+                  Explore plans <ArrowRight className="h-5 w-5" />
                 </Link>
                 <Link
-                  href="#product"
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#17201d]/20 bg-white/50 px-7 py-4 font-bold hover:bg-white"
+                  href={demoEmail}
+                  className="inline-flex items-center justify-center gap-2 rounded-[var(--nf-radius-control)] border border-[var(--nx-border-emphasis)] bg-[var(--nx-surface-primary)] px-7 py-4 font-bold text-[var(--nx-text-strong)] hover:bg-[var(--nx-surface-secondary)]"
                 >
-                  See the working product <ChevronRight className="h-5 w-5" />
+                  Book a guided walkthrough <ChevronRight className="h-5 w-5" />
                 </Link>
               </div>
-              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-[#53605b]">
-                <span className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-[#167c62]" /> CRM foundation</span>
-                <span className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-[#167c62]" /> Visible handoffs</span>
-                <span className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-[#167c62]" /> Human-approved AI</span>
+              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-[var(--nx-text-muted)]">
+                <span className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-[var(--nx-success)]" /> CRM foundation</span>
+                <span className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-[var(--nx-success)]" /> Visible handoffs</span>
+                <span className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-[var(--nx-success)]" /> Human-approved AI</span>
               </div>
             </div>
 
-            <div className="relative rounded-[2rem] bg-[#17201d] p-3 shadow-[0_30px_90px_rgba(23,32,29,.22)] sm:p-5">
-              <div className="rounded-[1.4rem] bg-[#fbfaf7] p-5 sm:p-7">
-                <div className="flex items-center justify-between border-b border-[#17201d]/10 pb-5">
+            <div className="relative rounded-[2rem] bg-[var(--nx-text-strong)] p-3 shadow-[0_30px_90px_rgb(11_17_24_/_22%)] sm:p-5">
+              <div className="rounded-[1.4rem] bg-[var(--nx-surface-primary)] p-5 sm:p-7">
+                <div className="flex items-center justify-between border-b border-[var(--nx-border-subtle)] pb-5">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--nx-link)]">Live opportunity</p>
                     <h2 className="mt-2 text-2xl font-black tracking-tight">Northstar Services</h2>
                   </div>
-                  <span className="rounded-full bg-[#167c62]/10 px-3 py-1 text-xs font-black text-[#167c62]">Qualified</span>
+                  <span className="rounded-full bg-[var(--nx-success-surface)] px-3 py-1 text-xs font-black text-[var(--nx-success)]">Qualified</span>
                 </div>
                 <div className="grid gap-4 py-5 sm:grid-cols-2">
                   <div className="border-l-2 border-[var(--nx-action-primary)] pl-4">
-                    <span className="text-xs font-bold text-[#68736f]">Deal owner</span>
+                    <span className="text-xs font-bold text-[var(--nx-text-muted)]">Deal owner</span>
                     <p className="mt-1 font-black">Sales team</p>
                   </div>
-                  <div className="border-l-2 border-[#d5d0c7] pl-4">
-                    <span className="text-xs font-bold text-[#68736f]">Next action</span>
+                  <div className="border-l-2 border-[var(--nx-border-strong)] pl-4">
+                    <span className="text-xs font-bold text-[var(--nx-text-muted)]">Next action</span>
                     <p className="mt-1 font-black">Confirm discovery notes</p>
                   </div>
                 </div>
-                <div className="space-y-3 rounded-2xl bg-[#eeebe4] p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.15em] text-[#68736f]">Shared account timeline</p>
+                <div className="space-y-3 rounded-2xl bg-[var(--nx-surface-secondary)] p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.15em] text-[var(--nx-text-muted)]">Shared account timeline</p>
                   {[
                     ["Today", "Discovery notes added", MessageSquareText],
                     ["Tomorrow", "Proposal review due", Clock3],
@@ -169,17 +168,25 @@ export default async function Home() {
                   ].map(([time, text, Icon]) => {
                     const ItemIcon = Icon as typeof Clock3;
                     return (
-                      <div key={text as string} className="flex items-center gap-3 rounded-xl bg-white p-3">
+                      <div key={text as string} className="flex items-center gap-3 rounded-xl bg-[var(--nx-surface-primary)] p-3">
                         <ItemIcon className="h-4 w-4 text-[var(--nx-link)]" />
-                        <span className="min-w-16 text-xs font-black text-[#68736f]">{time as string}</span>
+                        <span className="min-w-16 text-xs font-black text-[var(--nx-text-muted)]">{time as string}</span>
                         <span className="text-sm font-bold">{text as string}</span>
                       </div>
                     );
                   })}
                 </div>
-                <p className="mt-4 text-xs leading-5 text-[#68736f]">Illustrative workspace using clearly labelled demonstration data.</p>
+                <p className="mt-4 text-xs leading-5 text-[var(--nx-text-muted)]">Illustrative workspace using clearly labelled demonstration data.</p>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="border-b border-[var(--nx-border-subtle)] bg-[var(--nx-surface-primary)] py-7" aria-label="NexaFlow benefits">
+          <div className="mx-auto grid max-w-7xl gap-5 px-5 text-sm text-[var(--nx-text)] sm:grid-cols-3 lg:px-8">
+            <p><strong className="text-[var(--nx-text-strong)]">One customer record</strong><br />Sales, conversations, and delivery context stay connected.</p>
+            <p><strong className="text-[var(--nx-text-strong)]">Clear ownership</strong><br />Teams can see the next action and the person responsible.</p>
+            <p><strong className="text-[var(--nx-text-strong)]">Human-controlled AI</strong><br />Suggestions are visible, reviewable, and optional.</p>
           </div>
         </section>
 
@@ -257,7 +264,7 @@ export default async function Home() {
         </section>
 
         <section id="plans" className="marketing-pricing py-20 lg:py-24">
-          <div className="mx-auto max-w-7xl px-5 lg:px-8">
+          <div className="mx-auto max-w-[1440px] px-5 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-link)]">Plans</p>
               <h2 className="mt-5 text-4xl font-black tracking-[-0.045em] sm:text-5xl">Choose the plan that fits your team today.</h2>
@@ -279,8 +286,21 @@ export default async function Home() {
                   <Link className="marketing-pricing-action" href={`/select-plan?plan=${plan.code}&cadence=monthly`}>Choose {plan.name}</Link>
                 </article>
               ))}
+              <article className="marketing-pricing-card marketing-pricing-enterprise">
+                <p className="marketing-pricing-kicker">For larger organizations</p>
+                <h3>Enterprise</h3>
+                <p className="marketing-pricing-copy">A tailored rollout for multiple Workspaces and custom capacity.</p>
+                <p className="marketing-pricing-price"><b>Custom</b><span> Contact Sales</span></p>
+                <p className="marketing-pricing-seats">Designed for multi-Workspace organizations.</p>
+                <ul>
+                  <li><CircleCheck aria-hidden="true" /> Multiple Workspaces</li>
+                  <li><CircleCheck aria-hidden="true" /> Custom commercial terms</li>
+                  <li><CircleCheck aria-hidden="true" /> Guided rollout</li>
+                </ul>
+                <a className="marketing-pricing-action marketing-pricing-secondary-action" href={demoEmail}>Talk with Sales</a>
+              </article>
             </div> : <p className="alert error" role="alert">Plans are temporarily unavailable. Contact Sales for help.</p>}
-            <p className="mt-8 text-center text-sm text-[var(--nx-text-muted)]">Need multiple Workspaces or custom capacity? <a className="font-semibold text-[var(--nx-link)]" href={demoEmail}>Talk with Sales about Enterprise.</a> Billing is not connected.</p>
+            <p className="mt-8 text-center text-sm text-[var(--nx-text-muted)]">Billing is not connected in this environment.</p>
           </div>
         </section>
 
@@ -340,11 +360,11 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="bg-[#17201d] py-12 text-white">
+      <footer className="marketing-footer py-12">
         <div className="mx-auto grid max-w-7xl gap-10 px-5 lg:grid-cols-[1fr_auto] lg:px-8">
           <div>
             <p className="text-xl font-black">NexaFlow Systems</p>
-            <p className="mt-3 max-w-lg text-sm leading-6 text-white/60">A connected sales and delivery workspace for growing B2B teams.</p>
+            <p className="marketing-footer-muted mt-3 max-w-lg text-sm leading-6">A connected sales and delivery workspace for growing B2B teams.</p>
           </div>
           <div className="flex flex-col gap-3 text-sm font-bold sm:flex-row sm:gap-7">
             <a href="mailto:info@nexaflowsystems.com" className="flex items-center gap-2"><Mail className="h-4 w-4 text-[var(--nx-action-primary)]" /> info@nexaflowsystems.com</a>
@@ -352,7 +372,7 @@ export default async function Home() {
             <Link href={appUrl}>CRM sign in</Link>
           </div>
         </div>
-        <div className="mx-auto mt-10 flex max-w-7xl flex-col gap-3 border-t border-white/10 px-5 pt-6 text-xs text-white/45 sm:flex-row sm:justify-between lg:px-8">
+        <div className="marketing-footer-divider marketing-footer-muted mx-auto mt-10 flex max-w-7xl flex-col gap-3 border-t px-5 pt-6 text-xs sm:flex-row sm:justify-between lg:px-8">
           <span>© {new Date().getFullYear()} NexaFlow Systems. All rights reserved.</span>
           <span>UAT product access is provided for evaluation.</span>
         </div>
