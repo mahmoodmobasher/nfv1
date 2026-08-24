@@ -27,13 +27,22 @@ test("an invitation creates a planless account and only accepts its token-bound 
   await page.getByLabel("Full name").fill("Invited Member");
   await page.getByLabel("Work email").fill(email);
   await page.locator("#password").fill("Invitation-password-123!");
-  const request = page.waitForRequest((value) => value.url().endsWith("/api/auth/register") && value.method() === "POST");
-  const response = page.waitForResponse((value) => value.url().endsWith("/api/auth/register") && value.request().method() === "POST");
+  const clientFailures: string[] = [], pageErrors: Error[] = [];
+  page.on("response", (value) => { if (new URL(value.url()).pathname.startsWith("/_next/") && value.status() >= 400) clientFailures.push(`${value.status()} ${value.url()}`); });
+  page.on("pageerror", (error) => pageErrors.push(error));
+  await expect(page.locator("#password")).toHaveValue("Invitation-password-123!");
+  await expect(page.locator(".requirements .met")).toHaveCount(3);
+  const requests: string[] = [];
+  page.on("request", (value) => { if (new URL(value.url()).pathname === "/api/auth/register" && value.method() === "POST") requests.push(value.postData() ?? ""); });
+  const response = page.waitForResponse((value) => new URL(value.url()).pathname === "/api/auth/register" && value.request().method() === "POST");
   await page.getByRole("button", { name: "Create account" }).click();
-  expect(await (await request).postDataJSON()).toMatchObject({ email, continuation: "/workspace/invitations/accept" });
-  expect(await (await request).postDataJSON()).not.toHaveProperty("planCode");
-  expect(await (await request).postDataJSON()).not.toHaveProperty("cadence");
   expect((await response).status()).toBe(202);
+  expect(requests).toHaveLength(1);
+  expect(JSON.parse(requests[0])).toMatchObject({ email, continuation: "/workspace/invitations/accept" });
+  expect(JSON.parse(requests[0])).not.toHaveProperty("planCode");
+  expect(JSON.parse(requests[0])).not.toHaveProperty("cadence");
+  expect(clientFailures).toEqual([]);
+  expect(pageErrors).toEqual([]);
 
   const invitee = (await database.query("select id from users where primary_email_normalized=$1", [email])).rows[0];
   const verificationToken = `verify-${crypto.randomUUID()}`;
