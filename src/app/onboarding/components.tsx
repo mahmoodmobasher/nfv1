@@ -27,11 +27,13 @@ function Progress({ active }: { active: number }) {
   return <nav className="progress" aria-label="Onboarding progress"><p>Step {active} of 4</p><ol>{labels.map((label, i) => <li key={label} className={i + 1 <= active ? "active" : ""}><span>{i + 1 < active ? <Check /> : i + 1}</span>{label}</li>)}</ol></nav>;
 }
 
-export function PlanSummary({persisted}:{persisted?:{plan:keyof typeof plans;cadence:"monthly"|"annual"}}) {
+export type PlanPresentation={plan:keyof typeof plans;name:string;cadence:"monthly"|"annual";seats:number;priceCents:number};
+export function PlanSummary({presentation}:{presentation?:PlanPresentation}) {
   const params = useSearchParams();
-  const { plan, cadence } = persisted??selection(params);
+  const { plan, cadence } = presentation??selection(params);
   const item = plans[plan];
-  return <aside className="plan-summary"><p className="eyebrow">Your selection</p><h2>{item.name}</h2><p>One Workspace subscription. Your saved plan details are validated server-side before Workspace creation.</p><p><Check /> 14-day trial starts when your Workspace is created</p><Link href={`/select-plan?${query(plan, cadence)}`}>Change plan</Link></aside>;
+  if (!presentation) return <aside className="plan-summary"><p className="eyebrow">Your selection</p><p>Plan details are unavailable. Choose a plan to continue.</p><Link href="/select-plan">Choose a plan</Link></aside>;
+  return <aside className="plan-summary"><p className="eyebrow">Your selection</p><h2>{presentation.name ?? item.name}</h2><p className="price"><b>${(presentation.priceCents/100).toFixed(presentation.priceCents%100?2:0)}</b> {cadence==="annual"?"monthly equivalent, billed annually":"per month"}</p><p>One Workspace subscription includes {presentation.seats} active seats, Owner included.</p><p><Check /> 14-day trial starts when your Workspace is created</p><p>Billing is not connected.</p><Link href={`/select-plan?${query(plan, cadence)}`}>Change plan</Link></aside>;
 }
 
 export function Field({ label, name, type = "text", hint, required = true, autoComplete = "off", error, onChange }: { label: string; name: string; type?: string; hint?: string; required?: boolean; autoComplete?: string; error?: string; onChange?: (value:string)=>void }) {

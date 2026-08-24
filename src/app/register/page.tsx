@@ -2,5 +2,6 @@ import { Suspense } from "react";
 import { RegisterForm } from "../onboarding/forms";
 import { websiteProvider } from "../onboarding/provider";
 import { WebsiteEnvironmentNotice, WebsiteShell } from "../onboarding/website-shell";
+import { activeCommercialCatalog } from "@/server/commercial/catalog";
 
-export default function Page(){const provider=websiteProvider();return <WebsiteShell action="login"><WebsiteEnvironmentNotice>Identity and password security are server-backed. Do not reuse a password from another service.</WebsiteEnvironmentNotice><Suspense><RegisterForm provider={provider} /></Suspense></WebsiteShell>}
+export default async function Page({searchParams}:{searchParams:Promise<{plan?:string;cadence?:string}>}){const provider=websiteProvider(),params=await searchParams;let presentation;try{const plan=(await activeCommercialCatalog()).find(item=>item.code===params.plan&&item.allowedCadences.includes(params.cadence==="annual"?"annual":"monthly"));if(plan){const cadence=params.cadence==="annual"?"annual":"monthly";presentation={plan:plan.code,name:plan.name,cadence,seats:plan.seats,priceCents:cadence==="annual"?plan.annualMonthlyEquivalentCents:plan.monthlyCents}as const}}catch{}return <WebsiteShell action="login"><WebsiteEnvironmentNotice>Identity and password security are server-backed. Use only credentials approved for this environment.</WebsiteEnvironmentNotice><Suspense><RegisterForm provider={provider} presentation={presentation} /></Suspense></WebsiteShell>}
