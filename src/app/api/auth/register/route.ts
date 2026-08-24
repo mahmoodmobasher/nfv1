@@ -3,7 +3,7 @@ import { identityConfig, localDatabase, mutationGuard, requestRiskContext } from
 import { registerPasswordUser } from "@/server/identity/service";
 import { meetsPasswordPolicy } from "@/shared/password-policy";
 import { privateIdentityJson, privateIdentityResponse } from "@/server/identity/http";
-import { activeCommercialCatalog } from "@/server/commercial/catalog";
+import { resolveSelectedCommercialPlan } from "@/server/commercial/catalog";
 
 const input = z.object({ email: z.string().email(), displayName: z.string().trim().min(1).max(120), password: z.string().refine(meetsPasswordPolicy),
   planCode: z.enum(["essentials", "growth", "scale"]).optional(), cadence: z.enum(["monthly", "annual"]).optional(), continuation:z.literal("/workspace/invitations/accept").optional() }).superRefine((value,context)=>{
@@ -18,9 +18,8 @@ export async function POST(request: Request) {
   const { pool } = localDatabase();
   try {
     if(!parsed.data.continuation){
-      const catalog=await activeCommercialCatalog();
-      const selected=catalog.find(plan=>plan.code===parsed.data.planCode);
-      if(!selected||!parsed.data.cadence||!selected.allowedCadences.includes(parsed.data.cadence))return privateIdentityJson({ok:false,code:"invalid_request",message:"Choose a currently available plan."},{status:400});
+      try{await resolveSelectedCommercialPlan(pool,parsed.data.planCode,parsed.data.cadence)}
+      catch{return privateIdentityJson({ok:false,code:"invalid_request",message:"Choose a currently available plan."},{status:400})}
     }
     return privateIdentityJson(await registerPasswordUser(pool, { ...parsed.data, riskKey: requestRiskContext(request), requestId: crypto.randomUUID() }, identityConfig()), { status: 202 });
   }

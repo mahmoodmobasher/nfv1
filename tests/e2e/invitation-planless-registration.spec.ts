@@ -6,6 +6,9 @@ const database = new Pool({ connectionString: process.env.DATABASE_URL ?? "postg
 const secret = "local-only-session-secret-change-me-32chars";
 
 test("an invitation creates a planless account and only accepts its token-bound Membership", async ({ page }) => {
+  const clientFailures: string[] = [], pageErrors: Error[] = [];
+  page.on("response", (value) => { if (new URL(value.url()).pathname.startsWith("/_next/") && value.status() >= 400) clientFailures.push(`${value.status()} ${value.url()}`); });
+  page.on("pageerror", (error) => pageErrors.push(error));
   const suffix = crypto.randomUUID(), email = `invited-${suffix}@example.test`, token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
   const owner = (await database.query("insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at) values($1,$1,'Invitation Owner','active',now()) returning id", [`owner-${suffix}@example.test`])).rows[0];
   const workspace = (await database.query("insert into workspaces(name,slug,status,plan_code,billing_cadence,created_by_user_id) values('Invitation Journey',$1,'active','growth','monthly',$2) returning id", [`invitation-journey-${suffix}`, owner.id])).rows[0];
@@ -27,9 +30,6 @@ test("an invitation creates a planless account and only accepts its token-bound 
   await page.getByLabel("Full name").fill("Invited Member");
   await page.getByLabel("Work email").fill(email);
   await page.locator("#password").fill("Invitation-password-123!");
-  const clientFailures: string[] = [], pageErrors: Error[] = [];
-  page.on("response", (value) => { if (new URL(value.url()).pathname.startsWith("/_next/") && value.status() >= 400) clientFailures.push(`${value.status()} ${value.url()}`); });
-  page.on("pageerror", (error) => pageErrors.push(error));
   await expect(page.locator("#password")).toHaveValue("Invitation-password-123!");
   await expect(page.locator(".requirements .met")).toHaveCount(3);
   const requests: string[] = [];
