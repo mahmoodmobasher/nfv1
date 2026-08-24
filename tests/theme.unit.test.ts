@@ -34,19 +34,15 @@ describe("theme foundation", () => {
   });
 
   it("meets WCAG AA contrast for foundation body and muted text", () => {
-    expect(contrast("#34433e", "#f6f8f7")).toBeGreaterThanOrEqual(4.5);
-    expect(contrast("#62716b", "#f6f8f7")).toBeGreaterThanOrEqual(4.5);
-    expect(contrast("#d1ddd8", "#0b1210")).toBeGreaterThanOrEqual(4.5);
-    expect(contrast("#9fb0aa", "#0b1210")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#35414d", "#f7f8fa")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#4b5866", "#f7f8fa")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#d6dde4", "#0b1118")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#a7b1bc", "#0b1118")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("meets WCAG AA contrast for every primary action state in both themes", () => {
-    const foreground = "#13201c";
-    for (const fill of ["#e75c35", "#f07955", "#f58a69", "#ff8e6b", "#f79b7e"]) {
-      expect(contrast(foreground, fill), fill).toBeGreaterThanOrEqual(4.5);
-    }
-    expect(contrast("#34433e", "#f0f4f2")).toBeGreaterThanOrEqual(4.5);
-    expect(contrast("#d1ddd8", "#17241f")).toBeGreaterThanOrEqual(4.5);
+    for (const fill of ["#315ed4", "#294baa", "#263f86"]) expect(contrast("#ffffff", fill), fill).toBeGreaterThanOrEqual(4.5);
+    for (const fill of ["#6c94f7", "#89aaff", "#a7c0ff"]) expect(contrast("#0b1118", fill), fill).toBeGreaterThanOrEqual(4.5);
   });
 
   it("subscribes only in System mode without duplicates and cleans up", () => {
@@ -76,15 +72,15 @@ describe("theme foundation", () => {
 
   it("keeps desktop Workspace navigation states at WCAG AA contrast", () => {
     const lightSurface = "#ffffff";
-    const darkSurface = "#121d19";
-    for (const color of ["#34433e", "#8f3215", "#62716b"]) expect(contrast(color, lightSurface), color).toBeGreaterThanOrEqual(4.5);
-    for (const color of ["#d1ddd8", "#ff9a78", "#9fb0aa"]) expect(contrast(color, darkSurface), color).toBeGreaterThanOrEqual(4.5);
+    const darkSurface = "#0e171f";
+    for (const color of ["#35414d", "#294baa", "#4b5866"]) expect(contrast(color, lightSurface), color).toBeGreaterThanOrEqual(4.5);
+    for (const color of ["#d6dde4", "#a7c0ff", "#a7b1bc"]) expect(contrast(color, darkSurface), color).toBeGreaterThanOrEqual(4.5);
   });
 
   it("keeps Pipeline stage, card, count, and metadata text at WCAG AA contrast", () => {
     const themes = [
-      { stage: "#f0f4f2", card: "#ffffff", raised: "#ffffff", strong: "#18221f", text: "#34433e", muted: "#62716b" },
-      { stage: "#17241f", card: "#121d19", raised: "#1d2b26", strong: "#f2f7f5", text: "#d1ddd8", muted: "#9fb0aa" },
+      { stage: "#f0f2f5", card: "#ffffff", raised: "#ffffff", strong: "#17212b", text: "#35414d", muted: "#4b5866" },
+      { stage: "#17232e", card: "#111a23", raised: "#1d2a36", strong: "#f4f7fa", text: "#d6dde4", muted: "#a7b1bc" },
     ];
     for (const theme of themes) {
       expect(contrast(theme.strong, theme.stage)).toBeGreaterThanOrEqual(4.5);

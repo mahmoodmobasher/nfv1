@@ -186,7 +186,7 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   await page.getByRole("button", { name: "Save preferences" }).click();
   await expect(page.getByRole("status")).toContainText("Preferences updated.");
   await visualBaseline(page, "design-system-personal-settings-light.png");
-  expect(await page.locator(".eyebrow").first().evaluate(element => getComputedStyle(element).fontWeight)).toBe("550");
+  expect(await page.locator(".eyebrow").first().evaluate(element => getComputedStyle(element).fontWeight)).toBe("500");
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByRole("combobox", { name: "Theme" }).selectOption("system");
@@ -214,17 +214,28 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
   await visualBaseline(page, "design-system-crm-dark.png");
+  await page.setViewportSize({ width: 320, height: 640 });
+  await visualBaseline(page, "spectrum-crm-shell-dark-mobile.png");
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/workspace/settings");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await visualBaseline(page, "design-system-workspace-admin-dark.png");
+  await page.setViewportSize({ width: 320, height: 640 });
+  await visualBaseline(page, "spectrum-admin-shell-dark-mobile.png");
 
   await setServerAppearance(fixture.users[0].id, "light");
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/crm");
   await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
   await visualBaseline(page, "design-system-crm-light.png");
+  await page.setViewportSize({ width: 320, height: 640 });
+  await visualBaseline(page, "spectrum-crm-shell-light-mobile.png");
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/workspace/settings");
   await visualBaseline(page, "design-system-workspace-admin-light.png");
+  await page.setViewportSize({ width: 320, height: 640 });
+  await visualBaseline(page, "spectrum-admin-shell-light-mobile.png");
 
   await page.keyboard.press("Tab");
   const focused = page.locator(":focus");
@@ -325,6 +336,16 @@ test("Workspace navigation states and representative controls retain keyboard fo
   }
 });
 
+test("Spectrum shell honors forced colours and reduced motion", async ({ page }) => {
+  await tenantBrowserFixture(page);
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await page.goto("/crm");
+  const current = page.getByRole("navigation", { name: "CRM navigation" }).getByRole("link", { name: "Leads" });
+  expect(await current.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  const transition = await current.evaluate(element => getComputedStyle(element).transitionDuration);
+  expect(transition.split(",").every(value => Number.parseFloat(value) <= .01)).toBe(true);
+});
+
 test("Pipeline semantic surfaces retain paired contrast, interaction, and responsive behavior", async ({ page }) => {
   const fixture = await tenantBrowserFixture(page);
   await seedVisualPipeline(fixture);
@@ -347,7 +368,7 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     expect(await renderedTextContrast(card.locator(".pipeline-visibility"), card)).toBeGreaterThanOrEqual(4.5);
     expect(await renderedTextContrast(emptyStage.locator(".pipeline-empty-stage"), emptyStage)).toBeGreaterThanOrEqual(4.5);
     expect(await renderedTextContrast(page.locator(".crm-preview>aside .brand b"), page.locator(".crm-preview>aside"))).toBeGreaterThanOrEqual(4.5);
-    expect(await renderedTextContrast(page.locator(".crm-preview>aside .admin-workspace b"), page.locator(".crm-preview>aside .admin-workspace"))).toBeGreaterThanOrEqual(4.5);
+    expect(await renderedTextContrast(page.locator(".crm-preview>.product-topbar .admin-workspace b"), page.locator(".crm-preview>.product-topbar"))).toBeGreaterThanOrEqual(4.5);
     const defaultCardBorder = await card.evaluate(element => getComputedStyle(element).borderColor);
     await card.hover();
     expect(await card.evaluate(element => getComputedStyle(element).borderColor)).not.toBe(defaultCardBorder);
