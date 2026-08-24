@@ -40,6 +40,23 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: ad hoc probes remain error-prone until consolidated into a reviewed script.
 - Blocks: none.
 
+### UAT-GAP-007 — Protected sender representation differed between shell and Docker env-file parsing
+
+- Date/environment/release/commit: 2026-08-24; UAT Option A pre-switch staging; exact validation source `05c4c02`.
+- Category: Operations / Test evidence.
+- Observed versus expected: the first isolated staged sender retained shell-style outer quotes that Docker treated as literal data, so schema validation rejected it; a subsequent harness attempt showed the corrected display-name value cannot safely be shell-sourced. Expected one protected representation consumed consistently by Docker without disclosure.
+- Severity: P3.
+- Affected journeys/tenants/data: pre-switch validation only; no live tenant, email, Session, or database data was affected.
+- Evidence and reproduction: exact `nexaflow:05c4c02` schema validation failed closed on the quoted staged value; shell parsing stopped on the display-name syntax before migration.
+- Root cause: `.env.example` uses shell-oriented quoting while Docker `--env-file` preserves quote characters, and display-name syntax is not a safe generic shell assignment without quoting.
+- Containment/rollback: both failures occurred against an isolated staged file and disposable validation harness. The live protected file fingerprint and release pointer remained unchanged.
+- Fall-forward owner/target: Release Engineering; closed during Option A pre-switch validation.
+- Acceptance criteria: stage the approved identity in Docker env-file representation; keep Reply-To absent; pass exact schema, migration twice, readiness, worker, provider probe, and cleanup using the same staged file; never source the complete staged file.
+- Dependencies: Product Option A authority and Architecture `f67b069`.
+- Status and verification: closed; corrected candidate fingerprint `a825b7947bbeda0fd747233457af40ef40cee71d5905686b2c397f531bd1f3d8`, schema/migration/readiness/worker/provider gates passed, and live authority remained unchanged.
+- Residual risk: future runbook tooling must distinguish Docker env-file serialization from shell syntax and avoid sourcing provider configuration.
+- Blocks: none after the successful evidence rerun.
+
 ## Open blocking
 
 ### UAT-GAP-002 — Candidate runtime rejects protected UAT sender configuration
@@ -58,6 +75,15 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status and verification: open blocking; `v0.5.0-uat.2` permanently rejected.
 - Residual risk: bypassing validation could create delivery failure, sender spoofing/misrepresentation, or candidate outage.
 - Blocks: UAT acceptance, Phase 5, and production readiness.
+
+#### Option A pre-switch update — PASS, evidence review pending
+
+- Authorization: Product Owner selected Architecture Option A from `f67b069`, reaffirmed the documented Accounts sender on verified `mail.nexaflowsystems.com`, required Reply-To absent, and authorized the provider/domain-owner plus Release Engineering roles for minimized verification and protected staging.
+- Provider evidence: authenticated Resend domains requests returned HTTP 200 at `2026-08-24T07:44:55Z` and `2026-08-24T07:47:16Z`; the canonical domain was present and verified/active, required DNS hostnames resolved, and the second request was a non-delivery probe that created no email.
+- Protected evidence: live file unchanged at fingerprint `143eadb6333cd0279884d49a4af27f6e7c030cd58ac49ff89aacf2ec83e0ac36`; root-owned mode-`0600` backup retained; root-owned mode-`0600` staged candidate fingerprint `a825b7947bbeda0fd747233457af40ef40cee71d5905686b2c397f531bd1f3d8`; non-reversible sender fingerprint `588dafe12e8bf43635c3bc604789c8d0864df600a3439f917f0d4b1902bb4172`; Reply-To absent.
+- Exact candidate results: environment schema passed; disposable migration apply and idempotent rerun passed at 12/head `1787501845245`; isolated app readiness passed; continuous worker startup passed; bounded worker logs passed; provider non-delivery probe passed; all disposable resources were removed.
+- Status: technical pre-switch compatibility **PASS**. Gap remains open blocking until Architecture and backend/security accept `docs/release/uat-option-a-sender-pre-switch-evidence.md`, Product separately authorizes a new immutable attempt, the protected candidate becomes live through the approved atomic workflow, and real-email/public-edge/full UAT evidence passes.
+- Residual risk: provider verification and non-delivery authentication do not prove current inbox receipt; no live service consumes the staged correction yet. Never mutate rejected `v0.5.0-uat.2`; fall forward no earlier than `v0.5.0-uat.3` after review.
 
 ### UAT-GAP-001 — Edge overwrote application no-referrer policy
 
