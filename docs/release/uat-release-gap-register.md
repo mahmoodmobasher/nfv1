@@ -23,6 +23,11 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: future runbook automation should emit basename-only portable manifests.
 - Blocks: none.
 
+#### v0.5.0-uat.4 recurrence
+
+- The generated sidecar again retained the local temporary-directory prefix. Host `sha256sum -c` failed before release-directory creation or image load; separately recorded expected source/image digests were then compared against transferred basenames successfully before staging.
+- Status: reopened P3/non-blocking under `UAT-GAP-005` until a reviewed basename-only artifact harness replaces the ad hoc command. No artifact, authority, tenant, or data integrity was weakened.
+
 ### UAT-GAP-004 — Initial migration-ledger evidence probes used invalid SQL
 
 - Date/environment/release/commit: 2026-08-24; live UAT read-only discovery; `v0.5.0-uat.2`; `05c4c02`.
@@ -154,6 +159,28 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Existing direct/unit and serialized PostgreSQL identity/reset/invitation suites remain green, including invalid/expired/replayed tokens, rate limits, all-Session reset revocation, success-Audit singularity, late-failure rollback, tenant/seat/identity denial, and invitation concurrency/replay. Focused browser evidence remains token-free across HTML/RSC, history, storage, redirects, cookies, and outbound requests.
 - Status: implementation complete; gap remains open P1/blocking until distinct backend/security and Architecture acceptance, controlled integration, a new immutable deployment authorization, and a fully restarted public-edge matrix close the live boundary. No UAT service, release tag, provider, secret, Caddy, or infrastructure state changed.
 
+#### v0.5.0-uat.4 public-edge update
+
+- Accepted implementation/review ancestry was integrated at `58c5ae4`. The first 52 live protected assertions passed, including all eleven exact routes and verification/reset completion missing/mismatched-CSRF plus absent/cross-Origin denials with one application `no-referrer` and effective private/no-store.
+- The release was rolled back for separate P1 `UAT-GAP-011` before the full matrix completed. Implementation closure remains accepted, but live operational closure is incomplete while `e58c22a` is restored.
+
+### UAT-GAP-011 — Generated verification/reset capture RSC redirect retains token query
+
+- Date/environment/release/commit: 2026-08-24; public UAT rejected `v0.5.0-uat.4`; `58c5ae4c7075d3637bacb96fb70c343d671273a6`.
+- Category: Security / Application / Test evidence.
+- Observed versus expected: an RSC-shaped request to generated `/verify-email/capture?token=...` returned HTTP 307 with the token query retained in `Location` plus `_rsc`; expected the existing token-free HTTP 303 clean destination. Exact-image isolation reproduced the same behavior for verification and reset capture routes without Caddy.
+- Severity: P1.
+- Affected journeys/tenants/data: verification and password-recovery links when requested with the RSC header shape. Only synthetic tokens were used; no credential, personal recipient, tenant data, or production token was disclosed.
+- Evidence and reproduction: request either generated identity capture route with a synthetic valid-shape token, `RSC: 1`, and redirects disabled; inspect only status and redacted Location shape. HTML capture remains clean. The behavior reproduces directly on `nexaflow:58c5ae4`.
+- Root cause/current hypothesis: Next.js RSC request normalization redirects the token-bearing Route Handler URL before the handler's 303 cookie-capture response. Existing tests covered clean proxy capture/invitation RSC shapes but omitted generated verification/reset capture Route Handlers under RSC.
+- Containment/rollback: edge testing stopped before email or business-flow mutation. Prior `e58c22a` application/config authority was restored; all services, public health, 12/head ledger, restarts, and bounded logs passed.
+- Fall-forward owner/target: Backend + Architecture + Security; bounded capture-before-framework remediation, no earlier than a new immutable `v0.5.0-uat.5` after Product authorization.
+- Acceptance criteria: generated verification/reset links under HTML and RSC return one clean token-free Location and preserve encrypted purpose/path/expiry cookies; raw/encoded tokens absent from body/headers/cookies in plaintext/history/storage/outbound/logs; Back/refresh/replay/invalid/expired/replaced/consumed and direct legacy compatibility remain correct; complete direct-production and public-edge matrices restart from probe one.
+- Dependencies: Next.js 16.3.1 mechanism review, focused implementation, backend/security and Architecture acceptance, integration, artifact/preflight/deployment authorization.
+- Status and verification: open blocking; `.4` permanently rejected and unmoved.
+- Residual risk: token-bearing redirect Location may expose a bearer token to client history, intermediaries, or downstream requests despite strict Referrer-Policy/cache headers.
+- Blocks: UAT acceptance, Phase 5, and production readiness.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
@@ -178,6 +205,11 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - The bounded candidate leaves `deploy/uat/Caddyfile` unchanged with exactly one `?Referrer-Policy` default-if-absent operation and the existing Workspace private-document defense intact.
 - Focused regression evidence counts raw repeated Cache-Control fields, parses their combined effective directives, accepts only identical `private, no-store` values, and fails closed for missing, conflicting, positive-age, stale-serving, unknown/unparsable, or otherwise weakened values.
 - Status remains open P3/non-blocking. No normalization is included in this application remediation; a future edge-only cleanup still requires separate authority and negative cache proof.
+
+#### v0.5.0-uat.4 public evidence
+
+- Initial Workspace lifecycle probes exposed repeated raw cache fields only as identical `private, no-store`; combined parsing found no public/shared-cache, positive-age, stale-serving, unknown, or weakened directive.
+- Status remains P3/non-blocking and unnormalized. `.4` failed for unrelated `UAT-GAP-011`.
 
 ### UAT-GAP-005 — Release evidence commands remain partly ad hoc
 
