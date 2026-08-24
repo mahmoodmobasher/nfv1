@@ -1,7 +1,7 @@
 export const plans = {
-  essentials: { name: "Essentials", monthly: 29, annual: 24, seats: 1 },
-  growth: { name: "Growth", monthly: 69, annual: 57, seats: 3 },
-  scale: { name: "Scale", monthly: 129, annual: 107, seats: 5 },
+  essentials: { name: "Essentials", monthly: 69.99, annual: 24, seats: 1 },
+  growth: { name: "Growth", monthly: 89.99, annual: 57, seats: 3 },
+  scale: { name: "Scale", monthly: 119.99, annual: 107, seats: 5 },
 } as const;
 
 export type PlanKey = keyof typeof plans;

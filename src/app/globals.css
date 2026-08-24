@@ -513,7 +513,8 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .website-root .progress li.active { color: var(--nx-text-strong); }
 .website-root .progress li.active span { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); color: var(--nx-selected-text); }
 .website-root .pricing { max-width: 1120px; }
-.website-root .plan-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.website-root .plan-grid { grid-template-columns: repeat(4,minmax(0,1fr)); align-items: stretch; }
+.website-root .plan-card { min-width: 0; }
 .website-root .plan-price b { color: var(--nx-text-strong); }
 .website-root .plan-card.selected { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }
 .website-root .selected-label { color: var(--nx-selected-text); font-weight: 600; }
@@ -522,8 +523,24 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .website-root .cadence a.active { background: var(--nx-selected-surface); color: var(--nx-selected-text); }
 .website-root .workspace-choice-list li.current { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }
 .website-root .workspace-choice-list strong { color: var(--nx-selected-text); }
+.marketing-site .marketing-pricing { background: var(--nx-surface-secondary); color: var(--nx-text-strong); }
+.marketing-pricing-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--nf-space-5); align-items: stretch; }
+.marketing-pricing-card { position: relative; display: flex; min-width: 0; flex-direction: column; padding: var(--nf-space-7); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); color: var(--nx-text-strong); box-shadow: var(--nf-shadow-1); }
+.marketing-pricing-card.is-recommended { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }
+.marketing-pricing-card h3 { margin: 0; font-size: 24px; line-height: 32px; }
+.marketing-pricing-copy,.marketing-pricing-seats { color: var(--nx-text-muted); font-size: 14px; line-height: 21px; }
+.marketing-pricing-price { margin: var(--nf-space-5) 0 var(--nf-space-2); }
+.marketing-pricing-price b { color: var(--nx-text-strong); font-size: 36px; line-height: 40px; }
+.marketing-pricing-price span { color: var(--nx-text-muted); font-size: 14px; }
+.marketing-pricing-card ul { display: grid; gap: var(--nf-space-3); flex: 1; margin: var(--nf-space-6) 0; padding: 0; list-style: none; color: var(--nx-text); font-size: 14px; }
+.marketing-pricing-card li { display: flex; align-items: flex-start; gap: var(--nf-space-2); }
+.marketing-pricing-card li svg { width: 18px; height: 18px; flex: none; color: var(--nx-success); }
+.marketing-pricing-badge { align-self: flex-start; margin-bottom: var(--nf-space-4); padding: 4px 8px; border-radius: var(--nf-radius-control); background: var(--nx-action-primary); color: var(--nx-action-primary-text); font-size: 12px; font-weight: 600; }
+.marketing-pricing-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid var(--nx-action-primary); border-radius: var(--nf-radius-control); background: var(--nx-action-primary); color: var(--nx-action-primary-text); font-weight: 600; text-decoration: none; }
+.marketing-pricing-action:hover { border-color: var(--nx-action-primary-hover); background: var(--nx-action-primary-hover); }
 @media (max-width: 900px) { .website-root .onboarding-layout { grid-template-columns: minmax(0,680px); justify-content: center; } .website-root .onboarding-layout>.plan-summary { grid-row: 1; position: static; } .website-root .onboarding-layout>.flow-card { grid-row: 2; } .website-root .plan-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
-@media (max-width: 600px) { .website-header { min-height: 56px; padding-inline: 16px; } .website-header-action { font-size: 0; } .website-header-action a { font-size: 13px; } .website-root .onboarding-layout,.website-root .onboarding-narrow,.website-root .pricing { padding-inline: 16px; } .website-root .flow-card,.website-root .plan-summary,.website-root .plan-card { padding: var(--nf-space-5); } .website-root .flow-card h1,.website-root .pricing h1 { font-size: 28px; line-height: 36px; } .website-root .plan-grid { grid-template-columns: 1fr; } .website-root .primary,.website-root .secondary,.website-root .google-button { width: 100%; } }
+@media (max-width: 900px) { .marketing-pricing-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 600px) { .website-header { min-height: 56px; padding-inline: 16px; } .website-header-action { font-size: 0; } .website-header-action a { font-size: 13px; } .website-root .onboarding-layout,.website-root .onboarding-narrow,.website-root .pricing { padding-inline: 16px; } .website-root .flow-card,.website-root .plan-summary,.website-root .plan-card { padding: var(--nf-space-5); } .website-root .flow-card h1,.website-root .pricing h1 { font-size: 28px; line-height: 36px; } .website-root .plan-grid,.marketing-pricing-grid { grid-template-columns: 1fr; } .website-root .primary,.website-root .secondary,.website-root .google-button { width: 100%; } }
 @media (max-width: 340px) { .website-header,.website-root .onboarding-layout,.website-root .onboarding-narrow,.website-root .pricing { padding-inline: 12px; } .website-brand small { display: none; } }
 @media (forced-colors: active) { .website-root .plan-card.selected,.website-root .cadence a.active,.website-root .progress li.active span,.website-root .workspace-choice-list li.current { border: 2px solid Highlight; } }
 

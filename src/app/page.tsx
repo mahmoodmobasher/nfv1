@@ -16,6 +16,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
+import { activeCommercialCatalog } from "@/server/commercial/catalog";
 
 const appUrl = "https://app.nexaflowsystems.com/login";
 const demoEmail =
@@ -64,9 +65,12 @@ const principles = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  let catalog;
+  try { catalog = await activeCommercialCatalog(); } catch { catalog = null; }
+  const marketingPlans = catalog?.map((plan) => ({ ...plan, price: `$${(plan.monthlyCents / 100).toFixed(2)}`, recommended: plan.code === "growth", copy: plan.code === "essentials" ? "A focused CRM foundation for a company getting its process in place." : plan.code === "growth" ? "For a growing revenue team coordinating one pipeline." : "For a larger company using advanced roles and automation." }));
   return (
-    <div className="min-h-screen bg-[#f5f3ee] text-[#17201d] selection:bg-[#ff6b35]/20">
+    <div className="marketing-site min-h-screen bg-[#f5f3ee] text-[#17201d] selection:bg-[color:var(--nx-action-primary)]/20">
       <header className="sticky top-0 z-50 border-b border-[#17201d]/10 bg-[#f5f3ee]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
           <Link href="#top" className="flex items-center gap-3" aria-label="NexaFlow home">
@@ -80,11 +84,12 @@ export default function Home() {
           </Link>
 
           <nav className="hidden items-center gap-7 text-sm font-semibold lg:flex" aria-label="Primary navigation">
-            <Link href="#workflow" className="transition-colors hover:text-[#d94f20]">How it works</Link>
-            <Link href="#product" className="transition-colors hover:text-[#d94f20]">Product</Link>
-            <Link href="#ai" className="transition-colors hover:text-[#d94f20]">Responsible AI</Link>
-            <Link href="#about" className="transition-colors hover:text-[#d94f20]">Why NexaFlow</Link>
-            <Link href="#questions" className="transition-colors hover:text-[#d94f20]">Questions</Link>
+            <Link href="#workflow" className="transition-colors hover:text-[var(--nx-link)]">How it works</Link>
+            <Link href="#product" className="transition-colors hover:text-[var(--nx-link)]">Product</Link>
+            <Link href="#ai" className="transition-colors hover:text-[var(--nx-link)]">Responsible AI</Link>
+            <Link href="#about" className="transition-colors hover:text-[var(--nx-link)]">Why NexaFlow</Link>
+            <Link href="#plans" className="transition-colors hover:text-[var(--nx-link)]">Plans</Link>
+            <Link href="#questions" className="transition-colors hover:text-[var(--nx-link)]">Questions</Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -101,11 +106,11 @@ export default function Home() {
 
       <main id="top">
         <section className="relative overflow-hidden border-b border-[#17201d]/10">
-          <div className="absolute -right-40 top-10 h-96 w-96 rounded-full bg-[#ff6b35]/10 blur-3xl" />
+          <div className="absolute -right-40 top-10 h-96 w-96 rounded-full bg-[color:var(--nx-action-primary)]/10 blur-3xl" />
           <div className="mx-auto grid max-w-7xl gap-14 px-5 py-20 lg:grid-cols-[1.05fr_.95fr] lg:px-8 lg:py-28">
             <div className="relative z-10 self-center">
-              <p className="mb-7 flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-[#d94f20]">
-                <span className="h-px w-10 bg-[#d94f20]" />
+              <p className="mb-7 flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-link)]">
+                <span className="h-px w-10 bg-[var(--nx-link)]" />
                 Built for growing B2B teams
               </p>
               <h1 className="max-w-3xl text-5xl font-black leading-[0.98] tracking-[-0.055em] sm:text-6xl lg:text-[5.2rem]">
@@ -117,7 +122,7 @@ export default function Home() {
               <div className="mt-10 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href={demoEmail}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#ff6b35] px-7 py-4 font-black text-white shadow-[0_12px_30px_rgba(217,79,32,.2)] transition-transform hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--nx-action-primary)] px-7 py-4 font-black text-[var(--nx-action-primary-text)] shadow-lg transition-transform hover:-translate-y-0.5"
                 >
                   Book a guided walkthrough <ArrowRight className="h-5 w-5" />
                 </Link>
@@ -139,13 +144,13 @@ export default function Home() {
               <div className="rounded-[1.4rem] bg-[#fbfaf7] p-5 sm:p-7">
                 <div className="flex items-center justify-between border-b border-[#17201d]/10 pb-5">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#d94f20]">Live opportunity</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--nx-link)]">Live opportunity</p>
                     <h2 className="mt-2 text-2xl font-black tracking-tight">Northstar Services</h2>
                   </div>
                   <span className="rounded-full bg-[#167c62]/10 px-3 py-1 text-xs font-black text-[#167c62]">Qualified</span>
                 </div>
                 <div className="grid gap-4 py-5 sm:grid-cols-2">
-                  <div className="border-l-2 border-[#ff6b35] pl-4">
+                  <div className="border-l-2 border-[var(--nx-action-primary)] pl-4">
                     <span className="text-xs font-bold text-[#68736f]">Deal owner</span>
                     <p className="mt-1 font-black">Sales team</p>
                   </div>
@@ -164,7 +169,7 @@ export default function Home() {
                     const ItemIcon = Icon as typeof Clock3;
                     return (
                       <div key={text as string} className="flex items-center gap-3 rounded-xl bg-white p-3">
-                        <ItemIcon className="h-4 w-4 text-[#d94f20]" />
+                        <ItemIcon className="h-4 w-4 text-[var(--nx-link)]" />
                         <span className="min-w-16 text-xs font-black text-[#68736f]">{time as string}</span>
                         <span className="text-sm font-bold">{text as string}</span>
                       </div>
@@ -181,19 +186,19 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-5 lg:px-8">
             <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#d94f20]">Built around real work</p>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-link)]">Built around real work</p>
                 <h2 className="mt-5 text-4xl font-black tracking-[-0.045em] sm:text-5xl">Less searching. Fewer dropped handoffs.</h2>
                 <p className="mt-6 text-lg leading-8 text-[#5f6b66]">
                   The product is designed around the moments where revenue teams lose context: ownership changes, follow-ups, customer conversations, and the transition from a signed deal to delivery.
                 </p>
-                <Link href={appUrl} className="mt-8 inline-flex items-center gap-2 font-black text-[#d94f20]">
+                <Link href={appUrl} className="mt-8 inline-flex items-center gap-2 font-black text-[var(--nx-link)]">
                   Open the live CRM sign-in <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
               <div className="grid gap-px overflow-hidden rounded-3xl border border-[#17201d]/10 bg-[#17201d]/10 md:grid-cols-3">
                 {outcomes.map(({ icon: Icon, label, copy }) => (
                   <article key={label} className="bg-white p-7 lg:p-8">
-                    <Icon className="h-7 w-7 text-[#d94f20]" />
+                    <Icon className="h-7 w-7 text-[var(--nx-link)]" />
                     <h3 className="mt-10 text-xl font-black tracking-tight">{label}</h3>
                     <p className="mt-3 text-sm leading-6 text-[#5f6b66]">{copy}</p>
                   </article>
@@ -206,13 +211,13 @@ export default function Home() {
         <section id="workflow" className="border-y border-[#17201d]/10 bg-[#17201d] py-20 text-white lg:py-24">
           <div className="mx-auto max-w-7xl px-5 lg:px-8">
             <div className="max-w-3xl">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#ff8b61]">One continuous customer record</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-action-primary)]">One continuous customer record</p>
               <h2 className="mt-5 text-4xl font-black tracking-[-0.045em] sm:text-5xl">A clearer path from first contact to delivered work.</h2>
             </div>
             <div className="mt-14 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
               {workflowSteps.map(([number, title, copy]) => (
                 <article key={number} className="border-t border-white/20 pt-5">
-                  <span className="font-mono text-sm font-black text-[#ff8b61]">{number}</span>
+                  <span className="font-mono text-sm font-black text-[var(--nx-action-primary)]">{number}</span>
                   <h3 className="mt-10 text-2xl font-black">{title}</h3>
                   <p className="mt-3 text-sm leading-6 text-white/65">{copy}</p>
                 </article>
@@ -250,7 +255,35 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="about" className="bg-[#ff6b35] py-20 text-white lg:py-24">
+        <section id="plans" className="marketing-pricing py-20 lg:py-24">
+          <div className="mx-auto max-w-7xl px-5 lg:px-8">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-link)]">Plans</p>
+              <h2 className="mt-5 text-4xl font-black tracking-[-0.045em] sm:text-5xl">Choose the plan that fits your team today.</h2>
+              <p className="mt-6 text-lg leading-8 text-[var(--nx-text-muted)]">Every self-service plan includes one company Workspace. Prices shown are per user, per month; included seats count the Workspace Owner.</p>
+            </div>
+            {marketingPlans ? <div className="marketing-pricing-grid mt-12">
+              {marketingPlans.map((plan) => (
+                <article className={`marketing-pricing-card ${plan.recommended ? "is-recommended" : ""}`} key={plan.code}>
+                  {plan.recommended && <span className="marketing-pricing-badge">Recommended</span>}
+                  <h3>{plan.name}</h3>
+                  <p className="marketing-pricing-copy">{plan.copy}</p>
+                  <p className="marketing-pricing-price"><b>{plan.price}</b><span> / month</span></p>
+                  <p className="marketing-pricing-seats">One Workspace subscription includes {plan.seats} active seats, Owner included.</p>
+                  <ul>
+                    <li><CircleCheck aria-hidden="true" /> One company Workspace</li>
+                    <li><CircleCheck aria-hidden="true" /> 14-day trial at creation</li>
+                    <li><CircleCheck aria-hidden="true" /> Owner included in active seats</li>
+                  </ul>
+                  <Link className="marketing-pricing-action" href={`/select-plan?plan=${plan.code}&cadence=monthly`}>Choose {plan.name}</Link>
+                </article>
+              ))}
+            </div> : <p className="alert error" role="alert">Plans are temporarily unavailable. Contact Sales for help.</p>}
+            <p className="mt-8 text-center text-sm text-[var(--nx-text-muted)]">Need multiple Workspaces or custom capacity? <a className="font-semibold text-[var(--nx-link)]" href={demoEmail}>Talk with Sales about Enterprise.</a> Billing is not connected.</p>
+          </div>
+        </section>
+
+        <section id="about" className="bg-[var(--nx-action-primary)] py-20 text-[var(--nx-action-primary-text)] lg:py-24">
           <div className="mx-auto grid max-w-7xl gap-12 px-5 lg:grid-cols-[1.1fr_.9fr] lg:px-8">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-white/70">Why NexaFlow</p>
@@ -271,7 +304,7 @@ export default function Home() {
         <section id="questions" className="bg-[#fffdf8] py-20 lg:py-24">
           <div className="mx-auto max-w-5xl px-5 lg:px-8">
             <div className="max-w-2xl">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#d94f20]">Before you evaluate</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--nx-link)]">Before you evaluate</p>
               <h2 className="mt-5 text-4xl font-black tracking-[-0.045em] sm:text-5xl">Straight answers to practical questions.</h2>
             </div>
             <div className="mt-12 divide-y divide-[#17201d]/10 border-y border-[#17201d]/10">
@@ -313,8 +346,8 @@ export default function Home() {
             <p className="mt-3 max-w-lg text-sm leading-6 text-white/60">A connected sales and delivery workspace for growing B2B teams.</p>
           </div>
           <div className="flex flex-col gap-3 text-sm font-bold sm:flex-row sm:gap-7">
-            <a href="mailto:info@nexaflowsystems.com" className="flex items-center gap-2"><Mail className="h-4 w-4 text-[#ff8b61]" /> info@nexaflowsystems.com</a>
-            <a href="tel:+18444823336" className="flex items-center gap-2"><Phone className="h-4 w-4 text-[#ff8b61]" /> +1 844-482-3336</a>
+            <a href="mailto:info@nexaflowsystems.com" className="flex items-center gap-2"><Mail className="h-4 w-4 text-[var(--nx-action-primary)]" /> info@nexaflowsystems.com</a>
+            <a href="tel:+18444823336" className="flex items-center gap-2"><Phone className="h-4 w-4 text-[var(--nx-action-primary)]" /> +1 844-482-3336</a>
             <Link href={appUrl}>CRM sign in</Link>
           </div>
         </div>
