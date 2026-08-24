@@ -7,7 +7,7 @@ import { Field, Shell } from "../../onboarding/components";
 import { securePost } from "../../onboarding/api";
 import { query, type Cadence, type PlanKey } from "../../onboarding/logic";
 
-type PlanContext = { code: PlanKey; name: string; cadence: Cadence; seats: number; trialDays: number };
+type PlanContext = { code: PlanKey; name: string; cadence: Cadence; seats: number; trialDays: number; priceCents:number };
 
 export function WorkspaceForm({ plan }: { plan: PlanContext }) {
   const summary = useRef<HTMLDivElement>(null), idempotencyKey = useRef<string | null>(null), submitting = useRef(false);
@@ -36,7 +36,7 @@ export function WorkspaceForm({ plan }: { plan: PlanContext }) {
     }
   }
 
-  const planSummary = <aside className="plan-summary" aria-labelledby="workspace-plan-heading"><p className="eyebrow">Your server-saved plan</p><h2 id="workspace-plan-heading">{plan.name}</h2><p><b>{plan.seats} total active {plan.seats === 1 ? "seat" : "seats"}:</b> you as Owner{additionalSeats ? ` plus up to ${additionalSeats} Admins or Members` : "; the Owner uses the included seat"}.</p><p><Check aria-hidden="true" /> {plan.trialDays}-day trial starts when this Workspace is created.</p><p>No payment is collected in this environment. Production billing and plan changes are not connected.</p><Link href={`/select-plan?${query(plan.code, plan.cadence)}`}>Change plan intent</Link></aside>;
+  const planSummary = <aside className="plan-summary" aria-labelledby="workspace-plan-heading"><p className="eyebrow">Confirm current plan terms</p><h2 id="workspace-plan-heading">{plan.name}</h2><p className="price"><b>${(plan.priceCents/100).toFixed(plan.priceCents%100?2:0)}</b> {plan.cadence==="annual"?"monthly equivalent, billed annually":"per month"}</p><p>One Workspace subscription includes {plan.seats} active seats, Owner included.</p><p><Check aria-hidden="true" /> {plan.trialDays}-day trial starts when this Workspace is created.</p><p>Billing is not connected.</p><Link href={`/select-plan?${query(plan.code, plan.cadence)}`}>Change plan intent</Link></aside>;
 
   return <Shell step={3} aside={planSummary}><p className="eyebrow">Company Workspace</p><h1>Create your company Workspace</h1><p className="lead">Your subscription includes one Workspace for this company. After creation, you will be its sole Owner. Included seats count the Owner.</p>{(formError || nameError) && <div ref={summary} className="alert error error-summary" tabIndex={-1} role="alert"><div><b>We couldn’t complete Workspace creation.</b>{nameError ? <ul><li><a href="#workspace">{nameError}</a></li></ul> : <p>{formError}</p>}</div></div>}<form onSubmit={submit} noValidate aria-busy={busy}><Field label="Company or Workspace name" name="workspace" error={nameError || undefined} hint="Use the company name your team will recognize." /><div className="owner-panel"><b>You’ll be the sole initial Owner</b><p>Owner is distinct from Admin and controls subscription, ownership and governance. Invited Admins operate only within server-authorized limits.</p></div><button className="primary" disabled={busy}>{busy ? "Creating Workspace…" : "Create company Workspace"}</button></form></Shell>;
 }
