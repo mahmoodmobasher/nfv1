@@ -31,8 +31,11 @@ export default async function Page() {
     if (!user) redirect("/login?next=/settings");
     const preferences = await accountPreferences(pool, identity);
     let workspace = await workspaceSummary(pool, identity.userId, identity.activeWorkspaceId);
-    if (!workspace && !identity.activeWorkspaceId) {
-      const selected = (await selectableWorkspaces(pool, { ...identity, activeWorkspaceId: null })).find(
+    if (!workspace) {
+      const selected = (await selectableWorkspaces(pool, {
+        ...identity,
+        activeWorkspaceId: identity.activeWorkspaceId ?? null,
+      })).find(
         (option) => option.current,
       );
       if (selected) workspace = await workspaceSummary(pool, identity.userId, selected.id);

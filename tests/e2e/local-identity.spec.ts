@@ -665,6 +665,12 @@ test("authenticated users without a Workspace retain complete account settings",
   const accountMenu = page.getByRole("button", { name: "Account menu" });
   await accountMenu.click();
   await expect(page.getByRole("menuitem", { name: "Personal settings" })).toHaveCount(1);
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("menuitem", { name: "Personal settings" })).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(accountMenu).toBeFocused();
   await page.setViewportSize({ width: 320, height: 640 });

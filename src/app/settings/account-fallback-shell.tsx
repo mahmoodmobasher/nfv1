@@ -29,7 +29,15 @@ export function AccountFallbackShell({ children }: { children: React.ReactNode }
       if (event.key === "Escape") {
         event.preventDefault();
         close();
+        return;
       }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      const items = menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])');
+      if (!items?.length) return;
+      event.preventDefault();
+      const current = Array.from(items).indexOf(document.activeElement as HTMLElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : event.key === 'ArrowUp' ? (current - 1 + items.length) % items.length : (current + 1) % items.length;
+      items[next].focus();
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
