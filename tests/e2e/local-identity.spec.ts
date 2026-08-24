@@ -203,8 +203,8 @@ async function seedVisualPipeline(
     )
   ).rows;
   const stage = (name: string) => stages.find((item) => item.name === name)!.id;
-  await database.query(
-    `insert into leads(workspace_id,first_name,last_name,email_normalized,email_display,company,source,status,stage_id,owner_membership_id,visibility,created_at,updated_at) values($1,'Jordan','Lee','jordan.pipeline@example.test','jordan.pipeline@example.test','Acme North','website','open',$2,$4,'workspace','2026-08-20T12:00:00Z','2026-08-20T12:00:00Z'),($1,'Avery','Chen','avery.pipeline@example.test','avery.pipeline@example.test','Meridian Studio','referral','open',$3,$4,'workspace','2026-08-21T12:00:00Z','2026-08-21T12:00:00Z')`,
+  const leads = await database.query<{ id: string; first_name: string }>(
+    `insert into leads(workspace_id,first_name,last_name,email_normalized,email_display,company,source,status,stage_id,owner_membership_id,visibility,created_at,updated_at) values($1,'Jordan','Lee','jordan.pipeline@example.test','jordan.pipeline@example.test','Acme North','website','open',$2,$4,'workspace','2026-08-20T12:00:00Z','2026-08-20T12:00:00Z'),($1,'Avery','Chen','avery.pipeline@example.test','avery.pipeline@example.test','Meridian Studio','referral','open',$3,$4,'workspace','2026-08-21T12:00:00Z','2026-08-21T12:00:00Z') returning id,first_name`,
     [
       fixture.workspace.id,
       stage("New"),
@@ -212,6 +212,19 @@ async function seedVisualPipeline(
       fixture.members[0].id,
     ],
   );
+  const jordanId = leads.rows.find((lead) => lead.first_name === "Jordan")!.id;
+  const averyId = leads.rows.find((lead) => lead.first_name === "Avery")!.id;
+  const team = (
+    await database.query<{ id: string }>(
+      `insert into teams(workspace_id,name,name_normalized,status,created_by_membership_id) values($1,'Sales','sales','active',$2) returning id`,
+      [fixture.workspace.id, fixture.members[0].id],
+    )
+  ).rows[0];
+  await database.query(
+    `insert into lead_activities(workspace_id,lead_id,kind,body,created_by_membership_id,created_at) values($1,$2,'created','Lead created.',$3,'2026-08-20T12:00:00Z'),($1,$2,'note','Requested a pricing follow-up.',$3,'2026-08-21T10:30:00Z')`,
+    [fixture.workspace.id, jordanId, fixture.members[0].id],
+  );
+  return { jordanId, averyId, teamId: team.id };
 }
 
 async function visualBaseline(page: Page, name: string) {
@@ -629,6 +642,7 @@ test("Workspace navigation states and representative controls retain keyboard fo
   const fixture = await tenantBrowserFixture(page);
   for (const theme of ["light", "dark"] as const) {
     await setServerAppearance(fixture.users[0].id, theme);
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/crm");
     await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
     await page.goto("/workspace/settings");
@@ -677,7 +691,64 @@ test("Workspace navigation states and representative controls retain keyboard fo
     await tabTo(page, defaultLink);
     await expectVisibleFocus(defaultLink, aside);
 
-    await page.setViewportSize({ width: 1280, height: 900 });
+    const accountTrigger = page
+      .locator(".product-topbar")
+      .getByRole("button", { name: "Account menu" });
+    expect((await accountTrigger.boundingBox())!.height).toBeGreaterThanOrEqual(
+      44,
+    );
+    await tabTo(page, accountTrigger);
+    await accountTrigger.press("Enter");
+    const accountMenu = page.getByRole("menu", { name: "Account menu" });
+    const personalSettings = accountMenu.getByRole("menuitem", {
+      name: "Personal settings",
+    });
+    const signOut = accountMenu.getByRole("menuitem", { name: "Sign out" });
+    await expect(personalSettings).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(signOut).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(accountMenu).toBeHidden();
+    await expect(accountTrigger).toBeFocused();
+    await accountTrigger.click();
+    await visualViewportBaseline(
+      page,
+      `spectrum-account-menu-${theme}-desktop.png`,
+    );
+    await page.getByRole("heading", { name: "Workspace settings" }).click();
+    await expect(accountMenu).toBeHidden();
+    await expect(accountTrigger).toBeFocused();
+    await accountTrigger.click();
+    await page.route(
+      "**/api/auth/logout",
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "unexpected_error" } }),
+        });
+      },
+      { times: 1 },
+    );
+    await accountMenu.getByRole("menuitem", { name: "Sign out" }).click();
+    await expect(
+      accountMenu.getByRole("menuitem", { name: "Signing out…" }),
+    ).toBeDisabled();
+    await expect(accountMenu.getByRole("alert")).toContainText(
+      "session remains active",
+    );
+    await visualViewportBaseline(
+      page,
+      `spectrum-account-menu-${theme}-error.png`,
+    );
+    await page.unroute("**/api/auth/logout");
+    await accountMenu.getByRole("menuitem", { name: "Personal settings" }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(
+      page.getByRole("heading", { name: "Personal settings" }),
+    ).toBeVisible();
+
     await page.goto("/settings");
     await expect(
       page.getByRole("heading", { name: "Personal settings" }),
@@ -711,6 +782,29 @@ test("Workspace navigation states and representative controls retain keyboard fo
     }
     expect(await targets[2].getAttribute("class")).toContain("primary");
     expect(await targets[4].getAttribute("class")).toContain("secondary");
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto("/crm");
+    const mobileAccount = page
+      .locator(".product-mobile")
+      .getByRole("button", { name: "Account menu" });
+    expect((await mobileAccount.boundingBox())!.height).toBeGreaterThanOrEqual(
+      44,
+    );
+    await mobileAccount.click();
+    await expect(
+      page.getByRole("menu", { name: "Account menu" }),
+    ).toBeVisible();
+    await visualViewportBaseline(
+      page,
+      `spectrum-account-menu-${theme}-mobile.png`,
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(mobileAccount).toBeFocused();
     await page.setViewportSize({ width: 640, height: 720 });
     await page.goto("/settings");
     const zoomProxyInput = page.getByRole("textbox", { name: "Display name" });
@@ -1387,13 +1481,29 @@ test("Spectrum shell honors forced colours and reduced motion", async ({
   expect(
     transition.split(",").every((value) => Number.parseFloat(value) <= 0.01),
   ).toBe(true);
+  const account = page
+    .locator(".product-topbar")
+    .getByRole("button", { name: "Account menu" });
+  await account.click();
+  const accountMenu = page.getByRole("menu", { name: "Account menu" });
+  await expect(accountMenu).toBeVisible();
+  expect(
+    await account.evaluate(
+      (element) => getComputedStyle(element).borderTopStyle,
+    ),
+  ).not.toBe("none");
+  expect(
+    await accountMenu.evaluate(
+      (element) => getComputedStyle(element).borderTopStyle,
+    ),
+  ).not.toBe("none");
 });
 
 test("Pipeline semantic surfaces retain paired contrast, interaction, and responsive behavior", async ({
   page,
 }) => {
   const fixture = await tenantBrowserFixture(page);
-  await seedVisualPipeline(fixture);
+  const visual = await seedVisualPipeline(fixture);
   for (const theme of ["light", "dark"] as const) {
     await setServerAppearance(fixture.users[0].id, theme);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -1510,6 +1620,242 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
+
+    for (const width of [768, 640]) {
+      await page.setViewportSize({ width, height: 820 });
+      await page.goto("/crm");
+      await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
+      const leadAction = page.getByRole("link", { name: "Add lead" });
+      await tabTo(page, leadAction);
+      await expectVisibleFocus(leadAction, page.locator(".admin-content"));
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      await visualViewportBaseline(
+        page,
+        `spectrum-leads-${theme}-${width === 768 ? "tablet" : "zoom200"}.png`,
+      );
+      await page.goto("/crm/pipeline");
+      await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      await visualViewportBaseline(
+        page,
+        `spectrum-pipeline-${theme}-${width === 768 ? "tablet" : "zoom200"}.png`,
+      );
+    }
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/crm/leads/new");
+    await page.getByLabel("First name").fill("Morgan");
+    await page.getByLabel("Last name").fill("Reed");
+    await page.getByLabel("Work email").fill("morgan.reed@example.test");
+    await page.getByLabel("Company").fill("Northstar Labs");
+    await page.getByLabel("Phone").fill("+1 416 555 0100");
+    await page.getByLabel("Lead source").selectOption("website");
+    await page.getByLabel("First note").fill("Requested a product walkthrough.");
+    await page.getByLabel("Owner, admins, and selected teams").check();
+    await page.getByRole("checkbox", { name: "Sales" }).check();
+    const createInput = page.getByLabel("First name");
+    await createInput.focus();
+    await expectVisibleFocus(createInput, page.locator(".admin-content"));
+    expect(
+      await renderedTextContrast(
+        page.getByText("Visibility", { exact: true }),
+        page.locator("fieldset"),
+      ),
+    ).toBeGreaterThanOrEqual(4.5);
+    await visualViewportBaseline(page, `spectrum-lead-create-${theme}-filled.png`);
+
+    await page.goto("/crm/leads/new");
+    await page.getByRole("button", { name: "Save lead" }).click();
+    await expect(page.locator("#lead-errors")).toBeFocused();
+    await expect(page.getByLabel("Work email")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await visualViewportBaseline(page, `spectrum-lead-create-${theme}-invalid.png`);
+
+    await page.getByLabel("First name").fill("Morgan");
+    await page.getByLabel("Last name").fill("Reed");
+    await page.getByLabel("Work email").fill("morgan.reed@example.test");
+    await page.getByLabel("Company").fill("Northstar Labs");
+    await page.getByLabel("Lead source").selectOption("website");
+    let releaseCreateFailure!: () => void;
+    const createFailureGate = new Promise<void>((resolve) => {
+      releaseCreateFailure = resolve;
+    });
+    await page.route(
+      "**/api/workspaces/*/leads",
+      async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
+        await createFailureGate;
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "unexpected_error" } }),
+        });
+      },
+      { times: 1 },
+    );
+    await page.getByRole("button", { name: "Save lead" }).click();
+    const savingLead = page.getByRole("button", { name: "Saving lead…" });
+    await expect(savingLead).toBeDisabled();
+    await savingLead.evaluate((element) => {
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+    });
+    await visualViewportBaseline(page, `spectrum-lead-create-${theme}-busy.png`);
+    releaseCreateFailure();
+    await expect(page.getByText("We couldn’t save this lead. Your entries are still here.")).toBeVisible();
+    await expect(page.getByLabel("Company")).toHaveValue("Northstar Labs");
+    await page.getByRole("button", { name: "Save lead" }).focus();
+    await page.getByText("We couldn’t save this lead. Your entries are still here.").evaluate(
+      (element) => {
+        document.documentElement.style.scrollBehavior = "auto";
+        element.scrollIntoView({ block: "center" });
+      },
+    );
+    await visualViewportBaseline(page, `spectrum-lead-create-${theme}-recovery.png`);
+    await page.unroute("**/api/workspaces/*/leads");
+
+    await page.goto(`/crm/leads/${visual.jordanId}`);
+    await expect(page.getByRole("heading", { name: "Jordan Lee" })).toBeVisible();
+    await expect(page.locator("#ownerMembershipId")).toContainText("owner");
+    await expect(page.getByText("Requested a pricing follow-up.")).toBeVisible();
+    expect(
+      await renderedTextContrast(
+        page.locator(".activity-meta").first(),
+        page.locator(".activity-list li").first(),
+      ),
+    ).toBeGreaterThanOrEqual(4.5);
+    await visualBaseline(page, `spectrum-lead-detail-${theme}-populated.png`);
+    await page.getByLabel("Status").selectOption("lost");
+    const saveChanges = page.getByRole("button", { name: "Save changes" });
+    await saveChanges.click();
+    const dialog = page.getByRole("alertdialog", {
+      name: "Mark Jordan Lee as Lost?",
+    });
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await visualViewportBaseline(page, `spectrum-lead-detail-${theme}-confirm.png`);
+    await page.keyboard.press("Escape");
+    await expect(saveChanges).toBeFocused();
+
+    await page.reload();
+    await page.getByLabel("Company").fill("Northstar Labs");
+    await page.route("**/api/workspaces/*/leads/*", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: { id: visual.jordanId, version: 2 } }),
+      });
+    }, { times: 1 });
+    await page.getByRole("button", { name: "Save changes" }).click();
+    const savedFeedback = page.getByText("Lead updated.");
+    await expect(savedFeedback).toBeVisible();
+    await expect(page.getByLabel("Pipeline stage")).toBeFocused();
+    await savedFeedback.evaluate((element) => {
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+    });
+    await visualViewportBaseline(page, `spectrum-lead-detail-${theme}-saved.png`);
+    await page.unroute("**/api/workspaces/*/leads/*");
+
+    await page.getByLabel("Add a note").fill("Confirmed budget and timeline.");
+    let releaseActivityFailure!: () => void;
+    const activityFailureGate = new Promise<void>((resolve) => {
+      releaseActivityFailure = resolve;
+    });
+    await page.route(
+      "**/api/workspaces/*/leads/*/activities",
+      async (route) => {
+        await activityFailureGate;
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "unexpected_error" } }),
+        });
+      },
+      { times: 1 },
+    );
+    await page.getByRole("button", { name: "Add note" }).click();
+    const addingNote = page.getByRole("button", { name: "Adding note…" });
+    await expect(addingNote).toBeDisabled();
+    await addingNote.evaluate((element) => {
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+    });
+    await visualViewportBaseline(page, `spectrum-activity-${theme}-loading.png`);
+    releaseActivityFailure();
+    const noteError = page.getByText(/We couldn’t add that note/);
+    await expect(noteError).toBeVisible();
+    await noteError.evaluate((element) => {
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+    });
+    await visualViewportBaseline(page, `spectrum-activity-${theme}-error.png`);
+    await page.unroute("**/api/workspaces/*/leads/*/activities");
+    await page.route(
+      "**/api/workspaces/*/leads/*/activities",
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              id: "00000000-0000-4000-8000-000000000123",
+              kind: "note",
+              body: "Confirmed budget and timeline.",
+              created_at: "2026-08-22T09:00:00Z",
+            },
+          }),
+        }),
+      { times: 1 },
+    );
+    await page.getByRole("button", { name: "Try again" }).click();
+    const noteSuccess = page.getByText("Note added.");
+    await expect(noteSuccess).toBeVisible();
+    await noteSuccess.evaluate((element) => {
+      document.documentElement.style.scrollBehavior = "auto";
+      element.scrollIntoView({ block: "center" });
+    });
+    await visualViewportBaseline(page, `spectrum-activity-${theme}-success.png`);
+    await page.unroute("**/api/workspaces/*/leads/*/activities");
+
+    await page.goto(`/crm/leads/${visual.averyId}`);
+    await expect(page.getByRole("heading", { name: "Avery Chen" })).toBeVisible();
+    await expect(page.locator(".activity-list li")).toHaveCount(0);
+    await visualBaseline(page, `spectrum-activity-${theme}-empty.png`);
+  }
+
+  await setServerAppearance(fixture.users[0].id, "system");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const effective of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: effective });
+    await page.goto(`/crm/leads/${visual.jordanId}`);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-theme-preference",
+      "system",
+    );
+    await expect(page.locator("html")).toHaveAttribute("data-theme", effective);
+    await visualViewportBaseline(
+      page,
+      `spectrum-lead-detail-system-${effective}.png`,
+    );
+    expect(
+      (
+        await database.query<{ appearance: string }>(
+          "select appearance from user_preferences where user_id=$1",
+          [fixture.users[0].id],
+        )
+      ).rows[0].appearance,
+    ).toBe("system");
   }
 });
 

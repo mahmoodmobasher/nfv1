@@ -234,6 +234,21 @@ describe("design-system document boundary", () => {
       /(?:primary|secondary|danger|menu-button)[^{}]*:disabled\s*\{[\s\S]*?opacity:\s*\.(?!0)/,
     );
   });
+
+  it("keeps the supported account actions discoverable in the shared shell", () => {
+    const shell = readFileSync(
+      new URL("../src/app/product-shell.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(shell).toContain('aria-label="Account menu"');
+    expect(shell).toContain('aria-haspopup="menu"');
+    expect(shell).toContain('role="menu"');
+    expect(shell).toContain('role="menuitem"');
+    expect(shell).toContain('href="/settings"');
+    expect(shell).toContain("Personal settings");
+    expect(shell).toContain("Sign out");
+    expect(shell).not.toMatch(/global search|create menu|billing portal/i);
+  });
   it("uses the configured Session cookie and preserves CSP for stale or invalid values", () => {
     const prior = process.env.SESSION_COOKIE_NAME;
     process.env.SESSION_COOKIE_NAME = "uat_session_cookie";
