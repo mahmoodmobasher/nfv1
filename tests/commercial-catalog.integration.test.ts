@@ -29,7 +29,7 @@ suite("versioned commercial catalog authority", () => {
     const rows = (await pool.query(`select code,included_active_seats seats,currency_code currency,billing_unit,monthly_price_cents monthly,annual_monthly_equivalent_price_cents annual_equivalent from plan_catalog_entries where status='active' and effective_from<=now() and(effective_to is null or effective_to>now()) and code in('essentials','growth','scale') order by code,effective_from desc,created_at desc,id desc`)).rows;
     expect(rows).toEqual(catalog.map(item => ({ code: item.code, seats: item.seats, currency: "USD", billing_unit: "workspace_subscription", monthly: item.monthly, annual_equivalent: item.annualEquivalent })));
     expect(new Set(rows.map(row => row.code)).size).toBe(3);
-    expect((await pool.query(`select count(*)::int count from plan_catalog_entries where catalog_version='2026-08'`)).rows[0].count).toBe(3);
+    expect((await pool.query(`select count(*)::int count from plan_catalog_entries where catalog_version='2026-08-commercial-v1'`)).rows[0].count).toBe(3);
     expect((await pool.query(`select count(*)::int count from workspace_entitlement_snapshots`)).rows[0].count).toBe(0);
   });
 
@@ -60,5 +60,19 @@ suite("versioned commercial catalog authority", () => {
   it("rejects partial or invalid typed pricing tuples", async () => {
     await expect(pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,currency_code,feature_flags,trial_days,effective_from) values('invalid-price','1','Invalid','draft','["monthly"]',1,'USD','{}',0,now())`)).rejects.toMatchObject({code:"23514"});
     await expect(pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,currency_code,billing_unit,monthly_price_cents,annual_monthly_equivalent_price_cents,feature_flags,trial_days,effective_from) values('invalid-unit','1','Invalid','draft','["monthly"]',1,'usd','per_user',1,1,'{}',0,now())`)).rejects.toMatchObject({code:"23514"});
+  });
+
+  it("rejects a newer untyped active row without any provisioning side effect", async () => {
+    const user=(await pool.query<{id:string}>(`insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at) values($1,$1,'Untyped Candidate','active',now()) returning id`,[`untyped-${crypto.randomUUID()}@catalog.test`])).rows[0];
+    const session=(await pool.query<{id:string}>(`insert into sessions(user_id,session_hash,security_version,idle_expires_at,absolute_expires_at,authenticated_at,auth_method) values($1,$2,1,now()+interval '1 hour',now()+interval '1 day',now(),'password') returning id`,[user.id,crypto.randomUUID()])).rows[0];
+    await pool.query(`insert into onboarding_progress(user_id,selected_plan_code,billing_cadence,current_step) values($1,'growth','monthly','workspace')`,[user.id]);
+    await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,feature_flags,trial_days,effective_from) values('growth',$1,'Untyped Growth','active','["monthly","annual"]',5,'{}',14,now()-interval '1 second')`,[`future-untyped-${crypto.randomUUID()}`]);
+
+    await expect(provisionWorkspace(pool,{userId:user.id,sessionId:session.id,name:"Must Not Exist",idempotencyKey:crypto.randomUUID()})).rejects.toMatchObject({code:"invalid_plan"});
+    expect((await pool.query(`select selected_plan_code,billing_cadence,current_step,workspace_id from onboarding_progress where user_id=$1`,[user.id])).rows[0]).toEqual({selected_plan_code:"growth",billing_cadence:"monthly",current_step:"workspace",workspace_id:null});
+    expect((await pool.query(`select active_workspace_id from sessions where id=$1`,[session.id])).rows[0].active_workspace_id).toBeNull();
+    for(const table of ["workspaces","workspace_memberships","workspace_entitlement_snapshots","pipeline_stages","audit_events","outbox_messages","idempotency_records"]){
+      expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count,table).toBe(0);
+    }
   });
 });

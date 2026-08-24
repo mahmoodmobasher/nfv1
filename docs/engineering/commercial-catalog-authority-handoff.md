@@ -24,7 +24,9 @@ Migration `0012_commercial_catalog_authority.sql` adds a nullable, all-or-none p
 
 Older active Essentials/Growth/Scale catalog rows are retained and retired with bounded effective dates. The migration inserts exactly one typed active row per self-service plan and aborts on a conflicting pre-existing copy of the new version.
 
-The migration does not insert, update, or delete `workspace_entitlement_snapshots`. Existing Workspace limits were already authoritative at 1/5/15 and remain byte-stable. New provisioning deterministically selects the newest effective catalog row and copies its unchanged 1/5/15 seats plus `2026-08-commercial-v1` into the new Workspace snapshot. Owner creation remains the first active seat.
+Before any older row is retired, migration validation compares the complete Product-authorized shape of all three new-version rows: code, version, name, status, cadence set, seat count, currency, billing unit, both price fields, feature flags, trial days, and exact effective-date policy. Any material mismatch aborts the migration transaction. PostgreSQL regressions cover conflicting name, cadence, features, trial duration, and future effective date and prove the prior active rows and schema remain unchanged after rollback.
+
+The migration does not insert, update, or delete `workspace_entitlement_snapshots`. Existing Workspace limits were already authoritative at 1/5/15 and remain byte-stable. New provisioning deterministically selects the newest effective catalog row before checking cadence and then fails closed unless that row is exact version `2026-08-commercial-v1`, has the authorized seat count, accepts the persisted cadence, and contains complete positive USD `workspace_subscription` pricing. It copies the unchanged 1/5/15 seats plus the accepted catalog version into the new Workspace snapshot. Owner creation remains the first active seat. A newer untyped active row cannot be skipped in favor of older authority and cannot create any Workspace, Membership, entitlement, selection, success Audit, Outbox, pipeline, or idempotency state.
 
 Migration rerun is ledger-idempotent. Rollback should normally retain this additive migration and revert consumers: old application code ignores the nullable columns and continues to provision the same seat limits. Deleting the new catalog version after new Workspaces reference it would break historical catalog joins and is not an approved rollback. A corrective forward catalog version is required if commercial values change.
 
@@ -39,9 +41,9 @@ All active-catalog lookups should use the deterministic order `effective_from de
 - Diff check, ESLint, and TypeScript: pass.
 - Migration direct contract: 2/2 pass.
 - Fresh migration apply and immediate ledger rerun: pass/pass.
-- Focused PostgreSQL catalog/provisioning/capacity suite: 4/4 pass.
-- Full serialized PostgreSQL suite: 143/143 pass across 17 files.
-- Full direct suite: 248 pass; 143 PostgreSQL-gated skips.
+- Focused PostgreSQL catalog/provisioning/capacity and migration-conflict suites: 10/10 pass.
+- Full serialized PostgreSQL suite: 149/149 pass across 18 files.
+- Full direct suite: 248 pass; 149 PostgreSQL-gated skips.
 - Production build: pass; 42/42 static generation tasks and all routes emitted.
 - Forward rehearsal from migrations 0000–0011: pass; the pre-existing Workspace entitlement snapshot was unchanged byte-for-byte while the three typed active rows became authoritative.
 - Database health: pass.

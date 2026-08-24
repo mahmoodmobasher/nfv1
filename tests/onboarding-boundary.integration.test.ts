@@ -31,10 +31,11 @@ suite("onboarding/workspace boundary validation", () => {
   afterAll(async () => pool.end());
   beforeEach(async () => {
     await pool.query("truncate lead_activities,lead_visible_teams,leads,pipeline_stages,team_memberships,teams,workspace_invitations,audit_events,outbox_messages,idempotency_records,workspace_entitlement_snapshots,workspace_memberships,roles,oidc_transactions,identity_tokens,sessions,identity_credentials,onboarding_progress,workspaces,users,rate_limit_windows restart identity cascade");
-    await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,feature_flags,trial_days,effective_from)
-      values ('growth','boundary-v1','Growth','active','["monthly","annual"]',5,'{"pipeline":true}',14,now()-interval '1 day'),
-             ('scale','boundary-v1','Scale','active','["monthly","annual"]',15,'{"pipeline":true,"teams":true}',21,now()-interval '1 day')
-      on conflict(code,catalog_version) do update set status='active',effective_from=excluded.effective_from,effective_to=null`);
+    await pool.query(`update plan_catalog_entries set status='retired',effective_to=greatest(now(),effective_from+interval '1 microsecond') where code in('growth','scale') and catalog_version<>'2026-08-commercial-v1' and status='active'`);
+    await pool.query(`insert into plan_catalog_entries(code,catalog_version,name,status,allowed_cadences,included_active_seats,currency_code,billing_unit,monthly_price_cents,annual_monthly_equivalent_price_cents,feature_flags,trial_days,effective_from,effective_to)
+      values ('growth','2026-08-commercial-v1','Growth','active','["monthly","annual"]',5,'USD','workspace_subscription',8999,5700,'{"crm":true,"automation":true}',14,'2026-08-24T00:00:00Z',null),
+             ('scale','2026-08-commercial-v1','Scale','active','["monthly","annual"]',15,'USD','workspace_subscription',11999,10700,'{"crm":true,"automation":true,"advanced_roles":true}',14,'2026-08-24T00:00:00Z',null)
+      on conflict(code,catalog_version) do update set name=excluded.name,status='active',allowed_cadences=excluded.allowed_cadences,included_active_seats=excluded.included_active_seats,currency_code=excluded.currency_code,billing_unit=excluded.billing_unit,monthly_price_cents=excluded.monthly_price_cents,annual_monthly_equivalent_price_cents=excluded.annual_monthly_equivalent_price_cents,feature_flags=excluded.feature_flags,trial_days=excluded.trial_days,effective_from=excluded.effective_from,effective_to=null`);
   });
 
   it("persists selection before provisioning and snapshots exact workspace entitlement values only on provisioning", async () => {
@@ -51,8 +52,8 @@ suite("onboarding/workspace boundary validation", () => {
     expect((await pool.query("select count(*) from workspaces")).rows[0].count).toBe("0");
     const session = (await pool.query<{ id: string }>("select id from sessions where user_id=$1", [user.id])).rows[0];
     const provisioned = await provisionWorkspace(pool, { userId: user.id, sessionId: session.id, name: "Boundary Workspace", idempotencyKey: crypto.randomUUID() });
-    expect((await pool.query("select status,plan_code,billing_cadence,trial_ends_at-trial_started_at trial from workspaces where id=$1", [provisioned.workspaceId])).rows[0]).toMatchObject({ status: "active", plan_code: "scale", billing_cadence: "annual", trial: { days: 21 } });
-    expect((await pool.query("select plan_code,catalog_version,effective_limits from workspace_entitlement_snapshots where workspace_id=$1", [provisioned.workspaceId])).rows[0]).toMatchObject({ plan_code: "scale", catalog_version: "boundary-v1", effective_limits: { activeSeats: 15 } });
+    expect((await pool.query("select status,plan_code,billing_cadence,trial_ends_at-trial_started_at trial from workspaces where id=$1", [provisioned.workspaceId])).rows[0]).toMatchObject({ status: "active", plan_code: "scale", billing_cadence: "annual", trial: { days: 14 } });
+    expect((await pool.query("select plan_code,catalog_version,effective_limits from workspace_entitlement_snapshots where workspace_id=$1", [provisioned.workspaceId])).rows[0]).toMatchObject({ plan_code: "scale", catalog_version: "2026-08-commercial-v1", effective_limits: { activeSeats: 15 } });
     expect((await pool.query("select (select count(*)::int from roles where workspace_id=$1) roles,(select count(*)::int from workspace_memberships where workspace_id=$1 and status='active') memberships,(select count(*)::int from workspace_memberships m join roles r on r.id=m.role_id and r.workspace_id=m.workspace_id where m.workspace_id=$1 and m.status='active' and r.code='owner') owners", [provisioned.workspaceId])).rows[0]).toEqual({ roles: 3, memberships: 1, owners: 1 });
   });
 

@@ -20,17 +20,6 @@ ALTER TABLE "plan_catalog_entries" ADD CONSTRAINT "plan_catalog_pricing_tuple_ch
         and "plan_catalog_entries"."monthly_price_cents" > 0
         and "plan_catalog_entries"."annual_monthly_equivalent_price_cents" > 0
       ));--> statement-breakpoint
-UPDATE "plan_catalog_entries"
-SET
-	"status" = 'retired',
-	"effective_to" = greatest(
-		'2026-08-24T00:00:00Z'::timestamptz,
-		"effective_from" + interval '1 microsecond'
-	),
-	"updated_at" = now()
-WHERE "code" IN ('essentials', 'growth', 'scale')
-	AND "catalog_version" <> '2026-08-commercial-v1'
-	AND "status" = 'active';--> statement-breakpoint
 INSERT INTO "plan_catalog_entries" (
 	"code",
 	"catalog_version",
@@ -52,19 +41,51 @@ INSERT INTO "plan_catalog_entries" (
 ON CONFLICT ("code", "catalog_version") DO NOTHING;--> statement-breakpoint
 DO $$
 BEGIN
-	IF (
-		SELECT count(*)
-		FROM "plan_catalog_entries"
-		WHERE "catalog_version" = '2026-08-commercial-v1'
-			AND "status" = 'active'
-			AND "currency_code" = 'USD'
-			AND "billing_unit" = 'workspace_subscription'
-			AND (
-				("code" = 'essentials' AND "included_active_seats" = 1 AND "monthly_price_cents" = 6999 AND "annual_monthly_equivalent_price_cents" = 2400)
-				OR ("code" = 'growth' AND "included_active_seats" = 5 AND "monthly_price_cents" = 8999 AND "annual_monthly_equivalent_price_cents" = 5700)
-				OR ("code" = 'scale' AND "included_active_seats" = 15 AND "monthly_price_cents" = 11999 AND "annual_monthly_equivalent_price_cents" = 10700)
-			)
-	) <> 3 THEN
+	IF (SELECT count(*) FROM "plan_catalog_entries" WHERE "catalog_version" = '2026-08-commercial-v1') <> 3
+		OR NOT EXISTS (
+			SELECT 1 FROM "plan_catalog_entries" WHERE
+				"code" = 'essentials' AND "catalog_version" = '2026-08-commercial-v1'
+				AND "name" = 'Essentials' AND "status" = 'active'
+				AND "allowed_cadences" = '["monthly","annual"]'::jsonb
+				AND "included_active_seats" = 1 AND "currency_code" = 'USD'
+				AND "billing_unit" = 'workspace_subscription'
+				AND "monthly_price_cents" = 6999 AND "annual_monthly_equivalent_price_cents" = 2400
+				AND "feature_flags" = '{"crm":true}'::jsonb AND "trial_days" = 14
+				AND "effective_from" = '2026-08-24T00:00:00Z'::timestamptz AND "effective_to" IS NULL
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM "plan_catalog_entries" WHERE
+				"code" = 'growth' AND "catalog_version" = '2026-08-commercial-v1'
+				AND "name" = 'Growth' AND "status" = 'active'
+				AND "allowed_cadences" = '["monthly","annual"]'::jsonb
+				AND "included_active_seats" = 5 AND "currency_code" = 'USD'
+				AND "billing_unit" = 'workspace_subscription'
+				AND "monthly_price_cents" = 8999 AND "annual_monthly_equivalent_price_cents" = 5700
+				AND "feature_flags" = '{"crm":true,"automation":true}'::jsonb AND "trial_days" = 14
+				AND "effective_from" = '2026-08-24T00:00:00Z'::timestamptz AND "effective_to" IS NULL
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM "plan_catalog_entries" WHERE
+				"code" = 'scale' AND "catalog_version" = '2026-08-commercial-v1'
+				AND "name" = 'Scale' AND "status" = 'active'
+				AND "allowed_cadences" = '["monthly","annual"]'::jsonb
+				AND "included_active_seats" = 15 AND "currency_code" = 'USD'
+				AND "billing_unit" = 'workspace_subscription'
+				AND "monthly_price_cents" = 11999 AND "annual_monthly_equivalent_price_cents" = 10700
+				AND "feature_flags" = '{"crm":true,"automation":true,"advanced_roles":true}'::jsonb AND "trial_days" = 14
+				AND "effective_from" = '2026-08-24T00:00:00Z'::timestamptz AND "effective_to" IS NULL
+		) THEN
 		RAISE EXCEPTION 'commercial catalog 2026-08-commercial-v1 conflicts with Product authority';
 	END IF;
-END $$;
+END $$;--> statement-breakpoint
+UPDATE "plan_catalog_entries"
+SET
+	"status" = 'retired',
+	"effective_to" = greatest(
+		'2026-08-24T00:00:00Z'::timestamptz,
+		"effective_from" + interval '1 microsecond'
+	),
+	"updated_at" = now()
+WHERE "code" IN ('essentials', 'growth', 'scale')
+	AND "catalog_version" <> '2026-08-commercial-v1'
+	AND "status" = 'active';
