@@ -76,6 +76,29 @@ async function assertPlanValueContrast(page: Page) {
   for (const value of ["$24", "$107", "Custom"] as const) expect(await page.getByText(value, { exact: true }).evaluate((element) => element.closest(".plan-card")?.classList.contains("selected"))).toBe(false);
 }
 
+async function assertOwnerCopyContrast(page: Page, copy: string) {
+  const target = page.getByText(copy, { exact: true });
+  await expect(target).toBeVisible();
+  expect(await textContrast(target), copy).toBeGreaterThanOrEqual(4.5);
+}
+
+async function assertSelectedPlanContained(page: Page) {
+  const geometry = await page.locator(".spectrum-state-sheet article").filter({ has: page.getByRole("heading", { name: "Selection" }) }).evaluate((article) => {
+    const card = article.querySelector<HTMLElement>(".plan-card.selected")!;
+    const label = card.querySelector<HTMLElement>(".selected-label")!;
+    const articleRect = article.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const labelRect = label.getBoundingClientRect();
+    return { article: { left: articleRect.left, right: articleRect.right }, card: { left: cardRect.left, right: cardRect.right, top: cardRect.top, bottom: cardRect.bottom }, label: { left: labelRect.left, right: labelRect.right, top: labelRect.top, bottom: labelRect.bottom } };
+  });
+  expect(geometry.card.left).toBeGreaterThanOrEqual(geometry.article.left);
+  expect(geometry.card.right).toBeLessThanOrEqual(geometry.article.right);
+  expect(geometry.label.left).toBeGreaterThanOrEqual(geometry.card.left);
+  expect(geometry.label.right).toBeLessThanOrEqual(geometry.card.right);
+  expect(geometry.label.top).toBeGreaterThanOrEqual(geometry.card.top);
+  expect(geometry.label.bottom).toBeLessThanOrEqual(geometry.card.bottom);
+}
+
 async function keyboardFocus(page: Page, target: Locator, surface: Locator) {
   await target.focus();
   await page.keyboard.press("Shift+Tab");
@@ -112,7 +135,7 @@ async function installWebsiteStateSheet(page: Page) {
     element.innerHTML = `<section class="spectrum-state-sheet" aria-label="Website component state sheet">
       <h1>Website component states</h1>
       <article><h2>Plan values</h2><div class="plan-card"><p class="plan-price"><b>$24</b><span>Unselected</span></p></div><div class="plan-card selected"><p class="plan-price"><b>$57</b><span>Selected</span></p></div><div class="plan-card"><p class="plan-price"><b>$107</b><span>Unselected</span></p></div><div class="plan-card"><p class="plan-price"><b>Custom</b><span>Enterprise</span></p></div></article>
-      <article><h2>Selection</h2><div class="cadence"><a href="#monthly">Monthly</a><a class="active" href="#annual">Annual · Selected</a></div><span class="selected-label">✓ Selected plan</span></article>
+      <article><h2>Selection</h2><div class="cadence"><a href="#monthly">Monthly</a><a class="active" href="#annual">Annual · Selected</a></div><div class="plan-card selected" aria-current="true"><span class="selected-label">✓ Selected plan</span><h3>Growth</h3><p>One company Workspace</p></div></article>
       <article><h2>Actions</h2><button class="primary">Primary action</button><button class="primary" disabled>Primary disabled</button><button class="secondary">Secondary action</button><button class="secondary" disabled>Secondary disabled</button></article>
       <article><h2>Fields</h2><label class="field"><span>Company name</span><input value="Northstar Revenue" readonly></label><label class="field"><span>Invalid company name</span><input aria-invalid="true" value="" readonly></label></article>
       <article><h2>Feedback</h2><div class="alert info">Plan details loaded.</div><div class="alert success">Workspace ready.</div><div class="alert error">Workspace creation failed.</div></article>
@@ -185,8 +208,10 @@ test("P4-11 through P4-15 Workspace states have exact paired responsive evidence
       await page.setViewportSize({ width, height });
       await page.goto("/workspace/create");
       const field = page.getByLabel("Company or Workspace name");
+      await expect.poll(() => field.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__reactFiber$")))).toBe(true);
       await keyboardFocus(page, field, page.locator(".flow-card"));
       expect(await textContrast(page.getByText("Your subscription includes one Workspace for this company.", { exact: false }))).toBeGreaterThanOrEqual(4.5);
+      await assertOwnerCopyContrast(page, "Owner is distinct from Admin and controls subscription, ownership and governance. Invited Admins operate only within server-authorized limits.");
       await assertNoOverflow(page);
       await screenshot(page, `phase4-workspace-create-${theme}-${label}.png`);
     }
@@ -230,6 +255,7 @@ test("P4-11 through P4-15 Workspace states have exact paired responsive evidence
     await page.goto("/workspace/create");
     await expect(page.locator("html")).toHaveAttribute("data-theme-preference", "system");
     await expect(page.locator("html")).toHaveAttribute("data-theme", effective);
+    await assertOwnerCopyContrast(page, "Owner is distinct from Admin and controls subscription, ownership and governance. Invited Admins operate only within server-authorized limits.");
     await assertNoOverflow(page);
     await screenshot(page, `phase4-workspace-create-system-${effective}.png`);
   }
@@ -313,10 +339,26 @@ test("P4-22 website component-state sheet has paired desktop and 320 reflow evid
       await page.goto("/select-plan?plan=growth&cadence=annual");
       await installWebsiteStateSheet(page);
       await assertPlanValueContrast(page);
+      await assertOwnerCopyContrast(page, "Owner is included in active seats.");
+      await expect(page.locator(".spectrum-state-sheet .selected-label").filter({ hasText: "Selected plan" })).toBeVisible();
+      await assertSelectedPlanContained(page);
       for (const text of ["Primary action", "Secondary action", "Plan details loaded.", "Workspace ready.", "Workspace creation failed.", "Sole initial Owner", "Northstar Revenue"] as const) expect(await textContrast(page.getByText(text, { exact: true }).first()), text).toBeGreaterThanOrEqual(4.5);
       await keyboardFocus(page, page.getByRole("button", { name: "Primary action" }), page.locator(".spectrum-state-sheet"));
       await assertNoOverflow(page);
       await screenshot(page, `phase4-website-component-states-${theme}-${label}.png`);
     }
   }
+
+  await setAppearance(user.id, "system");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const effective of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: effective, forcedColors: "none" });
+    await page.goto("/select-plan?plan=growth&cadence=annual");
+    await installWebsiteStateSheet(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme-preference", "system");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", effective);
+    await assertOwnerCopyContrast(page, "Owner is included in active seats.");
+    await assertNoOverflow(page);
+  }
+  expect((await database.query<{ appearance: string }>("select appearance from user_preferences where user_id=$1", [user.id])).rows[0].appearance).toBe("system");
 });

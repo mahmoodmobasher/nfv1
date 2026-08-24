@@ -473,6 +473,8 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .spectrum-state-sheet>h1 { grid-column: 1/-1; margin: 0; }
 .spectrum-state-sheet article { display: grid; align-content: start; gap: var(--nf-space-3); padding: var(--nf-space-4); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-raised); }
 .spectrum-state-sheet article>* { width: 100%; }
+.spectrum-state-sheet article>.plan-card { width: auto; min-width: 0; box-sizing: border-box; }
+.spectrum-state-sheet article>.cadence { display: flex; width: auto; min-width: 0; margin: 0; }
 
 /* Spectrum experience configurations remain thin; routes consume the canonical foundation. */
 .experience-product { background: var(--nx-canvas); color: var(--nx-text-strong); }
@@ -499,6 +501,7 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .website-root .plan-summary { padding: var(--nf-space-6); }
 .website-root .flow-card h1,.website-root .pricing h1 { margin: var(--nf-space-2) 0 var(--nf-space-3); font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -.02em; }
 .website-root .lead,.website-root .plan-card>p,.website-root .trial,.website-root .reassurance,.website-root .helper { color: var(--nx-text-muted); }
+.website-root .owner-panel p { color: var(--nx-text); }
 .website-root .below { color: var(--nx-text); }
 .website-root .error-summary:focus { outline: 2px solid var(--nx-focus); outline-offset: 3px; }
 .website-root .primary,.website-root .secondary,.website-root .google-button { border-radius: var(--nf-radius-control); font-weight: 600; }
