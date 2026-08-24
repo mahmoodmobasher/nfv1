@@ -57,6 +57,23 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: future runbook tooling must distinguish Docker env-file serialization from shell syntax and avoid sourcing provider configuration.
 - Blocks: none after the successful evidence rerun.
 
+### UAT-GAP-010 — Remote Compose migration evidence consumed the command stream
+
+- Date/environment/release/commit: 2026-08-24; UAT `v0.5.0-uat.3`; `82b8104`.
+- Category: Operations / Test evidence.
+- Observed versus expected: migration containers exited successfully, but attached `docker compose run` consumed the remaining SSH heredoc and prevented subsequent evidence lines; expected deterministic exit/idempotency output.
+- Severity: P3.
+- Affected journeys/tenants/data: evidence capture only; ledger and application data were unchanged.
+- Evidence and reproduction: direct/named container migration exited 0 while the wrapper ended before its following statements.
+- Root cause: Compose run retained stdin from the remote script.
+- Containment/rollback: stopped interpretation of missing output as migration failure; inspected immutable container result and reran with `-T` plus `</dev/null`.
+- Fall-forward owner/target: Release Engineering; closed during `.3` preflight and included in the `UAT-GAP-005` automation follow-up.
+- Acceptance criteria: two explicit zero exits plus exact 12/head ledger after stdin-detached runs.
+- Dependencies: reviewed deployment harness.
+- Status and verification: closed; apply and idempotent rerun passed with ledger 12/head `1787501845245`.
+- Residual risk: ad hoc future wrappers can regress until automated.
+- Blocks: none.
+
 ## Open blocking
 
 ### UAT-GAP-002 — Candidate runtime rejects protected UAT sender configuration
@@ -85,6 +102,12 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status: technical pre-switch compatibility **PASS**. Gap remains open blocking until Architecture and backend/security accept `docs/release/uat-option-a-sender-pre-switch-evidence.md`, Product separately authorizes a new immutable attempt, the protected candidate becomes live through the approved atomic workflow, and real-email/public-edge/full UAT evidence passes.
 - Residual risk: provider verification and non-delivery authentication do not prove current inbox receipt; no live service consumes the staged correction yet. Never mutate rejected `v0.5.0-uat.2`; fall forward no earlier than `v0.5.0-uat.3` after review.
 
+#### v0.5.0-uat.3 deployment update — runtime parity passed, live acceptance deferred
+
+- The exact `.3` migration, app readiness, and worker startup passed using the protected Option A environment after atomic switch.
+- No controlled-recipient email journey ran because the earlier mandatory Caddy matrix failed at `UAT-GAP-008` and forced rollback.
+- Live authority returned to the prior environment, so Option A remains technically proven but not current live configuration. The gap remains release-blocking until a later accepted attempt repeats parity and completes the authorized real-email journeys.
+
 ### UAT-GAP-001 — Edge overwrote application no-referrer policy
 
 - Date/environment/release/commit: discovered 2026-08-24 on UAT `v0.5.0-uat.1` / `9162a90`; remediation integrated at `05c4c02`.
@@ -102,7 +125,46 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: no risk added to currently retained healthy release; the remediated edge cannot be declared live-closed until public verification succeeds.
 - Blocks: UAT acceptance of the Nexa Spectrum release; Phase 5 and production readiness until live closure evidence exists.
 
+#### v0.5.0-uat.3 public-edge update
+
+- The integrated Caddy `?Referrer-Policy` behavior preserved application `no-referrer` on ten initial invitation/verification probes, including HTML/RSC and denied invitation completion.
+- Closure did not complete because the application omitted `no-referrer` on verification/reset completion denial responses (`UAT-GAP-008`). `.3` was rolled back and rejected; the full matrix must restart on a new fall-forward candidate.
+
+### UAT-GAP-008 — Verification/reset completion denials omit application no-referrer
+
+- Date/environment/release/commit: 2026-08-24; public UAT rejected `v0.5.0-uat.3`; `82b81044443a61d25926608d57c943b9ed89dfe1`.
+- Category: Security / Application / Edge/Infrastructure.
+- Observed versus expected: CSRF-denied POSTs to `/verify-email/complete` and `/reset-password/complete` returned HTTP 403 with exactly one edge default `strict-origin-when-cross-origin`; `f907e70` requires exactly one application `no-referrer` for verification/reset terminal and denied outcomes.
+- Severity: P1.
+- Affected journeys/tenants/data: verification and password-reset terminal/denial privacy for every UAT identity flow. No token or tenant data was observed disclosed; the accepted referrer boundary was absent.
+- Evidence and reproduction: deploy exact `.3`, POST each completion route without valid CSRF, disable redirects, and inspect the single public Referrer-Policy. Stop before broader testing.
+- Root cause/current hypothesis: `src/proxy.ts` sets `no-referrer` for capture/clean token documents but its token-document route set omits verification/reset completion endpoints, leaving Caddy to apply the correct upstream-silent default.
+- Containment/rollback: immediately restored `e58c22a` application/config authority and recreated only app, worker, and Caddy; health/readiness, ledger, restarts, and bounded logs passed.
+- Fall-forward owner/target: Backend + Security + Architecture; new application commit and no earlier than `v0.5.0-uat.4`.
+- Acceptance criteria: server-authored `no-referrer` on every verification/reset completion success, invalid, stale, replay, CSRF/origin denial, and terminal outcome; HTML/RSC/API direct and public-edge positive/negative tests; exactly one non-combined policy; preserved CSP/cache/cookies/Location/Vary/token privacy; complete `f907e70` matrix.
+- Dependencies: Backend implementation, focused security peer review, Architecture acceptance, integration, and separate Product deployment authorization.
+- Status and verification: open blocking; `.3` permanently rejected.
+- Residual risk: route-list drift can recur unless policy coverage is asserted from one canonical protected-route contract.
+- Blocks: UAT acceptance, Phase 5, and production readiness.
+
 ## Open non-blocking
+
+### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
+
+- Date/environment/release/commit: 2026-08-24; public UAT `v0.5.0-uat.3`; `82b8104`.
+- Category: Edge/Infrastructure / Test evidence.
+- Observed versus expected: invitation capture emitted two identical `Cache-Control: private, no-store` fields from upstream application policy plus existing Caddy Workspace defense; expected preserved effective private/no-store behavior with an Architecture-reviewed canonical header shape.
+- Severity: P3.
+- Affected journeys/tenants/data: Workspace token/private responses; no weakening or data disclosure observed.
+- Evidence and reproduction: GET invitation capture with a synthetic token and count public cache fields without retaining cookie/token values.
+- Root cause/current hypothesis: overlapping application header and unchanged `@privateDocuments` Caddy setter.
+- Containment/rollback: effective policy remained private/no-store; `.3` rollback occurred for unrelated P1 `UAT-GAP-008`.
+- Fall-forward owner/target: Architecture + Edge/Backend, next bounded header-contract review.
+- Acceptance criteria: decide whether identical repeated fields are accepted defense-in-depth or must be canonicalized; if changed, prove no route loses private/no-store and static caching remains public immutable.
+- Dependencies: Architecture decision; must not broaden the accepted Caddy remediation without review.
+- Status and verification: open non-blocking warning.
+- Residual risk: intermediary variance or evidence ambiguity despite equivalent effective policy.
+- Blocks: none unless Architecture reclassifies.
 
 ### UAT-GAP-005 — Release evidence commands remain partly ad hoc
 
