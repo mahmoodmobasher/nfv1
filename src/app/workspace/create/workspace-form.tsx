@@ -12,7 +12,6 @@ type PlanContext = { code: PlanKey; name: string; cadence: Cadence; seats: numbe
 export function WorkspaceForm({ plan }: { plan: PlanContext }) {
   const summary = useRef<HTMLDivElement>(null), idempotencyKey = useRef<string | null>(null), submitting = useRef(false);
   const [busy, setBusy] = useState(false), [formError, setFormError] = useState(""), [nameError, setNameError] = useState("");
-  const additionalSeats = Math.max(0, plan.seats - 1);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();

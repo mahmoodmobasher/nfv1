@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { FormEvent, RefObject, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Field, PlanSummary, ProviderControl, query, Requirements, Shell, type PlanPresentation } from "./components";
 import { validEmail, validPassword } from "./logic";
 import { securePost } from "./api";
@@ -14,7 +14,7 @@ function Summary({ errors, summary }: { errors: Errors; summary: RefObject<HTMLD
 }
 
 export function RegisterForm({provider,presentation}:{provider:{mode:"disabled"|"fixture"};presentation?:PlanPresentation}) {
-  const params=useSearchParams(),continuation=params.get("next")==="/workspace/invitations/accept"?"/workspace/invitations/accept":null, summary = useRef<HTMLDivElement>(null);
+  const params=useSearchParams(),router=useRouter(),continuation=params.get("next")==="/workspace/invitations/accept"?"/workspace/invitations/accept":null, summary = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false), [password, setPassword] = useState(""), [errors, setErrors] = useState<Errors>({});
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault(); const data = new FormData(event.currentTarget), next: Errors = {}, email = String(data.get("email"));
@@ -23,7 +23,7 @@ export function RegisterForm({provider,presentation}:{provider:{mode:"disabled"|
     if (!validPassword(password)) next.password = "Use at least 12 characters, including a number and a symbol.";
     setErrors(next); if (Object.keys(next).length) return focusSummary(summary);
     if (!presentation) { setErrors({form:"Choose a currently available plan before registering."}); return focusSummary(summary); }
-    setBusy(true); try { const { response } = await securePost("/api/auth/register", { email, displayName: String(data.get("name")), password, planCode: presentation.plan, cadence: presentation.cadence,...(continuation?{continuation}:{}) }); if (!response.ok) throw new Error("registration_failed"); sessionStorage.setItem("nexaDemoEmail", email); window.location.href = `/verify-email?${query(presentation.plan, presentation.cadence,continuation?`&next=${encodeURIComponent(continuation)}`:"")}`; } catch { setErrors({ form: "We couldn’t create your account. Try again." }); focusSummary(summary); setBusy(false); }
+    setBusy(true); try { const { response } = await securePost("/api/auth/register", { email, displayName: String(data.get("name")), password, planCode: presentation.plan, cadence: presentation.cadence,...(continuation?{continuation}:{}) }); if (!response.ok) throw new Error("registration_failed"); sessionStorage.setItem("nexaDemoEmail", email); router.push(`/verify-email?${query(presentation.plan, presentation.cadence,continuation?`&next=${encodeURIComponent(continuation)}`:"")}`); } catch { setErrors({ form: "We couldn’t create your account. Try again." }); focusSummary(summary); setBusy(false); }
   }
   return <Shell step={2} aside={<PlanSummary presentation={presentation} />}><p className="eyebrow">Company account</p><h1>Create your company account</h1><p className="lead">After your work email is verified, you’ll create the one company Workspace included with this subscription and become its sole initial Owner.</p><ProviderControl mode={provider.mode} /><Summary errors={errors} summary={summary} />{errors.form&&<Alert kind="error">{errors.form}</Alert>}<form onSubmit={submit} noValidate aria-busy={busy}><Field label="Full name" name="name" error={errors.name} autoComplete="name" /><Field label="Work email" name="email" type="email" error={errors.email} autoComplete="email" /><Field label="Password" name="password" type="password" error={errors.password} onChange={setPassword} autoComplete="new-password" /><Requirements value={password} /><button className="primary" disabled={busy||!presentation}>{busy ? "Creating account…" : "Create account"}</button></form><p className="helper">No payment is collected in this environment. Production billing and plan changes are not connected.</p><p className="below">Already have an account? <Link href="/login">Sign in</Link></p></Shell>;
 }
