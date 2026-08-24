@@ -25,7 +25,7 @@ Branch: `codex/uat-token-terminal-header-remediation`
 - Diff/ancestry: `git diff --check` passed; Architecture decision is preserved in branch ancestry through merge `f2f01b3`; the implementation diff changes only `src/proxy.ts`, focused tests, this handoff, and append-only gap evidence.
 - Lint: `npm run lint` passed.
 - TypeScript: `npx tsc --noEmit` passed.
-- Direct/unit: `npm test` passed **123/123** executable tests across **20/20** files; **124** database-gated tests were intentionally skipped in that direct run.
+- Direct/unit: `npm test` passed **124/124** executable tests across **20/20** files; **124** database-gated tests were intentionally skipped in that direct run.
 - Focused new boundary: **22/22** tests passed for the eleven exact routes, all-method/query coverage, immutable membership, `Headers.set` uniqueness, and near misses. Caddy/cache evidence passed **4/4** after the strict raw-field negative cases were added.
 - PostgreSQL: `npm run test:integration` passed **124/124** serialized tests across **15/15** files. This includes **17** identity tests and **24** invitation/tenant-administration tests covering single use/replay, rate limits, Session revocation, reset security effects, transaction rollback, singular committed success effects, seat/identity/tenant denials, and invitation concurrency.
 - Production build: `npm run build` passed on Next.js **16.3.1** with all routes and Proxy compiled.
