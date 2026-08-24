@@ -14,6 +14,33 @@ import {
 
 export const DEFAULT_SESSION_COOKIE = "nexaflow_session";
 
+export const PROTECTED_TOKEN_LIFECYCLE_PATHS = Object.freeze([
+  "/verify-email",
+  "/verify-email/capture",
+  "/verify-email/complete",
+  "/reset-password",
+  "/reset-password/capture",
+  "/reset-password/complete",
+  "/workspace/invitations/accept",
+  "/workspace/invitations/accept/complete",
+  "/workspace/invitations/accept/intent",
+  "/workspace/invitations/accept/intent/clear",
+  "/workspace/invitations/accept/terminal",
+] as const);
+
+const protectedTokenLifecyclePathSet: ReadonlySet<string> = new Set(
+  PROTECTED_TOKEN_LIFECYCLE_PATHS,
+);
+
+export function isProtectedTokenLifecyclePath(pathname: string) {
+  return protectedTokenLifecyclePathSet.has(pathname);
+}
+
+export function setProtectedTokenLifecycleHeaders(headers: Headers) {
+  headers.set("Cache-Control", "private, no-store");
+  headers.set("Referrer-Policy", "no-referrer");
+}
+
 export function configuredSessionCookieName(environment: NodeJS.ProcessEnv = process.env) {
   return environment.SESSION_COOKIE_NAME?.trim() || DEFAULT_SESSION_COOKIE;
 }
@@ -46,7 +73,7 @@ export function proxy(request: NextRequest) {
     destination.search="";
     const capture=NextResponse.redirect(destination,303);
     try{capture.headers.set("Set-Cookie",identityTokenIntentCookie(capturePurpose,sealIdentityTokenIntent(capturePurpose,rawToken,env.SESSION_SECRET,Date.now(),continuation??undefined),env.APP_ORIGIN.startsWith("https://")))}catch{capture.headers.set("Set-Cookie",identityTokenIntentCookie(capturePurpose,"invalid",env.APP_ORIGIN.startsWith("https://")))}
-    capture.headers.set("Content-Security-Policy",policy);capture.headers.set("Cache-Control","private, no-store");capture.headers.set("Referrer-Policy","no-referrer");return capture;
+    capture.headers.set("Content-Security-Policy",policy);setProtectedTokenLifecycleHeaders(capture.headers);return capture;
   }
   const invitationDocument = request.nextUrl.pathname === "/workspace/invitations/accept";
   const invitationToken = invitationDocument
@@ -76,15 +103,18 @@ export function proxy(request: NextRequest) {
       capture.headers.append("Set-Cookie", clearInvitationReturnCookie(secure));
     }
     capture.headers.set("Content-Security-Policy", policy);
-    capture.headers.set("Cache-Control", "private, no-store");
-    capture.headers.set("Referrer-Policy", "no-referrer");
+    setProtectedTokenLifecycleHeaders(capture.headers);
     return capture;
   }
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", policy);
-  const tokenDocument = ["/verify-email", "/verify-email/capture", "/reset-password", "/reset-password/capture", "/workspace/invitations/accept"].includes(request.nextUrl.pathname);
-  if (request.cookies.has(configuredSessionCookieName()) || tokenDocument) response.headers.set("Cache-Control", "private, no-store");
-  if (tokenDocument) response.headers.set("Referrer-Policy", "no-referrer");
+  const protectedTokenLifecycle = isProtectedTokenLifecyclePath(
+    request.nextUrl.pathname,
+  );
+  if (request.cookies.has(configuredSessionCookieName()))
+    response.headers.set("Cache-Control", "private, no-store");
+  if (protectedTokenLifecycle)
+    setProtectedTokenLifecycleHeaders(response.headers);
   if (invitationDocument) {
     const env = getServerEnv();
     const value = request.cookies.get(INVITATION_INTENT_COOKIE)?.value;

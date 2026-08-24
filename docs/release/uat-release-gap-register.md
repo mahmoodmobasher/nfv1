@@ -147,6 +147,13 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Residual risk: route-list drift can recur unless policy coverage is asserted from one canonical protected-route contract.
 - Blocks: UAT acceptance, Phase 5, and production readiness.
 
+#### Bounded fall-forward implementation update — review pending
+
+- Backend candidate implementation `5fdec7b` on `codex/uat-token-terminal-header-remediation` replaces the five-entry ad hoc proxy classifier with one frozen, exported exact-path contract covering all eleven verification, reset, and invitation website token lifecycle paths required by Architecture `0035fd1`.
+- Static boundary evidence passed for exact membership, duplicate prevention, query independence, all-method header assignment through `Headers.set`, direct-compatibility API exclusion, and near-miss exclusion. Exact production-build response probes passed 29/29 across all protected GET/PUT outcomes, missing-CSRF completion/clear denials, and near misses, with one effective `no-referrer`, private/no-store, nonce CSP, and no production unsafe CSP directive.
+- Existing direct/unit and serialized PostgreSQL identity/reset/invitation suites remain green, including invalid/expired/replayed tokens, rate limits, all-Session reset revocation, success-Audit singularity, late-failure rollback, tenant/seat/identity denial, and invitation concurrency/replay. Focused browser evidence remains token-free across HTML/RSC, history, storage, redirects, cookies, and outbound requests.
+- Status: implementation complete; gap remains open P1/blocking until distinct backend/security and Architecture acceptance, controlled integration, a new immutable deployment authorization, and a fully restarted public-edge matrix close the live boundary. No UAT service, release tag, provider, secret, Caddy, or infrastructure state changed.
+
 ## Open non-blocking
 
 ### UAT-GAP-009 — Workspace token routes emit duplicate identical private cache fields
@@ -165,6 +172,12 @@ This register is append-only by stable gap ID. Closed means the stated acceptanc
 - Status and verification: open non-blocking warning.
 - Residual risk: intermediary variance or evidence ambiguity despite equivalent effective policy.
 - Blocks: none unless Architecture reclassifies.
+
+#### Fall-forward evidence update — retained P3/non-blocking
+
+- The bounded candidate leaves `deploy/uat/Caddyfile` unchanged with exactly one `?Referrer-Policy` default-if-absent operation and the existing Workspace private-document defense intact.
+- Focused regression evidence counts raw repeated Cache-Control fields, parses their combined effective directives, accepts only identical `private, no-store` values, and fails closed for missing, conflicting, positive-age, stale-serving, unknown/unparsable, or otherwise weakened values.
+- Status remains open P3/non-blocking. No normalization is included in this application remediation; a future edge-only cleanup still requires separate authority and negative cache proof.
 
 ### UAT-GAP-005 — Release evidence commands remain partly ad hoc
 

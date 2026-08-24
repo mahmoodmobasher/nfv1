@@ -19,6 +19,25 @@ function applyDefaultIfAbsent(headers: Headers) {
   return headers;
 }
 
+function acceptsRepeatedPrivateNoStore(rawCacheFields: readonly string[]) {
+  if (rawCacheFields.length < 1) return false;
+  const normalizedFields = rawCacheFields.map((value) =>
+    value.trim().toLowerCase(),
+  );
+  if (new Set(normalizedFields).size !== 1) return false;
+  const directives = normalizedFields
+    .flatMap((value) => value.split(","))
+    .map((directive) => directive.trim())
+    .filter(Boolean);
+  return (
+    directives.includes("private") &&
+    directives.includes("no-store") &&
+    directives.every((directive) =>
+      ["private", "no-store"].includes(directive),
+    )
+  );
+}
+
 describe("UAT Caddy Referrer-Policy precedence", () => {
   it("declares one shared default-if-absent operation and no overwriting or appending operation", () => {
     expect(referrerPolicyLines()).toEqual([
@@ -54,6 +73,48 @@ describe("UAT Caddy Referrer-Policy precedence", () => {
       );
       expect(values).toHaveLength(1);
       expect(values[0][1]).not.toContain(",");
+    }
+  });
+
+  it("retains the non-blocking duplicate private cache defense as an effective private no-store policy", () => {
+    const rawCacheFields = ["private, no-store", "private, no-store"];
+    const effectiveDirectives = rawCacheFields
+      .flatMap((value) => value.split(","))
+      .map((directive) => directive.trim().toLowerCase())
+      .filter(Boolean);
+
+    expect(rawCacheFields).toHaveLength(2);
+    expect(new Set(rawCacheFields)).toEqual(new Set(["private, no-store"]));
+    expect(effectiveDirectives).toEqual([
+      "private",
+      "no-store",
+      "private",
+      "no-store",
+    ]);
+    expect(effectiveDirectives).toContain("private");
+    expect(effectiveDirectives).toContain("no-store");
+    expect(effectiveDirectives).not.toContain("public");
+    expect(effectiveDirectives).not.toContain("immutable");
+    expect(effectiveDirectives.some((value) => /^(?:s-)?max-age=/.test(value))).toBe(
+      false,
+    );
+    expect(effectiveDirectives.some((value) => value.startsWith("stale-"))).toBe(
+      false,
+    );
+    expect(acceptsRepeatedPrivateNoStore(rawCacheFields)).toBe(true);
+  });
+
+  it("fails closed on absent, conflicting, weakened, or unparsable cache fields", () => {
+    for (const fields of [
+      [],
+      ["private, no-store", "public, max-age=60"],
+      ["private, no-store", "private"],
+      ["private, no-store, stale-if-error=60"],
+      ["private, no-store, unknown-directive"],
+    ]) {
+      expect(acceptsRepeatedPrivateNoStore(fields), JSON.stringify(fields)).toBe(
+        false,
+      );
     }
   });
 });
