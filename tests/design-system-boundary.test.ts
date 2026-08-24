@@ -56,6 +56,71 @@ describe("design-system document boundary", () => {
     }
   });
 
+  it("centralizes Spectrum foundations behind only thin product and website configurations", () => {
+    const css = readFileSync(
+      new URL("../src/app/globals.css", import.meta.url),
+      "utf8",
+    );
+    const foundationMarker =
+        "/* Nexa Spectrum — Phase 1 foundation with compatibility aliases */",
+      phase2Marker = "/* Nexa Spectrum — Phase 2 shared authenticated shell */",
+      foundationStart = css.indexOf(foundationMarker),
+      phase2Start = css.indexOf(phase2Marker),
+      migrated = css.slice(phase2Start),
+      deferredLegacy = css.slice(0, foundationStart);
+    expect(
+      css.match(
+        new RegExp(
+          foundationMarker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "g",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(foundationStart).toBeGreaterThan(0);
+    expect(phase2Start).toBeGreaterThan(foundationStart);
+    expect(migrated).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    expect(migrated).not.toMatch(/html\[data-theme|\.crm-home[^,{]*\{/);
+    expect(migrated).not.toMatch(/font-family\s*:/);
+    for (const property of ["border-radius", "box-shadow"]) {
+      for (const match of migrated.matchAll(
+        new RegExp(`${property}\\s*:\\s*([^;]+)`, "g"),
+      ))
+        expect(match[1].trim(), property).toMatch(/^var\(--/);
+    }
+    expect(migrated).not.toMatch(/--(?:nx|nf|spectrum)-[\w-]+\s*:/);
+    const experiences = [
+      ...migrated.matchAll(/\.experience-([\w-]+)\s*\{([^}]+)\}/g),
+    ];
+    expect(experiences.map((match) => match[1])).toEqual([
+      "product",
+      "website",
+    ]);
+    for (const [, , body] of experiences) {
+      expect(body.replace(/\s/g, "")).toBe(
+        "background:var(--nx-canvas);color:var(--nx-text-strong);",
+      );
+    }
+    expect(deferredLegacy).toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+
+    for (const file of [
+      "../src/app/product-shell.tsx",
+      "../src/app/crm/crm-shell.tsx",
+      "../src/app/crm/home/page.tsx",
+      "../src/app/workspace/settings/admin-shell.tsx",
+    ]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source, file).not.toMatch(
+        /data-theme|fontFamily|borderRadius|boxShadow|--(?:nx|nf|spectrum)-|#[0-9a-f]{3,8}\b|rgba?\(/i,
+      );
+    }
+    expect(
+      readFileSync(
+        new URL("../src/app/product-shell.tsx", import.meta.url),
+        "utf8",
+      ),
+    ).toContain("experience-product");
+  });
+
   it("keeps Phase 2 components on semantic tokens without raw colour literals", () => {
     for (const file of [
       "../src/app/product-shell.tsx",

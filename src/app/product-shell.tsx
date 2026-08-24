@@ -80,17 +80,18 @@ function isolate(element: HTMLElement): IsolationState {
   };
   element.inert = true;
   element.setAttribute("aria-hidden", "true");
-  element
-    .querySelectorAll<HTMLElement>(
-      "a[href],button,input,select,textarea,[tabindex]",
-    )
-    .forEach((node) => {
-      state.tabStops.push({
-        element: node,
-        tabindex: node.getAttribute("tabindex"),
-      });
-      node.setAttribute("tabindex", "-1");
+  const focusableSelector = "a[href],button,input,select,textarea,[tabindex]",
+    tabStops = [
+      ...(element.matches(focusableSelector) ? [element] : []),
+      ...element.querySelectorAll<HTMLElement>(focusableSelector),
+    ];
+  tabStops.forEach((node) => {
+    state.tabStops.push({
+      element: node,
+      tabindex: node.getAttribute("tabindex"),
     });
+    node.setAttribute("tabindex", "-1");
+  });
   return state;
 }
 function restoreIsolation(state: IsolationState) {
@@ -124,6 +125,7 @@ export function ProductShell({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null),
+    skip = useRef<HTMLAnchorElement>(null),
     panel = useRef<HTMLDivElement>(null),
     rail = useRef<HTMLElement>(null),
     topbar = useRef<HTMLElement>(null),
@@ -147,6 +149,7 @@ export function ProductShell({
   useEffect(() => {
     if (!open) return;
     const targets = [
+        skip.current,
         rail.current,
         topbar.current,
         mobileContext.current,
@@ -269,10 +272,10 @@ export function ProductShell({
     menuId = kind === "crm" ? "crm-menu" : "workspace-menu";
   return (
     <div
-      className={`product-shell ${legacyClass}`}
+      className={`product-shell experience-product ${legacyClass}`}
       data-drawer-open={open || undefined}
     >
-      <a className="skip-link" href="#product-main">
+      <a ref={skip} className="skip-link" href="#product-main">
         Skip to main content
       </a>
       <AccountThemeSync />

@@ -235,7 +235,25 @@ async function visualViewportBaseline(page: Page, name: string) {
 }
 
 async function stabilizeCrmHome(page: Page) {
-  await page.locator(".dashboard-section-heading>p").first().evaluate(element => { element.textContent = "Generated Aug 24, 2026, 1:00 a.m. UTC"; });
+  await page
+    .locator(".dashboard-section-heading>p")
+    .first()
+    .evaluate((element) => {
+      element.textContent = "Generated Aug 24, 2026, 1:00 a.m. UTC";
+    });
+}
+
+async function crmHomeResponsiveBaselines(page: Page, theme: "light" | "dark") {
+  for (const [name, viewport] of [
+    ["desktop", { width: 1280, height: 900 }],
+    ["tablet", { width: 768, height: 900 }],
+    ["mobile", { width: 320, height: 640 }],
+    ["zoom200", { width: 640, height: 720 }],
+  ] as const) {
+    await page.setViewportSize(viewport);
+    await visualBaseline(page, `spectrum-crm-home-${theme}-${name}.png`);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
 }
 
 async function tabTo(page: Page, target: Locator) {
@@ -284,23 +302,43 @@ async function expectVisibleFocus(target: Locator, surface: Locator) {
   const background = await surface.evaluate(
     (element) => getComputedStyle(element).backgroundColor,
   );
-  expect(style.width).toBe("2px");
-  expect(style.offset).toBe("2px");
+  expect(Number.parseFloat(style.width)).toBeGreaterThanOrEqual(2);
+  expect(Number.parseFloat(style.offset)).toBeGreaterThanOrEqual(2);
   expect(colorContrast(style.color, background)).toBeGreaterThanOrEqual(3);
 }
 
 async function renderedTextContrast(target: Locator, surface: Locator) {
-  const style = await target.evaluate((element) => ({
-    color: getComputedStyle(element).color,
-    background: getComputedStyle(element).backgroundColor,
-  }));
-  const fallback = await surface.evaluate(
-    (element) => getComputedStyle(element).backgroundColor,
+  const color = await target.evaluate(
+    (element) => getComputedStyle(element).color,
   );
-  return colorContrast(
-    style.color,
-    /rgba\([^)]*,\s*0\)/.test(style.background) ? fallback : style.background,
-  );
+  const background = await surface.evaluate((element) => {
+    let current: Element | null = element;
+    while (current) {
+      const value = getComputedStyle(current).backgroundColor;
+      if (value !== "transparent" && !/rgba\([^)]*,\s*0(?:\.0+)?\)/.test(value))
+        return value;
+      current = current.parentElement;
+    }
+    return getComputedStyle(document.body).backgroundColor;
+  });
+  return colorContrast(color, background);
+}
+
+async function installSpectrumStateSheet(page: Page) {
+  await page.locator("#product-main").evaluate((element) => {
+    element.innerHTML = `<section class="spectrum-state-sheet" aria-label="Spectrum component state sheet">
+      <h1>Component states</h1>
+      <article><h2>Primary buttons</h2><button class="primary">Primary default</button><button class="primary" data-state="hover">Primary hover</button><button class="primary" data-state="pressed">Primary pressed</button><button class="primary" data-state="focus">Primary focus</button><button class="primary" disabled>Primary disabled</button><button class="primary" disabled aria-busy="true">Saving…</button></article>
+      <article><h2>Secondary buttons</h2><button class="secondary">Secondary default</button><button class="secondary" data-state="hover">Secondary hover</button><button class="secondary" data-state="pressed">Secondary pressed</button><button class="secondary" data-state="focus">Secondary focus</button><button class="secondary" disabled>Secondary disabled</button></article>
+      <article><h2>Danger buttons</h2><button class="danger">Danger default</button><button class="danger" data-state="hover">Danger hover</button><button class="danger" data-state="pressed">Danger pressed</button><button class="danger" data-state="focus">Danger focus</button><button class="danger" disabled>Danger disabled</button></article>
+      <article><h2>Links and compact controls</h2><a class="state-link" href="#default">Link default</a><a class="state-link" data-state="hover" href="#hover">Link hover</a><a class="state-link" data-state="pressed" href="#pressed">Link pressed</a><a class="state-link" data-state="focus" href="#focus">Link focus</a><a class="state-link" aria-disabled="true">Link disabled</a><button class="product-icon-action" aria-label="Icon default">×</button><button class="product-icon-action" data-state="hover" aria-label="Icon hover">×</button><button class="product-icon-action" data-state="pressed" aria-label="Icon pressed">×</button><button class="product-icon-action" data-state="focus" aria-label="Icon focus">×</button><button class="product-icon-action" aria-label="Icon disabled" aria-disabled="true">×</button><button class="menu-button" aria-label="Menu default">Menu default</button><button class="menu-button" data-state="hover" aria-label="Menu hover">Menu hover</button><button class="menu-button" data-state="pressed" aria-label="Menu pressed">Menu pressed</button><button class="menu-button" data-state="focus" aria-label="Menu focus">Menu focus</button><button class="menu-button" aria-label="Menu disabled" disabled>Menu disabled</button></article>
+      <article><h2>Fields</h2><label class="field"><span>Input default</span><input value="Default" readonly></label><label class="field"><span>Input focus</span><input data-state="focus" value="Focused" readonly></label><label class="field"><span>Input invalid</span><input aria-invalid="true" value="Invalid" readonly></label><label class="field"><span>Input disabled</span><input value="Disabled" disabled></label><label class="field"><span>Select default</span><select><option>Selected</option></select></label><label class="field"><span>Select disabled</span><select disabled><option>Unavailable</option></select></label></article>
+      <article><h2>Feedback</h2><div class="alert">Review this warning.</div><div class="alert success">Saved successfully.</div><div class="alert error">Action could not be completed.</div><div class="alert info">Additional information.</div></article>
+      <article><h2>Badges</h2><span class="live-badge">Live</span><span class="demo-badge">Preview</span><span class="lead-status">Open</span><span class="lead-status won">Won</span><span class="lead-status lost">Lost</span></article>
+      <article><h2>Panel</h2><div class="state-panel"><strong>Panel title</strong><p>Supporting panel metadata remains readable.</p></div></article>
+      <article><h2>Table</h2><table class="state-table"><thead><tr><th>Customer</th><th>Status</th></tr></thead><tbody><tr><td>Acme North</td><td>Active</td></tr></tbody></table></article>
+    </section>`;
+  });
 }
 
 test("authenticated server theme is authoritative over empty, correct, stale, and unavailable cache", async ({
@@ -487,7 +525,7 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   await page.goto("/crm/home");
   await expect(page.getByRole("heading", { name: "CRM home" })).toBeVisible();
   await stabilizeCrmHome(page);
-  await visualBaseline(page, "spectrum-crm-home-dark.png");
+  await crmHomeResponsiveBaselines(page, "dark");
   await page.goto("/crm");
   await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 640 });
@@ -516,7 +554,7 @@ test("personal settings theme, paired baselines, keyboard focus, and responsive 
   await page.goto("/crm/home");
   await expect(page.getByRole("heading", { name: "CRM home" })).toBeVisible();
   await stabilizeCrmHome(page);
-  await visualBaseline(page, "spectrum-crm-home-light.png");
+  await crmHomeResponsiveBaselines(page, "light");
   await page.goto("/crm");
   await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 640 });
@@ -762,6 +800,55 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
   page,
 }) => {
   const fixture = await tenantBrowserFixture(page);
+  const backgroundSelectors = [
+    ".skip-link",
+    ".product-rail",
+    ".product-topbar",
+    ".product-mobile>div:first-child",
+    ".product-mobile>.menu-button",
+    "#product-main",
+  ];
+  const backgroundState = () =>
+    page.locator(backgroundSelectors.join(",")).evaluateAll((elements) =>
+      elements.map((element) => ({
+        selector: element.id || Array.from(element.classList).sort().join("."),
+        inert: (element as HTMLElement).inert,
+        ariaHidden: element.getAttribute("aria-hidden"),
+        tabindex: element.getAttribute("tabindex"),
+        descendants: Array.from(
+          element.querySelectorAll<HTMLElement>(
+            "a[href],button,input,select,textarea,[tabindex]",
+          ),
+        ).map((node) => node.getAttribute("tabindex")),
+      })),
+    );
+  const assertRestored = async (
+    original: Awaited<ReturnType<typeof backgroundState>>,
+  ) => {
+    await expect.poll(backgroundState).toEqual(original);
+    expect(
+      await page.evaluate(() => ({
+        body: document.body.style.overflow,
+        html: document.documentElement.style.overflow,
+      })),
+    ).toEqual({ body: "", html: "" });
+  };
+  const assertCleanRouteState = async () => {
+    for (const item of await backgroundState()) {
+      expect(item.inert, item.selector).toBe(false);
+      expect(item.ariaHidden, item.selector).toBeNull();
+      expect(
+        item.descendants.every((tabindex) => tabindex === null),
+        item.selector,
+      ).toBe(true);
+    }
+    expect(
+      await page.evaluate(() => ({
+        body: document.body.style.overflow,
+        html: document.documentElement.style.overflow,
+      })),
+    ).toEqual({ body: "", html: "" });
+  };
   for (const theme of ["light", "dark"] as const) {
     await setServerAppearance(fixture.users[0].id, theme);
     for (const viewport of [
@@ -771,6 +858,7 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
       await page.setViewportSize(viewport);
       await page.goto("/crm");
       const trigger = page.getByRole("button", { name: "Open CRM navigation" });
+      const original = await backgroundState();
       await trigger.click();
       const dialog = page.getByRole("dialog", { name: "CRM navigation" });
       const closeButton = dialog.getByRole("button", {
@@ -780,12 +868,93 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
       const closeBox = await closeButton.boundingBox();
       expect(closeBox!.width).toBeGreaterThanOrEqual(44);
       expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+      for (const selector of backgroundSelectors) {
+        const element = page.locator(selector);
+        await expect(element).toHaveAttribute("aria-hidden", "true");
+        expect(
+          await element.evaluate((node) => (node as HTMLElement).inert),
+          selector,
+        ).toBe(true);
+        if (
+          await element.evaluate((node) => node.matches("a,button,[tabindex]"))
+        )
+          await expect(element).toHaveAttribute("tabindex", "-1");
+        expect(
+          await element.evaluate((node) =>
+            Array.from(
+              node.querySelectorAll<HTMLElement>(
+                "a[href],button,input,select,textarea,[tabindex]",
+              ),
+            ).every((focusable) => focusable.getAttribute("tabindex") === "-1"),
+          ),
+          selector,
+        ).toBe(true);
+      }
+      const escapedFocus = await page.evaluate((selectors) => {
+        const escaped: string[] = [];
+        for (const selector of selectors) {
+          const root = document.querySelector<HTMLElement>(selector);
+          if (!root) continue;
+          const candidates = [
+            ...(root.matches("a[href],button,input,select,textarea,[tabindex]")
+              ? [root]
+              : []),
+            ...root.querySelectorAll<HTMLElement>(
+              "a[href],button,input,select,textarea,[tabindex]",
+            ),
+          ];
+          for (const candidate of candidates) {
+            candidate.focus();
+            if (document.activeElement === candidate) escaped.push(selector);
+          }
+        }
+        return escaped;
+      }, backgroundSelectors);
+      expect(escapedFocus).toEqual([]);
+      await expect(closeButton).toBeFocused();
+      const closeColors = async () =>
+        closeButton.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            color: style.color,
+            background: style.backgroundColor,
+            border: style.borderColor,
+          };
+        });
+      let colors = await closeColors();
       expect(
-        await page.locator("#product-main").evaluate((element) => ({
-          inert: (element as HTMLElement).inert,
-          hidden: element.getAttribute("aria-hidden"),
-        })),
-      ).toEqual({ inert: true, hidden: "true" });
+        colorContrast(colors.color, colors.background),
+      ).toBeGreaterThanOrEqual(3);
+      await closeButton.hover();
+      colors = await closeColors();
+      expect(
+        colorContrast(colors.color, colors.background),
+      ).toBeGreaterThanOrEqual(3);
+      const closeCenter = await closeButton.boundingBox();
+      await page.mouse.move(closeCenter!.x + 22, closeCenter!.y + 22);
+      await page.mouse.down();
+      colors = await closeColors();
+      expect(
+        colorContrast(colors.color, colors.background),
+      ).toBeGreaterThanOrEqual(3);
+      await page.mouse.move(0, 0);
+      await page.mouse.up();
+      await closeButton.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await expect(closeButton).toBeFocused();
+      await expectVisibleFocus(closeButton, dialog);
+      await closeButton.evaluate((element) => {
+        (element as HTMLButtonElement).disabled = true;
+      });
+      colors = await closeColors();
+      expect(
+        colorContrast(colors.color, colors.background),
+      ).toBeGreaterThanOrEqual(3);
+      await closeButton.evaluate((element) => {
+        (element as HTMLButtonElement).disabled = false;
+      });
+      await closeButton.focus();
       expect(
         await page.evaluate(() => ({
           body: document.body.style.overflow,
@@ -819,23 +988,22 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
       await expect(closeButton).toBeFocused();
       await closeButton.click();
       await expect(trigger).toBeFocused();
-      await expect(page.locator("#product-main")).not.toHaveAttribute(
-        "inert",
-        "",
-      );
-      expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
+      await assertRestored(original);
 
       await trigger.click();
       await page.locator(".menu-backdrop").click({ position: { x: 4, y: 4 } });
       await expect(trigger).toBeFocused();
+      await assertRestored(original);
       await trigger.click();
       await page.keyboard.press("Escape");
       await expect(trigger).toBeFocused();
+      await assertRestored(original);
       await trigger.click();
       await dialog.getByRole("link", { name: "Home" }).click();
       await expect(page).toHaveURL(/\/crm\/home$/);
       await expect(dialog).toHaveCount(0);
       await expect(trigger).not.toBeFocused();
+      await assertCleanRouteState();
       await page.goto("/crm");
       await page.getByRole("button", { name: "Open CRM navigation" }).click();
       await page.evaluate(() => history.pushState({}, "", "/crm/pipeline"));
@@ -849,11 +1017,136 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
       expect(
         await page.evaluate(() => document.documentElement.style.overflow),
       ).toBe("");
+      await assertCleanRouteState();
+      await page.goto("/crm");
+      await page.getByRole("button", { name: "Open CRM navigation" }).click();
+      await page.goto("/settings");
+      await expect(
+        page.getByRole("heading", { name: "Personal settings" }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(() => ({
+          body: document.body.style.overflow,
+          html: document.documentElement.style.overflow,
+        })),
+      ).toEqual({ body: "", html: "" });
+      await expect(page.locator(".skip-link")).toHaveCount(0);
+    }
+  }
+  await page.emulateMedia({ forcedColors: "active" });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/crm");
+  await page.getByRole("button", { name: "Open CRM navigation" }).click();
+  const forcedClose = page
+    .getByRole("dialog", { name: "CRM navigation" })
+    .getByRole("button", { name: "Close CRM navigation" });
+  expect(
+    await forcedClose.evaluate((element) => ({
+      border: getComputedStyle(element).borderStyle,
+      stroke: getComputedStyle(element.querySelector("svg")!).stroke,
+    })),
+  ).toEqual(
+    expect.objectContaining({ border: expect.not.stringMatching(/^none$/) }),
+  );
+  expect(
+    await forcedClose.evaluate(
+      (element) => getComputedStyle(element.querySelector("svg")!).stroke,
+    ),
+  ).not.toBe("none");
+});
+
+test("CRM Home preview is semantically contained and reflows without clipping", async ({
+  page,
+}) => {
+  const fixture = await tenantBrowserFixture(page);
+  for (const theme of ["light", "dark"] as const) {
+    await setServerAppearance(fixture.users[0].id, theme);
+    for (const viewport of [
+      { width: 1280, height: 900 },
+      { width: 768, height: 900 },
+      { width: 320, height: 640 },
+      { width: 640, height: 720 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/crm/home");
+      await expect(
+        page.getByRole("heading", { name: "CRM home" }),
+      ).toBeVisible();
+      const region = page.locator(".demo-region");
+      const card = region.locator("article").first();
+      const welcome = page.locator(".dashboard-welcome");
+      await expect(
+        region.getByRole("heading", { name: "Coming next" }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+        `${theme} ${viewport.width}`,
+      ).toBe(true);
+      expect(
+        await region.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const textNodes = element.querySelectorAll<HTMLElement>(
+            "h2,h3,strong,p,small,.demo-badge,.coming-label",
+          );
+          return {
+            withinViewport: box.left >= 0 && box.right <= window.innerWidth + 1,
+            unclipped: Array.from(textNodes).every(
+              (node) =>
+                node.scrollWidth <= node.clientWidth + 1 &&
+                node.scrollHeight <= node.clientHeight + 1,
+            ),
+          };
+        }),
+      ).toEqual({ withinViewport: true, unclipped: true });
+      expect(
+        await welcome.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const clipped = Array.from(
+            element.querySelectorAll<HTMLElement>("h2,p,a,strong,span"),
+          )
+            .filter((node) => node.scrollWidth > node.clientWidth + 1)
+            .map((node) => `${node.tagName}:${node.textContent?.trim()}`);
+          return {
+            withinViewport: box.left >= 0 && box.right <= window.innerWidth + 1,
+            clipped,
+          };
+        }),
+      ).toEqual({ withinViewport: true, clipped: [] });
+      const main = page.locator(".product-main");
+      for (const target of [
+        region.getByRole("heading", { name: "Coming next" }),
+        card.getByRole("heading").first(),
+        card.locator("strong"),
+        card.locator("p"),
+        card.locator("small"),
+        card.locator(".demo-badge"),
+        card.locator(".coming-label"),
+      ]) {
+        expect(
+          await renderedTextContrast(target, target),
+          `${theme} ${viewport.width} ${await target.textContent()}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+      const boundary = await card.evaluate((element) => ({
+        border: getComputedStyle(element).borderColor,
+        background: getComputedStyle(element).backgroundColor,
+      }));
+      const adjacent = await main.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+      expect(
+        Math.min(
+          colorContrast(boundary.border, boundary.background),
+          colorContrast(boundary.border, adjacent),
+        ),
+      ).toBeGreaterThanOrEqual(3);
     }
   }
 });
 
-test("shared component states use explicit semantic disabled treatments", async ({
+test("shared Spectrum component sheet covers S09 interaction and feedback states", async ({
   page,
 }) => {
   const fixture = await tenantBrowserFixture(page);
@@ -863,13 +1156,24 @@ test("shared component states use explicit semantic disabled treatments", async 
     await page.goto("/crm");
     await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
     await page.waitForLoadState("networkidle");
-    await page.locator("#product-main").evaluate((element) => {
-      element.innerHTML = `<section class="spectrum-state-sheet" aria-label="Spectrum component state sheet"><h1>Component states</h1><article><h2>Primary</h2><button class="primary">Primary action</button><button class="primary" disabled>Primary disabled</button></article><article><h2>Secondary</h2><button class="secondary">Secondary action</button><button class="secondary" disabled>Secondary disabled</button></article><article><h2>Danger</h2><button class="danger">Danger action</button><button class="danger" disabled>Danger disabled</button></article><article><h2>Compact controls</h2><button class="product-icon-action" aria-label="Icon action">I</button><button class="product-icon-action" aria-label="Icon disabled" aria-disabled="true">I</button><button class="menu-button" aria-label="Menu action">M</button><button class="menu-button" aria-label="Menu disabled" disabled>M</button></article><article><h2>Fields</h2><label class="field"><span>Enabled field</span><input value="Enabled" readonly></label><label class="field"><span>Disabled field</span><input value="Disabled" disabled></label></article><article><h2>Feedback</h2><div class="alert success">Saved successfully.</div><div class="alert error">Action could not be completed.</div></article></section>`;
-    });
+    await installSpectrumStateSheet(page);
     const surface = page.locator(".spectrum-state-sheet");
     for (const name of [
+      "Primary default",
+      "Primary hover",
+      "Primary pressed",
+      "Primary focus",
       "Primary disabled",
+      "Saving…",
+      "Secondary default",
+      "Secondary hover",
+      "Secondary pressed",
+      "Secondary focus",
       "Secondary disabled",
+      "Danger default",
+      "Danger hover",
+      "Danger pressed",
+      "Danger focus",
       "Danger disabled",
       "Icon disabled",
       "Menu disabled",
@@ -897,22 +1201,142 @@ test("shared component states use explicit semantic disabled treatments", async 
         name,
       ).toBeGreaterThanOrEqual(3);
     }
+    for (const name of [
+      "Icon default",
+      "Icon hover",
+      "Icon pressed",
+      "Icon focus",
+      "Menu default",
+      "Menu hover",
+      "Menu pressed",
+      "Menu focus",
+    ]) {
+      const control = page.getByRole("button", { name });
+      expect(
+        await renderedTextContrast(control, control),
+        name,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const name of [
+      "Link default",
+      "Link hover",
+      "Link pressed",
+      "Link focus",
+      "Link disabled",
+    ]) {
+      const link = page.getByText(name, { exact: true });
+      expect(
+        await renderedTextContrast(link, link),
+        name,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const label of [
+      "Input default",
+      "Input focus",
+      "Input invalid",
+      "Input disabled",
+      "Select default",
+      "Select disabled",
+    ]) {
+      const field = page.getByLabel(label);
+      expect(
+        await renderedTextContrast(field, field),
+        label,
+      ).toBeGreaterThanOrEqual(4.5);
+      const fieldBoundary = await field.evaluate((element) => ({
+        border: getComputedStyle(element).borderColor,
+        background: getComputedStyle(element).backgroundColor,
+        adjacent: getComputedStyle(element.closest("article")!).backgroundColor,
+      }));
+      expect(
+        Math.min(
+          colorContrast(fieldBoundary.border, fieldBoundary.background),
+          colorContrast(fieldBoundary.border, fieldBoundary.adjacent),
+        ),
+        `${label} boundary`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+    for (const text of [
+      "Review this warning.",
+      "Saved successfully.",
+      "Action could not be completed.",
+      "Additional information.",
+      "Live",
+      "Preview",
+      "Open",
+      "Won",
+      "Lost",
+      "Panel title",
+      "Supporting panel metadata remains readable.",
+      "Customer",
+      "Acme North",
+    ]) {
+      const target = page.getByText(text, { exact: true });
+      expect(
+        await renderedTextContrast(target, target),
+        text,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const name of [
+      "Primary focus",
+      "Secondary focus",
+      "Danger focus",
+      "Link focus",
+      "Icon focus",
+      "Menu focus",
+    ]) {
+      const target = /^(?:Icon|Menu)/.test(name)
+        ? page.getByRole("button", { name })
+        : page.getByText(name, { exact: true });
+      await expectVisibleFocus(target, surface);
+    }
+    for (const selector of [".state-panel", ".state-table th", ".alert"]) {
+      const component = surface.locator(selector).first();
+      const boundary = await component.evaluate((element) => ({
+        border: getComputedStyle(element).borderColor,
+        background: getComputedStyle(element).backgroundColor,
+        adjacent: getComputedStyle(element.parentElement!).backgroundColor,
+      }));
+      expect(
+        Math.max(
+          colorContrast(boundary.border, boundary.background),
+          colorContrast(boundary.border, boundary.adjacent),
+        ),
+        selector,
+      ).toBeGreaterThanOrEqual(3);
+    }
     await visualBaseline(page, `spectrum-component-states-${theme}.png`);
   }
   await page.emulateMedia({ forcedColors: "active" });
   await page.goto("/crm");
   await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
   await page.waitForLoadState("networkidle");
-  await page.locator("#product-main").evaluate((element) => {
-    element.innerHTML = `<button class="primary" disabled>Forced disabled</button>`;
-  });
-  const forced = page.getByRole("button", { name: "Forced disabled" });
+  await installSpectrumStateSheet(page);
+  const forcedSheet = page.locator(".spectrum-state-sheet");
+  await visualBaseline(page, "spectrum-component-states-forced-colors.png");
+  const forced = page.getByRole("button", { name: "Primary disabled" });
   expect(
     await forced.evaluate((element) => getComputedStyle(element).borderStyle),
   ).not.toBe("none");
   expect(
     await forced.evaluate((element) => getComputedStyle(element).opacity),
   ).toBe("1");
+  for (const selector of [
+    "button",
+    "input",
+    "select",
+    ".alert",
+    ".state-panel",
+    ".state-table th",
+  ]) {
+    expect(
+      await forcedSheet
+        .locator(selector)
+        .first()
+        .evaluate((element) => getComputedStyle(element).borderStyle),
+      selector,
+    ).not.toBe("none");
+  }
 });
 
 test("shell reflows across required breakpoints and orientation changes", async ({
