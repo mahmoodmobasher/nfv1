@@ -24,6 +24,10 @@ function headers(status: number, locations: readonly string[] = []) {
   ].join("\r\n");
 }
 
+function headersWithStatusLine(statusLine: string, location = expectedPath) {
+  return `${statusLine}\r\nLocation: ${location}\r\n\r\n`;
+}
+
 function validate(headersText: string, overrides: Partial<{
   origin: string;
   expectedPath: string;
@@ -124,6 +128,46 @@ describe("UAT edge Location contract", () => {
       ok: true,
       probe: "verify-html",
       reason: null,
+    });
+  });
+
+  it.each([
+    ["HTTP/1.0", "HTTP/1.0 303"],
+    ["HTTP/1.1 with reason", "HTTP/1.1 303 See Other"],
+    ["HTTP/2", "HTTP/2 303"],
+    ["HTTP/3 with bounded reason", "HTTP/3 303 Redirect"],
+  ])("accepts supported status-line form %s", (_label, statusLine) => {
+    expect(validate(headersWithStatusLine(statusLine))).toEqual({
+      ok: true,
+      probe: "verify-html",
+      reason: null,
+    });
+  });
+
+  it.each([
+    ["alphabetic version", "HTTP/banana 303"],
+    ["lowercase protocol", "http/2 303"],
+    ["Unicode NBSP separator", "HTTP/2\u00a0303"],
+    ["Unicode EM SPACE separator", "HTTP/2\u2003303"],
+    ["tab separator", "HTTP/2\t303"],
+    ["unsupported decimal HTTP/2.0", "HTTP/2.0 303"],
+    ["unsupported arbitrary HTTP/999", "HTTP/999 303"],
+    ["malformed version punctuation", "HTTP/1..1 303"],
+    ["missing version", "HTTP/ 303"],
+    ["status below range", "HTTP/2 099"],
+    ["status above range", "HTTP/2 600"],
+    ["short status", "HTTP/2 30"],
+    ["long status", "HTTP/2 3030"],
+    ["double ASCII separator", "HTTP/2  303"],
+    ["trailing separator", "HTTP/2 303 "],
+    ["trailing invalid token", "HTTP/2 303 See Other\u0001"],
+    ["non-ASCII reason phrase", "HTTP/2 303 R\u00e9orienter"],
+    ["overlong reason phrase", `HTTP/2 303 ${"A".repeat(129)}`],
+  ])("rejects malformed status-line form: %s", (_label, statusLine) => {
+    expect(validate(headersWithStatusLine(statusLine))).toEqual({
+      ok: false,
+      probe: "verify-html",
+      reason: "headers_invalid",
     });
   });
 

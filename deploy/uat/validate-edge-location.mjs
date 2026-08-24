@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const SAFE_PROBE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const SAFE_PATH = /^\/[A-Za-z0-9/_-]*$/;
+const STATUS_LINE = /^HTTP\/(?:1\.0|1\.1|2|3) ([1-5][0-9]{2})(?: ([\x21-\x7e](?:[\x20-\x7e]{0,126}[\x21-\x7e])?))?$/;
 
 function safeProbe(value) {
   return typeof value === "string" && SAFE_PROBE.test(value) ? value : "invalid";
@@ -26,11 +27,9 @@ function parseResponseBlocks(headersText) {
 
   const responses = [];
   for (const lines of blocks) {
-    const statusMatch = /^HTTP\/\S+\s+(\d{3})(?:\s|$)/i.exec(lines[0]);
+    const statusMatch = STATUS_LINE.exec(lines[0]);
     if (!statusMatch) return null;
     const status = Number(statusMatch[1]);
-    if (status < 100 || status > 599) return null;
-    if (/[\u0000-\u001f\u007f-\u009f]/.test(lines[0])) return null;
     const headers = new Map();
     for (const line of lines.slice(1)) {
       if (/^[ \t]/.test(line)) return null;
