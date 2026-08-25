@@ -7,8 +7,6 @@ export function contactTransactionParticipant(tx: ModuleTransaction) {
       workspaceId: string;
       emailNormalized: string | null;
       phoneNormalized: string | null;
-      personNameNormalized: string;
-      companyNameNormalized: string | null;
     }): Promise<ContactCandidateV1[]> {
       const candidates: ContactCandidateV1[] = [];
       if (input.emailNormalized) {
@@ -27,16 +25,6 @@ export function contactTransactionParticipant(tx: ModuleTransaction) {
         );
         candidates.push(...rows.rows.map(row => ({ ...row, evidenceKind: "phone", evidenceStrength: "supplementary" } as ContactCandidateV1)));
       }
-      if (input.companyNameNormalized) {
-        const rows = await tx.query(
-          `select c.id,c.version,c.display_name "displayName",c.email_display "emailDisplay",c.phone_display "phoneDisplay",c.company_id "companyId"
-             from contacts c join companies o on o.workspace_id=c.workspace_id and o.id=c.company_id and o.status='active'
-            where c.workspace_id=$1 and c.status='active' and c.person_name_normalized=$2 and o.name_normalized=$3
-            order by c.id limit 10`,
-          [input.workspaceId, input.personNameNormalized, input.companyNameNormalized],
-        );
-        candidates.push(...rows.rows.map(row => ({ ...row, evidenceKind: "name_company", evidenceStrength: "probable" } as ContactCandidateV1)));
-      }
       return candidates;
     },
     async lockExisting(workspaceId: string, id: string, expectedVersion: number) {
@@ -48,7 +36,7 @@ export function contactTransactionParticipant(tx: ModuleTransaction) {
       if (row.version !== expectedVersion) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return row;
     },
-    async lockCandidateSet(workspaceId: string, candidates: ContactCandidateV1[]) {
+    async lockCandidateSet(workspaceId: string, candidates: Array<{ id: string; version: number }>) {
       const expected = new Map(candidates.map(candidate => [candidate.id, candidate.version]));
       const ids = [...expected.keys()].sort();
       if (!ids.length) return;
@@ -63,6 +51,11 @@ export function contactTransactionParticipant(tx: ModuleTransaction) {
       return (await tx.query(
         `select id,version,display_name "displayName",email_display email,phone_display phone
            from contacts where workspace_id=$1 and id=any($2::uuid[]) and status='active'`, [workspaceId, ids])).rows;
+    },
+    async assertFresh(workspaceId: string, id: string, expectedVersion: number) {
+      const row = (await tx.query(`select version,status from contacts where workspace_id=$1 and id=$2`, [workspaceId, id])).rows[0];
+      if (!row || row.status !== "active") throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      if (row.version !== expectedVersion) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
     },
     async create(input: CreateContactIdentityV1) {
       return (await tx.query(

@@ -23,7 +23,7 @@ export function companyTransactionParticipant(tx: ModuleTransaction) {
       if (row.version !== expectedVersion) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return row;
     },
-    async lockCandidateSet(workspaceId: string, candidates: CompanyCandidateV1[]) {
+    async lockCandidateSet(workspaceId: string, candidates: Array<{ id: string; version: number }>) {
       const expected = new Map(candidates.map(candidate => [candidate.id, candidate.version]));
       const ids = [...expected.keys()].sort();
       if (!ids.length) return;
@@ -33,11 +33,22 @@ export function companyTransactionParticipant(tx: ModuleTransaction) {
       if (rows.length !== ids.length || rows.some(row => row.status !== "active" || expected.get(row.id) !== row.version))
         throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
     },
+    async findActiveRowsByIds(workspaceId: string, ids: string[]) {
+      const unique = [...new Set(ids)].sort();
+      if (!unique.length) return [] as Array<{ id: string; version: number }>;
+      return (await tx.query(`select id,version from companies where workspace_id=$1 and id=any($2::uuid[]) and status='active' order by id`,
+        [workspaceId, unique])).rows as Array<{ id: string; version: number }>;
+    },
     async present(workspaceId: string, ids: string[]) {
       if (!ids.length) return [];
       return (await tx.query(
         `select id,version,display_name "displayName" from companies
           where workspace_id=$1 and id=any($2::uuid[]) and status='active'`, [workspaceId, ids])).rows;
+    },
+    async assertFresh(workspaceId: string, id: string, expectedVersion: number) {
+      const row = (await tx.query(`select version,status from companies where workspace_id=$1 and id=$2`, [workspaceId, id])).rows[0];
+      if (!row || row.status !== "active") throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      if (row.version !== expectedVersion) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
     },
     async create(input: CreateCompanyIdentityV1) {
       return (await tx.query(

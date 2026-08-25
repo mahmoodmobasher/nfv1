@@ -18,10 +18,23 @@ export async function writeGoverningAudit(tx: ModuleTransaction, input: {
   resultVersion: number;
   metadata?: P1AAuditMetadata;
 }): Promise<void> {
+  const operations = new Set<P1AOperation>(["lead-inquiry-intake.v1", "lead-identity-review-decision.v1"]);
+  const actions = new Set<P1AAuditAction>(["crm.inquiry_created", "crm.inquiry_held_for_review", "crm.inquiry_review_resolved"]);
+  const operationActions: Record<P1AOperation, Set<P1AAuditAction>> = {
+    "lead-inquiry-intake.v1": new Set(["crm.inquiry_created", "crm.inquiry_held_for_review"]),
+    "lead-identity-review-decision.v1": new Set(["crm.inquiry_held_for_review", "crm.inquiry_review_resolved"]),
+  };
+  if (!operations.has(input.operation) || !actions.has(input.action) || !operationActions[input.operation]?.has(input.action))
+    throw new Error("invalid_p1a_audit_identity");
+  if ((input.operation === "lead-inquiry-intake.v1" && input.targetType !== "lead") ||
+      (input.operation === "lead-identity-review-decision.v1" && input.targetType !== "identity_review"))
+    throw new Error("invalid_p1a_audit_target");
   const allowed = new Set(["contract_version", "intake_channel", "source_category", "source_platform", "source_medium",
     "disposition", "candidate_strong_count", "candidate_supplementary_count", "candidate_probable_count",
     "expected_version", "normalization_version"]);
   if (Object.keys(input.metadata ?? {}).some(key => !allowed.has(key))) throw new Error("invalid_p1a_audit_metadata");
+  if (Object.values(input.metadata ?? {}).some(value => value !== null && !["string", "number"].includes(typeof value)))
+    throw new Error("invalid_p1a_audit_metadata");
   await tx.query(
     `insert into audit_events(workspace_id,actor_user_id,actor_membership_id,actor_type,session_id,action,target_type,target_id,outcome,
       request_id,correlation_id,source_ip_policy,before,after,metadata_version,metadata)

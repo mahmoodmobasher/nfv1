@@ -34,8 +34,42 @@ describe("P1A stable errors and privacy allowlists", () => {
     await expect(writeGoverningAudit(tx, { actor, operation: "lead-inquiry-intake.v1", action: "crm.inquiry_created",
       targetType: "lead", targetId: crypto.randomUUID(), requestId: crypto.randomUUID(), correlationId: crypto.randomUUID(),
       resultVersion: 1, metadata: { email: "forbidden" } as never })).rejects.toThrow("invalid_p1a_audit_metadata");
+    await expect(writeGoverningAudit(tx, { actor, operation: "lead-inquiry-intake.v1", action: "crm.inquiry_created",
+      targetType: "lead", targetId: crypto.randomUUID(), requestId: crypto.randomUUID(), correlationId: crypto.randomUUID(),
+      resultVersion: 1, metadata: { source_category: { raw: "forbidden" } } as never })).rejects.toThrow("invalid_p1a_audit_metadata");
     await expect(writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: crypto.randomUUID(), events: [{
       topic: "crm.inquiry.created.v1", aggregateType: "lead", aggregateId: crypto.randomUUID(), resultVersion: 1,
       payload: { email: "forbidden@example.test" } }] })).rejects.toThrow("p1a_event_privacy_violation");
+  });
+
+  it("rejects invalid runtime Audit identities and event contracts", async () => {
+    const tx = { query: async () => ({ rows: [], rowCount: 1 }) } as never;
+    const common = { actor, targetType: "lead", targetId: crypto.randomUUID(), requestId: crypto.randomUUID(),
+      correlationId: crypto.randomUUID(), resultVersion: 1 };
+    await expect(writeGoverningAudit(tx, { ...common, operation: "unknown.v1", action: "crm.inquiry_created" } as never))
+      .rejects.toThrow("invalid_p1a_audit_identity");
+    await expect(writeGoverningAudit(tx, { ...common, operation: "lead-inquiry-intake.v1",
+      action: "crm.inquiry_review_resolved" })).rejects.toThrow("invalid_p1a_audit_identity");
+    const validPayload = { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: crypto.randomUUID(), leadVersion: 1,
+      lifecycle: "new", disposition: "created", intakeChannel: "manual", sourceCategory: "manual", sourcePlatform: null,
+      sourceMedium: "unknown", candidateSummary: { strong: 0, supplementary: 0, probable: 0 }, requestId: crypto.randomUUID() };
+    await expect(writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: crypto.randomUUID(), events: [{
+      topic: "crm.inquiry.created.v1", aggregateType: "contact", aggregateId: crypto.randomUUID(), resultVersion: 1,
+      payload: validPayload }] })).rejects.toThrow("invalid_p1a_event_aggregate");
+    await expect(writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: crypto.randomUUID(), events: [{
+      topic: "crm.inquiry.created.v1", aggregateType: "lead", aggregateId: crypto.randomUUID(), resultVersion: 1,
+      payload: { ...validPayload, secret: "no" } }] })).rejects.toThrow("invalid_p1a_event_payload");
+    await expect(writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: crypto.randomUUID(), events: [{
+      topic: "crm.inquiry.created.v1", aggregateType: "lead", aggregateId: validPayload.leadId, resultVersion: 1,
+      payload: { ...validPayload, candidateSummary: { strong: "ten", supplementary: 0, probable: 0 } } }] }))
+      .rejects.toThrow("invalid_p1a_event_payload");
+    await expect(writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: crypto.randomUUID(), events: [{
+      topic: "unknown.v1", aggregateType: "lead", aggregateId: crypto.randomUUID(), resultVersion: 1,
+      payload: validPayload }] } as never)).rejects.toThrow("invalid_p1a_event_topic");
+    const contactId = crypto.randomUUID();
+    await expect(writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: crypto.randomUUID(), events: [{
+      topic: "crm.contact.created.v1", aggregateType: "contact", aggregateId: contactId, resultVersion: 1,
+      payload: { schemaVersion: 1, workspaceId: actor.workspaceId, contactId, version: 1, requestId: crypto.randomUUID() } }] }))
+      .rejects.toThrow("invalid_p1a_event_set");
   });
 });

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 function files(root: string): string[] { return readdirSync(root).flatMap(name => { const path = join(root, name); return statSync(path).isDirectory() ? files(path) : [path]; }); }
 const modules = ["leads", "contacts", "companies", "identity-review"];
 const moduleFiles = files("src/backend/modules").filter(path => path.endsWith(".ts"));
+const platformFiles = files("src/backend/platform").filter(path => path.endsWith(".ts"));
 const registry = readFileSync("docs/architecture/capability-registry.md", "utf8");
 
 function routeViolation(source: string) {
@@ -24,6 +25,30 @@ function hasCycle(graph: Record<string, string[]>) {
 function ownershipRows(markdown: string) {
   const section = markdown.split("## Table ownership inventory")[1]?.split("## Stable identity inventory")[0] ?? "";
   return [...section.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)].map(match => ({ table: match[1], owner: match[2].trim() }));
+}
+const ownedByModule: Record<string, Set<string>> = {
+  leads: new Set(["leads", "lead_lifecycle_definitions", "lead_intakes", "lead_activities", "lead_visible_teams", "pipeline_stages"]),
+  contacts: new Set(["contacts"]), companies: new Set(["companies"]),
+  "identity-review": new Set(["lead_identity_reviews", "lead_identity_candidates", "lead_identity_decisions", "lead_identity_decision_heads"]),
+};
+function sqlTables(source: string) {
+  return [...source.matchAll(/\b(?:from|join|insert\s+into|update\s+(?!of\b)|delete\s+from)\s*([a-z][a-z0-9_]*)/gi)]
+    .map(match => match[1].toLowerCase());
+}
+function sqlOwnershipViolations(path: string, source: string) {
+  const moduleName = path.split("/")[3];
+  const reviewed = path.endsWith("companies/application/read-models/contact-company-candidate.read-model.ts")
+    ? new Set(["companies", "contacts"]) : ownedByModule[moduleName] ?? new Set<string>();
+  return sqlTables(source).filter(table => !reviewed.has(table));
+}
+const platformSql = {
+  authorization: new Set(["workspace_memberships", "roles", "workspaces", "users", "sessions", "teams", "team_memberships", "lead_visible_teams"]),
+  audit: new Set(["audit_events"]), outbox: new Set(["outbox_messages"]), database: new Set<string>(), idempotency: new Set<string>(),
+};
+function platformSqlViolations(path: string, source: string) {
+  const area = path.split("/")[3] as keyof typeof platformSql;
+  const allowed = platformSql[area] ?? new Set<string>();
+  return sqlTables(source).filter(table => !allowed.has(table));
 }
 
 describe("P1A modular-monolith boundaries", () => {
@@ -58,6 +83,20 @@ describe("P1A modular-monolith boundaries", () => {
     expect(routeViolation(`import {x} from "../../backend/modules/leads/persistence/repositories/x"`)).toBe(true);
     expect(routeViolation(`import {db} from "@/server/db/client"`)).toBe(true);
     expect(clientServerViolation(`"use client"; import {x} from "@/backend/modules/leads"`)).toBe(true);
+  });
+
+  it("rejects undeclared and cross-owner SQL, including negative fixtures", () => {
+    for (const path of moduleFiles)
+      expect(sqlOwnershipViolations(path, readFileSync(path, "utf8")), path).toEqual([]);
+    for (const path of platformFiles)
+      expect(platformSqlViolations(path, readFileSync(path, "utf8")), path).toEqual([]);
+    expect(sqlOwnershipViolations("src/backend/modules/contacts/persistence/x.ts", "select * from companies"))
+      .toEqual(["companies"]);
+    expect(sqlOwnershipViolations("src/backend/modules/leads/persistence/x.ts", "insert into mystery_table(id) values(1)"))
+      .toEqual(["mystery_table"]);
+    expect(sqlOwnershipViolations("src/backend/modules/companies/application/read-models/contact-company-candidate.read-model.ts",
+      "select * from contacts join companies on true")).toEqual([]);
+    expect(platformSqlViolations("src/backend/platform/audit/x.ts", "insert into leads(id) values(1)")).toEqual(["leads"]);
   });
 
   it("has an acyclic public module graph and proves the negative cycle fixture", () => {

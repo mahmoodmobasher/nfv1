@@ -6,9 +6,11 @@ import { canonicalRequestHash, lockIdempotencyAuthority, lockIdentityKeyAuthorit
 import { writeGoverningAudit } from "@/backend/platform/audit";
 import { writeDomainEventSet, type DomainEventV1 } from "@/backend/platform/outbox";
 import { contactTransactionParticipant } from "@/backend/modules/contacts";
-import { companyTransactionParticipant } from "@/backend/modules/companies";
+import { companyContactCandidateReadModel, companyTransactionParticipant } from "@/backend/modules/companies";
 import { identityReviewTransactionParticipant } from "@/backend/modules/identity-review";
 import { canonicalizeIntake } from "../../domain/lead-attribution.domain";
+import { CANDIDATE_QUERY_CONTRACT, sameCandidateSet, sameVersionSet, selectCandidateSetV1,
+  type CandidateQueryV1 } from "../../domain/identity-candidate-set.domain";
 import { leadTransactionParticipant } from "../../persistence/repositories/lead.repository";
 import { manualIntakeRepository } from "../../persistence/repositories/manual-intake.repository";
 import {
@@ -27,9 +29,10 @@ function asKnownError(error: unknown): never {
   throw error;
 }
 
-function sameCandidates(left: Array<{ id: string; version: number; evidenceKind: string }>, right: Array<{ id: string; version: number; evidenceKind: string }>) {
-  const key = (item: { id: string; version: number; evidenceKind: string }) => `${item.evidenceKind}:${item.id}:${item.version}`;
-  return left.length === right.length && left.map(key).sort().every((value, index) => value === right.map(key).sort()[index]);
+function publicResult(outcome: Record<string, unknown>): LeadInquiryIntakeResultV1 {
+  const { _candidateQuery: _private, ...result } = outcome;
+  void _private;
+  return result as LeadInquiryIntakeResultV1;
 }
 
 export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
@@ -63,7 +66,7 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         const actor = await revalidateActiveActor(tx, input.actor);
         if (actor.membershipId !== existing.actor_membership_id || !(await authority.canDiscloseLead(actor, lead)))
           throw new LeadIntakeError("resource_not_found", 404);
-        return { ...(existing.outcome as LeadInquiryIntakeResultV1), disposition: "replayed", replayed: true };
+        return { ...publicResult(existing.outcome as Record<string, unknown>), disposition: "replayed", replayed: true };
       }
 
       const actorLookup = await lookupActiveActor(tx, input.actor);
@@ -75,31 +78,45 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
 
       const contacts = contactTransactionParticipant(tx);
       const companies = companyTransactionParticipant(tx);
-      if (normalized.organizationNameNormalized) await lockIdentityKeyAuthority(tx,
-        `${actorLookup.workspaceId}:company:p1a-identity-v1:${normalized.organizationNameNormalized}`);
+      const companyContacts = companyContactCandidateReadModel(tx);
+      const candidateQuery: CandidateQueryV1 = { contractVersion: CANDIDATE_QUERY_CONTRACT,
+        emailNormalized: normalized.emailNormalized, phoneNormalized: normalized.phoneNormalized,
+        personNameNormalized: normalized.personNameNormalized, companyNameNormalized: normalized.organizationNameNormalized,
+        companyDomainNormalized: normalized.organizationDomainNormalized };
+      const companyKey = `${candidateQuery.companyNameNormalized ?? ""}:${candidateQuery.companyDomainNormalized ?? ""}`;
+      if (companyKey !== ":") await lockIdentityKeyAuthority(tx,
+        `${actorLookup.workspaceId}:company:p1a-identity-v1:${companyKey}`);
+      const companyQuery = { workspaceId: actorLookup.workspaceId, nameNormalized: candidateQuery.companyNameNormalized,
+        domainNormalized: candidateQuery.companyDomainNormalized };
+      const probableQuery = { workspaceId: actorLookup.workspaceId, personNameNormalized: candidateQuery.personNameNormalized,
+        companyNameNormalized: candidateQuery.companyNameNormalized };
+      const initialCompanies = await companies.findCandidates(companyQuery);
+      const initialProbable = await companyContacts.findProbableContacts(probableQuery);
+      const probableCompanyRows = await companies.findActiveRowsByIds(actorLookup.workspaceId,
+        initialProbable.flatMap(candidate => candidate.companyId ? [candidate.companyId] : []));
+      const companyRows = [...new Map([...initialCompanies, ...probableCompanyRows].map(item => [item.id, item])).values()];
+      await companies.lockCandidateSet(actorLookup.workspaceId, companyRows);
+      const companyRerun = await companies.findCandidates(companyQuery);
+      const probableRerun = await companyContacts.findProbableContacts(probableQuery);
+      const probableCompanyRerun = await companies.findActiveRowsByIds(actorLookup.workspaceId,
+        probableRerun.flatMap(candidate => candidate.companyId ? [candidate.companyId] : []));
+      if (!sameCandidateSet(initialCompanies, companyRerun) || !sameCandidateSet(initialProbable, probableRerun) ||
+          !sameVersionSet(probableCompanyRows, probableCompanyRerun))
+        throw new LeadIntakeError("stale_version", 409);
       const contactKey = normalized.emailNormalized ?? normalized.phoneNormalized ??
         `${normalized.personNameNormalized}:${normalized.organizationNameNormalized ?? ""}`;
       await lockIdentityKeyAuthority(tx, `${actorLookup.workspaceId}:contact:p1a-identity-v1:${contactKey}`);
-      const contactQuery = { workspaceId: actorLookup.workspaceId,
-        emailNormalized: normalized.emailNormalized, phoneNormalized: normalized.phoneNormalized,
-        personNameNormalized: normalized.personNameNormalized, companyNameNormalized: normalized.organizationNameNormalized };
-      const companyQuery = { workspaceId: actorLookup.workspaceId, nameNormalized: normalized.organizationNameNormalized,
-        domainNormalized: normalized.organizationDomainNormalized };
-      const initialCompanies = await companies.findCandidates(companyQuery);
-      await companies.lockCandidateSet(actorLookup.workspaceId, initialCompanies);
-      const initialContacts = await contacts.findCandidates(contactQuery);
-      await contacts.lockCandidateSet(actorLookup.workspaceId, initialContacts);
-      const allCompanyCandidates = await companies.findCandidates(companyQuery);
-      const contactCandidates = await contacts.findCandidates(contactQuery);
-      if (!sameCandidates(initialCompanies, allCompanyCandidates) || !sameCandidates(initialContacts, contactCandidates))
+      const contactQuery = { workspaceId: actorLookup.workspaceId, emailNormalized: candidateQuery.emailNormalized,
+        phoneNormalized: candidateQuery.phoneNormalized };
+      const initialDirect = await contacts.findCandidates(contactQuery);
+      const probableContacts = await companyContacts.findProbableContacts(probableQuery);
+      const selected = selectCandidateSetV1(initialDirect, probableContacts, initialCompanies);
+      await contacts.lockCandidateSet(actorLookup.workspaceId, selected.contacts);
+      const refreshed = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
+        await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
+      if (!sameCandidateSet(selected.companies, refreshed.companies) || !sameCandidateSet(selected.contacts, refreshed.contacts))
         throw new LeadIntakeError("stale_version", 409);
-      const probableContacts = contactCandidates.filter(candidate => candidate.evidenceStrength === "probable");
-      const companyCandidates = allCompanyCandidates.slice(0, Math.max(0, 10 - probableContacts.length));
-      const summary = {
-        strong: contactCandidates.filter(candidate => candidate.evidenceStrength === "strong").length,
-        supplementary: contactCandidates.filter(candidate => candidate.evidenceStrength === "supplementary").length,
-        probable: contactCandidates.filter(candidate => candidate.evidenceStrength === "probable").length + companyCandidates.length,
-      };
+      const contactCandidates = selected.contacts, companyCandidates = selected.companies, summary = selected.summary;
 
       const requestedMembership = input.command.requestedAssignment?.membershipId ??
         (input.compatibility ? input.actor.membershipId : null);
@@ -113,8 +130,10 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
       }
       await authority.validateAssignment(actor.workspaceId, requestedMembership, requestedTeam);
       for (const teamId of input.compatibility?.teamIds ?? []) await authority.validateAssignment(actor.workspaceId, null, teamId);
-      if (!sameCandidates(allCompanyCandidates, await companies.findCandidates(companyQuery)) ||
-          !sameCandidates(contactCandidates, await contacts.findCandidates(contactQuery))) throw new LeadIntakeError("stale_version", 409);
+      const finalCandidates = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
+        await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
+      if (!sameCandidateSet(companyCandidates, finalCandidates.companies) ||
+          !sameCandidateSet(contactCandidates, finalCandidates.contacts)) throw new LeadIntakeError("stale_version", 409);
       await leads.setInitialResponsibility({ workspaceId: actor.workspaceId, leadId: lead.id, membershipId: requestedMembership, teamId: requestedTeam });
       if (input.compatibility?.visibility === "teams") {
         await leads.addVisibleTeams(actor.workspaceId, lead.id, input.compatibility.teamIds);
@@ -128,7 +147,7 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         disposition: reviewId ? "held_for_review" : "created", candidateSummary: summary, leadVersion: lead.version,
         ...(reviewId ? { reviewCaseId: reviewId, reviewVersion: 1 } : {}), replayed: false, requestId,
       };
-      const committed = await receipts.commit(actor.workspaceId, intake.id, lead.id, baseResult);
+      const committed = await receipts.commit(actor.workspaceId, intake.id, lead.id, { ...baseResult, _candidateQuery: candidateQuery });
       let review: { id: string; version: number } | undefined;
       if (reviewId) {
         review = await reviews.open(actor.workspaceId, intake.id, lead.id, reviewId);

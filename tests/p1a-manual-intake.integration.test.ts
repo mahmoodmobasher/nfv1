@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { decideLeadIdentityReviewV1, submitLeadInquiryV1, resolveLeadIdentityReviewV1 } from "../src/backend/modules/leads";
-import { getIdentityReviewCandidatesV1 } from "../src/backend/modules/identity-review";
+import { decideLeadIdentityReviewV1, getIdentityReviewCandidatesV1, submitLeadInquiryV1,
+  resolveLeadIdentityReviewV1 } from "../src/backend/modules/leads";
 import type { TrustedActor } from "../src/backend/platform/authorization";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
@@ -127,6 +127,18 @@ suite("P1A manual intake modular transaction", () => {
       outcome: "resolve" as const, contact: { action: "link" as const, candidateId: contactCandidate.candidateId,
         targetId: contact.id, expectedTargetVersion: contactCandidate.targetVersion }, company: { action: "link" as const,
         candidateId: companyCandidate.candidateId, targetId: company.id, expectedTargetVersion: companyCandidate.targetVersion } };
+    await expect(resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(),
+      command: { ...decision, contact: { ...decision.contact, targetId: randomUUID() } } }))
+      .rejects.toMatchObject({ code: "invalid_match_decision" });
+    await expect(resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(),
+      command: { ...decision, company: { ...decision.company, targetId: randomUUID() } } }))
+      .rejects.toMatchObject({ code: "invalid_match_decision" });
+    await expect(resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(),
+      command: { ...decision, contact: { ...decision.contact, expectedTargetVersion: decision.contact.expectedTargetVersion + 1 } } }))
+      .rejects.toMatchObject({ code: "stale_version" });
+    await expect(resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(),
+      command: { ...decision, company: { ...decision.company, expectedTargetVersion: decision.company.expectedTargetVersion + 1 } } }))
+      .rejects.toMatchObject({ code: "stale_version" });
     const result = await resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: decision, idempotencyKey: key });
     const replay = await resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: decision, idempotencyKey: key });
     expect(result).toMatchObject({ contactId: contact.id, companyId: company.id, leadVersion: 2, reviewVersion: 2, replayed: false });
@@ -197,6 +209,26 @@ suite("P1A manual intake modular transaction", () => {
     await expect(pending).rejects.toMatchObject({ code: "resource_not_found" });
     expect((await pool.query("select count(*)::int count from lead_identity_decisions")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from contacts")).rows[0].count).toBe(1);
+    expect((await pool.query("select count(*)::int count from audit_events")).rows[0].count).toBe(1);
+  });
+
+  it("rejects an in-flight owner-assignment loss before any decision mutation", async () => {
+    const f = await fixture(), email = "assignment-race@example.test";
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      values($1,'Assignment Race','assignment race',$2,$2)`, [f.workspace.id, email]);
+    const held = await submitLeadInquiryV1(pool, { actor: f.member, command: command({ person: { displayName: "Assignment Race", email },
+      requestedAssignment: { membershipId: f.member.membershipId } }), idempotencyKey: randomUUID() });
+    const view = await getIdentityReviewCandidatesV1(pool, f.member, held.leadId), blocker = await pool.connect();
+    await blocker.query("begin");
+    await blocker.query("update leads set owner_membership_id=null where workspace_id=$1 and id=$2", [f.workspace.id, held.leadId]);
+    const pending = decideLeadIdentityReviewV1(pool, { actor: f.member, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
+      contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
+      expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
+      contact: { action: "create" }, company: { action: "dismiss" } } });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await blocker.query("commit"); blocker.release();
+    await expect(pending).rejects.toMatchObject({ code: "resource_not_found" });
+    expect((await pool.query("select count(*)::int count from lead_identity_decisions")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from audit_events")).rows[0].count).toBe(1);
   });
 
@@ -285,6 +317,28 @@ suite("P1A manual intake modular transaction", () => {
     expect((await pool.query("select count(*)::int count from contacts where email_normalized=$1", [email])).rows[0].count).toBe(2);
   });
 
+  it("avoids deadlock when intake and resolution contend on the same Company and Contact identities", async () => {
+    const f = await fixture(), email = "intake-resolution-race@example.test";
+    await pool.query(`insert into companies(workspace_id,display_name,name_normalized) values($1,'North Labs','north labs')`, [f.workspace.id]);
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      values($1,'Race Seed','race seed',$2,$2)`, [f.workspace.id, email]);
+    const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email } }),
+      idempotencyKey: randomUUID() });
+    const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
+    const settled = await Promise.allSettled([
+      decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
+        contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
+        expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
+        contact: { action: "create" }, company: { action: "create" } } }),
+      submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email } }),
+        idempotencyKey: randomUUID() }),
+    ]);
+    for (const item of settled) if (item.status === "rejected") {
+      expect(String(item.reason?.code ?? item.reason?.message)).not.toMatch(/40P01|deadlock/i);
+    }
+    expect(settled.some(item => item.status === "fulfilled")).toBe(true);
+  });
+
   it("rejects stale candidate targets and caps deterministic Workspace-scoped disclosure at ten", async () => {
     const f = await fixture(), email = "bounded@example.test";
     const ids: string[] = [];
@@ -308,6 +362,56 @@ suite("P1A manual intake modular transaction", () => {
     await expect(getIdentityReviewCandidatesV1(pool, foreign.owner, held.leadId)).rejects.toMatchObject({ code: "resource_not_found" });
   });
 
+  it("caps email, phone, and mixed probable evidence independently with a combined maximum of thirty", async () => {
+    const f = await fixture(), email = "all-caps@example.test", phone = "+14165550123";
+    for (let index = 0; index < 12; index++) {
+      await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+        values($1,$2,$3,$4,$4)`, [f.workspace.id, `Email ${index}`, `email ${index}`, email]);
+      await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,phone_display,phone_normalized,phone_country_code_used)
+        values($1,$2,$3,$4,$4,'CA')`, [f.workspace.id, `Phone ${index}`, `phone ${index}`, phone]);
+    }
+    for (let index = 0; index < 16; index++) {
+      const company = (await pool.query<{ id: string }>(`insert into companies(workspace_id,display_name,name_normalized)
+        values($1,$2,'north labs') returning id`, [f.workspace.id, `North Labs ${index}`])).rows[0];
+      if (index < 6) await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,company_id)
+        values($1,'Cap Person','cap person',$2)`, [f.workspace.id, company.id]);
+    }
+    const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({
+      person: { displayName: "Cap Person", email, phone }, organization: { name: "North Labs" } }), idempotencyKey: randomUUID() });
+    expect(held.candidateSummary).toEqual({ strong: 10, supplementary: 10, probable: 10 });
+    const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
+    expect(view.candidates).toHaveLength(30);
+    for (const kind of ["email", "phone", "name_company"] as const) {
+      const ids = view.candidates.filter(item => item.evidenceKind === kind).map(item => item.targetId);
+      expect(ids).toEqual([...ids].sort());
+    }
+    const result = await decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
+      contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
+      expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
+      contact: { action: "dismiss" }, company: { action: "dismiss" } } });
+    expect(result.disposition).toBe("resolved");
+  });
+
+  it("persists the normalized Company domain query and uses it for candidate rerun", async () => {
+    const f = await fixture(), domain = "domain-rerun.example";
+    await pool.query(`insert into companies(workspace_id,display_name,name_normalized,domain_normalized)
+      values($1,'Different Name','different name',$2)`, [f.workspace.id, domain]);
+    const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: {
+      displayName: "Domain Person", email: "domain-person@example.test" }, organization: { name: "Submitted Name", domain } }),
+      idempotencyKey: randomUUID() });
+    expect(held.candidateSummary.probable).toBe(1);
+    const stored = (await pool.query(`select outcome #>> '{_candidateQuery,companyDomainNormalized}' domain
+      from lead_intakes where id=$1`, [held.intakeId])).rows[0];
+    expect(stored.domain).toBe(domain);
+    const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
+    const result = await decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
+      contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
+      expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
+      contact: { action: "dismiss" }, company: { action: "create" } } });
+    expect(result.companyId).toBeTruthy();
+    expect((await pool.query("select domain_normalized from companies where id=$1", [result.companyId])).rows[0].domain_normalized).toBe(domain);
+  });
+
   it("rolls the entire command back when a required event write fails", async () => {
     const f = await fixture();
     await pool.query(`create function fail_p1a_event() returns trigger language plpgsql as $$ begin
@@ -317,6 +421,81 @@ suite("P1A manual intake modular transaction", () => {
     finally { await pool.query("drop trigger fail_p1a_event on outbox_messages");await pool.query("drop function fail_p1a_event()") }
     for (const table of ["leads", "lead_intakes", "lead_identity_reviews", "lead_identity_candidates", "lead_identity_decisions", "audit_events", "outbox_messages"]) {
       expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count, table).toBe(0);
+    }
+  });
+
+  it("rolls back and permits same-key retry at every manual-intake write boundary", async () => {
+    const boundaries = [
+      { table: "leads", when: "after insert", condition: "true" },
+      { table: "lead_identity_reviews", when: "after insert", condition: "true" },
+      { table: "lead_identity_candidates", when: "after insert", condition: "true" },
+      { table: "lead_identity_decisions", when: "after insert", condition: "true" },
+      { table: "lead_identity_decision_heads", when: "after insert", condition: "true" },
+      { table: "lead_intakes", when: "before update", condition: "new.state='committed'" },
+      { table: "audit_events", when: "after insert", condition: "true" },
+      { table: "outbox_messages", when: "after insert", condition: "new.topic='crm.inquiry.created.v1'" },
+      { table: "outbox_messages", when: "after insert", condition: "new.topic='crm.inquiry.review_required.v1'" },
+    ];
+    for (const [index, boundary] of boundaries.entries()) {
+      await pool.query("truncate users cascade");
+      const f = await fixture(), email = `intake-boundary-${index}@example.test`, key = randomUUID();
+      await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+        values($1,'Intake Boundary','intake boundary',$2,$2)`, [f.workspace.id, email]);
+      const functionName = `fail_p1a_intake_${index}`, triggerName = `fail_p1a_intake_${index}`;
+      await pool.query(`create function ${functionName}() returns trigger language plpgsql as $$ begin
+        if ${boundary.condition} then raise exception 'injected intake boundary failure'; end if; return new; end $$`);
+      await pool.query(`create trigger ${triggerName} ${boundary.when} on ${boundary.table} for each row execute function ${functionName}()`);
+      const intakeCommand = command({ person: { displayName: "Intake Boundary", email } });
+      try {
+        await expect(submitLeadInquiryV1(pool, { actor: f.owner, command: intakeCommand, idempotencyKey: key })).rejects.toThrow("injected");
+      } finally {
+        await pool.query(`drop trigger ${triggerName} on ${boundary.table}`);
+        await pool.query(`drop function ${functionName}()`);
+      }
+      for (const table of ["leads", "lead_intakes", "lead_identity_reviews", "lead_identity_candidates",
+        "lead_identity_decisions", "lead_identity_decision_heads", "lead_activities", "audit_events", "outbox_messages"])
+        expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count, `${boundary.table}:${table}`).toBe(0);
+      const retry = await submitLeadInquiryV1(pool, { actor: f.owner, command: intakeCommand, idempotencyKey: key });
+      expect(retry).toMatchObject({ disposition: "held_for_review", replayed: false });
+      expect((await pool.query("select count(*)::int count from leads")).rows[0].count).toBe(1);
+    }
+  });
+
+  it("rolls back Hold Audit and Outbox failures and permits same-key retry", async () => {
+    for (const [index, boundary] of [
+      { table: "audit_events", condition: "new.action='crm.inquiry_held_for_review'" },
+      { table: "outbox_messages", condition: "new.topic='crm.inquiry.review_required.v1'" },
+    ].entries()) {
+      await pool.query("truncate users cascade");
+      const f = await fixture(), email = `hold-boundary-${index}@example.test`, key = randomUUID();
+      await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+        values($1,'Hold Boundary','hold boundary',$2,$2)`, [f.workspace.id, email]);
+      const held = await submitLeadInquiryV1(pool, { actor: f.owner,
+        command: command({ person: { displayName: "Hold Boundary", email } }), idempotencyKey: randomUUID() });
+      const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
+      const before = { decisions: (await pool.query("select count(*)::int count from lead_identity_decisions")).rows[0].count,
+        audits: (await pool.query("select count(*)::int count from audit_events")).rows[0].count,
+        events: (await pool.query("select count(*)::int count from outbox_messages")).rows[0].count };
+      const functionName = `fail_p1a_hold_${index}`, triggerName = `fail_p1a_hold_${index}`;
+      await pool.query(`create function ${functionName}() returns trigger language plpgsql as $$ begin
+        if ${boundary.condition} then raise exception 'injected hold boundary failure'; end if; return new; end $$`);
+      await pool.query(`create trigger ${triggerName} after insert on ${boundary.table} for each row execute function ${functionName}()`);
+      const hold = { contractVersion: "lead-identity-review-decision.v1" as const, outcome: "hold" as const,
+        expectedLeadVersion: view.leadVersion, expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion };
+      try {
+        await expect(decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: hold, idempotencyKey: key }))
+          .rejects.toThrow("injected");
+      } finally {
+        await pool.query(`drop trigger ${triggerName} on ${boundary.table}`);
+        await pool.query(`drop function ${functionName}()`);
+      }
+      expect((await pool.query("select state,version from lead_identity_reviews where id=$1", [view.reviewId])).rows[0])
+        .toMatchObject({ state: "pending", version: view.reviewVersion });
+      expect((await pool.query("select count(*)::int count from lead_identity_decisions")).rows[0].count).toBe(before.decisions);
+      expect((await pool.query("select count(*)::int count from audit_events")).rows[0].count).toBe(before.audits);
+      expect((await pool.query("select count(*)::int count from outbox_messages")).rows[0].count).toBe(before.events);
+      const retry = await decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: hold, idempotencyKey: key });
+      expect(retry).toMatchObject({ outcome: "hold", replayed: false, reviewVersion: view.reviewVersion + 1 });
     }
   });
 

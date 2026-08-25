@@ -6,8 +6,9 @@ import { canonicalRequestHash, lockIdempotencyAuthority, lockIdentityKeyAuthorit
 import { writeGoverningAudit } from "@/backend/platform/audit";
 import { writeDomainEventSet, type DomainEventV1 } from "@/backend/platform/outbox";
 import { contactTransactionParticipant } from "@/backend/modules/contacts";
-import { companyTransactionParticipant } from "@/backend/modules/companies";
+import { companyContactCandidateReadModel, companyTransactionParticipant } from "@/backend/modules/companies";
 import { identityReviewTransactionParticipant, type IdentityReviewDecisionCommandV1 } from "@/backend/modules/identity-review";
+import { sameCandidateSet, sameVersionSet, selectCandidateSetV1, type CandidateQueryV1 } from "../../domain/identity-candidate-set.domain";
 import { leadTransactionParticipant } from "../../persistence/repositories/lead.repository";
 import { LeadIntakeError } from "../../contracts/lead-inquiry-intake.contract";
 
@@ -20,14 +21,6 @@ export type LeadIdentityReviewDecisionResultV1 = {
 };
 export type ResolveLeadIdentityReviewResultV1 = LeadIdentityReviewDecisionResultV1;
 
-function normalized(value: unknown): string | null {
-  const text = String(value ?? "").normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-  return text || null;
-}
-function sameSnapshot(current: Array<{ id: string; version: number }>, prior: Array<{ id: string; version: number }>) {
-  const left = new Map(current.map(item => [item.id, item.version])), right = new Map(prior.map(item => [item.id, item.version]));
-  return left.size === right.size && [...left].every(([id, version]) => right.get(id) === version);
-}
 async function authorizeDisclosure(tx: ModuleTransaction, actorInput: TrustedActor, lead: {
   id: string; owner_membership_id: string | null; responsible_team_id?: string | null; visibility: string;
 }, originalActorMembershipId: string) {
@@ -47,10 +40,12 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
   try {
     return await runModuleTransaction(pool, async tx => {
       await lockIdempotencyAuthority(tx, `${input.actor.workspaceId}:lead-identity-review-decision.v1:${input.idempotencyKey}`);
-      const reviews = identityReviewTransactionParticipant(tx), receipt = await reviews.findDecisionReceipt(input.actor.workspaceId, input.idempotencyKey);
+      const reviews = identityReviewTransactionParticipant(tx), leads = leadTransactionParticipant(tx);
+      const receipt = await reviews.findDecisionReceipt(input.actor.workspaceId, input.idempotencyKey);
       if (receipt) {
         if (receipt.request_hash !== requestHash) throw new LeadIntakeError("idempotency_conflict", 409);
-        const disclosure = await reviews.lockDisclosure(input.actor.workspaceId, receipt.review_id);
+        const disclosure = await leads.lockIntakeLeadContext(input.actor.workspaceId, receipt.intake_id, receipt.lead_id);
+        await reviews.lockDisclosureReview(input.actor.workspaceId, receipt.review_id);
         await authorizeDisclosure(tx, input.actor, disclosure, receipt.actor_membership_id);
         return { contractVersion: "lead-identity-review-decision-result.v1", outcome: receipt.governing_outcome,
           disposition: "replayed", reviewId: receipt.review_id, leadId: receipt.lead_id,
@@ -58,39 +53,76 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
           leadVersion: receipt.result_lead_version, reviewVersion: receipt.result_review_version, replayed: true, requestId: receipt.request_id };
       }
 
-      const trusted = await lookupActiveActor(tx, input.actor), reviewsLocked = await reviews.lockPending(input.actor.workspaceId, input.leadId);
-      const priorHead = await reviews.currentHead(trusted.workspaceId, reviewsLocked.intake_id);
-      if (reviewsLocked.version !== input.command.expectedReviewVersion || reviewsLocked.lead_version !== input.command.expectedLeadVersion ||
-          reviewsLocked.intake_version !== input.command.expectedIntakeVersion) throw new LeadIntakeError("stale_version", 409);
-      const leads = leadTransactionParticipant(tx), lead = await leads.lockForResolution(trusted.workspaceId, reviewsLocked.lead_id);
+      const trusted = await lookupActiveActor(tx, input.actor);
+      const refs = await reviews.findByLead(trusted.workspaceId, input.leadId);
+      const lead = await leads.lockIntakeLeadContext(trusted.workspaceId, refs.intake_id, refs.lead_id);
+      const reviewsLocked = await reviews.lockReview(trusted.workspaceId, refs.id);
+      const priorHead = await reviews.currentHead(trusted.workspaceId, refs.intake_id);
+      if (reviewsLocked.version !== input.command.expectedReviewVersion || lead.version !== input.command.expectedLeadVersion ||
+          lead.intake_version !== input.command.expectedIntakeVersion) throw new LeadIntakeError("stale_version", 409);
+      const candidateQuery = lead.candidate_query as CandidateQueryV1 | undefined;
+      if (!candidateQuery || candidateQuery.contractVersion !== "p1a-candidate-query.v1")
+        throw new LeadIntakeError("stale_version", 409);
       const companies = companyTransactionParticipant(tx), contacts = contactTransactionParticipant(tx);
+      const companyContacts = companyContactCandidateReadModel(tx);
       let companyCandidate: { id: string; target_id: string; target_version: number } | undefined;
       let contactCandidate: { id: string; target_id: string; target_version: number } | undefined;
-      if (input.command.outcome === "resolve" && input.command.company.action === "link")
+      if (input.command.outcome === "resolve" && input.command.company.action === "link") {
         companyCandidate = await reviews.candidate(trusted.workspaceId, reviewsLocked.id, input.command.company.candidateId, "company");
-      if (input.command.outcome === "resolve" && input.command.contact.action === "link")
-        contactCandidate = await reviews.candidate(trusted.workspaceId, reviewsLocked.id, input.command.contact.candidateId, "contact");
-
-      const companyNameNormalized = normalized(lead.company);
-      if (input.command.outcome === "resolve" && input.command.company.action === "create" && companyNameNormalized)
-        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:company:p1a-identity-v1:${companyNameNormalized}`);
-      if (companyCandidate) await companies.lockExisting(trusted.workspaceId, companyCandidate.target_id, companyCandidate.target_version);
-      if (input.command.outcome === "resolve" && input.command.company.action === "create") {
-        const query = { workspaceId: trusted.workspaceId, nameNormalized: companyNameNormalized, domainNormalized: null };
-        const current = await companies.findCandidates(query); await companies.lockCandidateSet(trusted.workspaceId, current);
-        if (!sameSnapshot(await companies.findCandidates(query), await reviews.targetSnapshot(trusted.workspaceId, reviewsLocked.id, "company")))
+        if (input.command.company.targetId !== companyCandidate.target_id)
+          throw new LeadIntakeError("invalid_match_decision", 409);
+        if (input.command.company.expectedTargetVersion !== companyCandidate.target_version)
           throw new LeadIntakeError("stale_version", 409);
       }
-      if (input.command.outcome === "resolve" && input.command.contact.action === "create") {
-        const key = lead.email_normalized ?? lead.phone_normalized ?? `${lead.person_name_normalized}:${companyNameNormalized ?? ""}`;
-        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:contact:p1a-identity-v1:${key}`);
+      if (input.command.outcome === "resolve" && input.command.contact.action === "link") {
+        contactCandidate = await reviews.candidate(trusted.workspaceId, reviewsLocked.id, input.command.contact.candidateId, "contact");
+        if (input.command.contact.targetId !== contactCandidate.target_id)
+          throw new LeadIntakeError("invalid_match_decision", 409);
+        if (input.command.contact.expectedTargetVersion !== contactCandidate.target_version)
+          throw new LeadIntakeError("stale_version", 409);
       }
-      if (contactCandidate) await contacts.lockExisting(trusted.workspaceId, contactCandidate.target_id, contactCandidate.target_version);
-      if (input.command.outcome === "resolve" && input.command.contact.action === "create") {
-        const query = { workspaceId: trusted.workspaceId, emailNormalized: lead.email_normalized,
-          phoneNormalized: lead.phone_normalized, personNameNormalized: lead.person_name_normalized, companyNameNormalized };
-        const current = await contacts.findCandidates(query); await contacts.lockCandidateSet(trusted.workspaceId, current);
-        if (!sameSnapshot(await contacts.findCandidates(query), await reviews.targetSnapshot(trusted.workspaceId, reviewsLocked.id, "contact")))
+
+      const companyKey = `${candidateQuery.companyNameNormalized ?? ""}:${candidateQuery.companyDomainNormalized ?? ""}`;
+      if (input.command.outcome === "resolve" && input.command.company.action === "create" && companyKey !== ":")
+        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:company:p1a-identity-v1:${companyKey}`);
+      const companyQuery = { workspaceId: trusted.workspaceId, nameNormalized: candidateQuery.companyNameNormalized,
+        domainNormalized: candidateQuery.companyDomainNormalized };
+      const probableQuery = { workspaceId: trusted.workspaceId, personNameNormalized: candidateQuery.personNameNormalized,
+        companyNameNormalized: candidateQuery.companyNameNormalized };
+      const contactQuery = { workspaceId: trusted.workspaceId, emailNormalized: candidateQuery.emailNormalized,
+        phoneNormalized: candidateQuery.phoneNormalized };
+      if (input.command.outcome === "resolve") {
+        const initialCompanies = await companies.findCandidates(companyQuery);
+        const initialProbable = await companyContacts.findProbableContacts(probableQuery);
+        const probableCompanyRows = await companies.findActiveRowsByIds(trusted.workspaceId,
+          initialProbable.flatMap(candidate => candidate.companyId ? [candidate.companyId] : []));
+        const companyRows = [...initialCompanies, ...probableCompanyRows,
+          ...(companyCandidate ? [{ id: companyCandidate.target_id, version: companyCandidate.target_version }] : [])];
+        await companies.lockCandidateSet(trusted.workspaceId, companyRows);
+        const companyRerun = await companies.findCandidates(companyQuery);
+        const probableRerun = await companyContacts.findProbableContacts(probableQuery);
+        const probableCompanyRerun = await companies.findActiveRowsByIds(trusted.workspaceId,
+          probableRerun.flatMap(candidate => candidate.companyId ? [candidate.companyId] : []));
+        if (!sameCandidateSet(initialCompanies, companyRerun) || !sameCandidateSet(initialProbable, probableRerun) ||
+            !sameVersionSet(probableCompanyRows, probableCompanyRerun))
+          throw new LeadIntakeError("stale_version", 409);
+        if (input.command.contact.action === "create") {
+          const key = candidateQuery.emailNormalized ?? candidateQuery.phoneNormalized ??
+            `${candidateQuery.personNameNormalized}:${candidateQuery.companyNameNormalized ?? ""}`;
+          await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:contact:p1a-identity-v1:${key}`);
+        }
+        const selected = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
+          await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
+        await contacts.lockCandidateSet(trusted.workspaceId, [...selected.contacts,
+          ...(contactCandidate ? [{ id: contactCandidate.target_id, version: contactCandidate.target_version }] : [])]);
+        const lockedRerun = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
+          await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
+        if (!sameCandidateSet(selected.contacts, lockedRerun.contacts) ||
+            !sameCandidateSet(selected.companies, lockedRerun.companies)) throw new LeadIntakeError("stale_version", 409);
+        if (!sameCandidateSet(lockedRerun.contacts,
+            await reviews.targetSnapshot(trusted.workspaceId, reviewsLocked.id, "contact")) ||
+            !sameCandidateSet(lockedRerun.companies,
+              await reviews.targetSnapshot(trusted.workspaceId, reviewsLocked.id, "company")))
           throw new LeadIntakeError("stale_version", 409);
       }
 
@@ -105,37 +137,34 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         const fresh = await reviews.candidate(actor.workspaceId, reviewsLocked.id, companyCandidate.id, "company");
         if (fresh.target_id !== companyCandidate.target_id || fresh.target_version !== companyCandidate.target_version)
           throw new LeadIntakeError("stale_version", 409);
-        await companies.lockExisting(actor.workspaceId, fresh.target_id, fresh.target_version);
+        await companies.assertFresh(actor.workspaceId, fresh.target_id, fresh.target_version);
       }
       if (contactCandidate) {
         const fresh = await reviews.candidate(actor.workspaceId, reviewsLocked.id, contactCandidate.id, "contact");
         if (fresh.target_id !== contactCandidate.target_id || fresh.target_version !== contactCandidate.target_version)
           throw new LeadIntakeError("stale_version", 409);
-        await contacts.lockExisting(actor.workspaceId, fresh.target_id, fresh.target_version);
+        await contacts.assertFresh(actor.workspaceId, fresh.target_id, fresh.target_version);
       }
-      if (input.command.outcome === "resolve" && input.command.company.action === "create") {
-        const current = await companies.findCandidates({ workspaceId: actor.workspaceId,
-          nameNormalized: companyNameNormalized, domainNormalized: null });
-        if (!sameSnapshot(current, await reviews.targetSnapshot(actor.workspaceId, reviewsLocked.id, "company")))
+      if (input.command.outcome === "resolve") {
+        const finalCandidates = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
+          await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
+        if (!sameCandidateSet(finalCandidates.contacts, await reviews.targetSnapshot(actor.workspaceId, reviewsLocked.id, "contact")) ||
+            !sameCandidateSet(finalCandidates.companies, await reviews.targetSnapshot(actor.workspaceId, reviewsLocked.id, "company")))
           throw new LeadIntakeError("stale_version", 409);
       }
-      if (input.command.outcome === "resolve" && input.command.contact.action === "create") {
-        const current = await contacts.findCandidates({ workspaceId: actor.workspaceId, emailNormalized: lead.email_normalized,
-          phoneNormalized: lead.phone_normalized, personNameNormalized: lead.person_name_normalized, companyNameNormalized });
-        if (!sameSnapshot(current, await reviews.targetSnapshot(actor.workspaceId, reviewsLocked.id, "contact")))
-          throw new LeadIntakeError("stale_version", 409);
-      }
-      await reviews.assertPendingVersions({ workspaceId: actor.workspaceId, reviewId: reviewsLocked.id, leadId: lead.id,
-        intakeId: reviewsLocked.intake_id, expectedReviewVersion: input.command.expectedReviewVersion,
-        expectedLeadVersion: input.command.expectedLeadVersion, expectedIntakeVersion: input.command.expectedIntakeVersion, expectedHead: priorHead });
+      await leads.assertIntakeLeadVersions({ workspaceId: actor.workspaceId, intakeId: reviewsLocked.intake_id,
+        leadId: lead.id, expectedIntakeVersion: input.command.expectedIntakeVersion,
+        expectedLeadVersion: input.command.expectedLeadVersion });
+      await reviews.assertPendingReviewHead({ workspaceId: actor.workspaceId, reviewId: reviewsLocked.id,
+        intakeId: reviewsLocked.intake_id, expectedReviewVersion: input.command.expectedReviewVersion, expectedHead: priorHead });
 
       if (input.command.outcome === "hold") {
         const resultReviewVersion = reviewsLocked.version + 1;
         const decision = await reviews.appendDecision({ workspaceId: actor.workspaceId, intakeId: reviewsLocked.intake_id,
           reviewId: reviewsLocked.id, idempotencyKey: input.idempotencyKey, requestHash, requestId, correlationId: requestId,
           supersedesDecisionId: priorHead, governingOutcome: "hold", actorMembershipId: actor.membershipId,
-          expectedLeadVersion: reviewsLocked.lead_version, expectedReviewVersion: reviewsLocked.version,
-          expectedIntakeVersion: reviewsLocked.intake_version, resultLeadVersion: reviewsLocked.lead_version,
+          expectedLeadVersion: lead.version, expectedReviewVersion: reviewsLocked.version,
+          expectedIntakeVersion: lead.intake_version, resultLeadVersion: lead.version,
           resultReviewVersion, reasonCode: input.command.reasonCode });
         await reviews.setDecisionHead(actor.workspaceId, reviewsLocked.intake_id, decision.id, priorHead);
         const held = await reviews.touchPending(actor.workspaceId, reviewsLocked.id, reviewsLocked.version);
@@ -145,10 +174,10 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
             expected_version: reviewsLocked.version, normalization_version: "p1a-identity-v1" } });
         await writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: decision.id, events: [{
           topic: "crm.inquiry.review_required.v1", aggregateType: "lead", aggregateId: lead.id, resultVersion: held.version,
-          payload: { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: lead.id, leadVersion: reviewsLocked.lead_version,
+          payload: { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: lead.id, leadVersion: lead.version,
             reviewId: reviewsLocked.id, reviewVersion: held.version, disposition: "held_for_review", requestId } }] });
         return { contractVersion: "lead-identity-review-decision-result.v1", outcome: "hold", disposition: "held_for_review",
-          reviewId: reviewsLocked.id, leadId: lead.id, leadVersion: reviewsLocked.lead_version, reviewVersion: held.version,
+          reviewId: reviewsLocked.id, leadId: lead.id, leadVersion: lead.version, reviewVersion: held.version,
           replayed: false, requestId };
       }
 
@@ -156,9 +185,9 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
       if (input.command.company.action === "link" && companyCandidate) {
         companyId = companyCandidate.target_id; companyVersion = companyCandidate.target_version;
       } else if (input.command.company.action === "create") {
-        if (!companyNameNormalized) throw new LeadIntakeError("invalid_match_decision", 409);
+        if (!candidateQuery.companyNameNormalized) throw new LeadIntakeError("invalid_match_decision", 409);
         const created = await companies.create({ workspaceId: actor.workspaceId, displayName: String(lead.company),
-          nameNormalized: companyNameNormalized, domainNormalized: null });
+          nameNormalized: candidateQuery.companyNameNormalized, domainNormalized: candidateQuery.companyDomainNormalized });
         companyId = created.id; companyVersion = created.version; companyCreated = true;
       }
       let contactId: string | null = null, contactVersion: number | null = null, contactCreated = false;
@@ -171,18 +200,18 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
           phoneNormalized: lead.phone_normalized, phoneCountryCodeUsed: lead.phone_country_code_used, companyId });
         contactId = created.id; contactVersion = created.version; contactCreated = true;
       }
-      const resultLeadVersion = reviewsLocked.lead_version + 1, resultReviewVersion = reviewsLocked.version + 1;
+      const resultLeadVersion = lead.version + 1, resultReviewVersion = reviewsLocked.version + 1;
       const decision = await reviews.appendDecision({ workspaceId: actor.workspaceId, intakeId: reviewsLocked.intake_id,
         reviewId: reviewsLocked.id, idempotencyKey: input.idempotencyKey, requestHash, requestId, correlationId: requestId,
         supersedesDecisionId: priorHead, governingOutcome: "resolve", contactAction: input.command.contact.action,
         companyAction: input.command.company.action, contactId, companyId, contactCandidateId: contactCandidate?.id,
         companyCandidateId: companyCandidate?.id, contactTargetVersion: contactVersion, companyTargetVersion: companyVersion,
-        actorMembershipId: actor.membershipId, expectedLeadVersion: reviewsLocked.lead_version,
-        expectedReviewVersion: reviewsLocked.version, expectedIntakeVersion: reviewsLocked.intake_version,
+        actorMembershipId: actor.membershipId, expectedLeadVersion: lead.version,
+        expectedReviewVersion: reviewsLocked.version, expectedIntakeVersion: lead.intake_version,
         resultLeadVersion, resultReviewVersion, reasonCode: input.command.reasonCode });
       await reviews.setDecisionHead(actor.workspaceId, reviewsLocked.intake_id, decision.id, priorHead);
       const updatedLead = await leads.resolveIdentity({ workspaceId: actor.workspaceId, leadId: reviewsLocked.lead_id,
-        expectedVersion: reviewsLocked.lead_version, contactId, companyId });
+        expectedVersion: lead.version, contactId, companyId });
       const updatedReview = await reviews.resolve(actor.workspaceId, reviewsLocked.id, reviewsLocked.version, actor.membershipId);
       await writeGoverningAudit(tx, { actor, operation: "lead-identity-review-decision.v1", action: "crm.inquiry_review_resolved",
         targetType: "identity_review", targetId: reviewsLocked.id, requestId, correlationId: requestId, resultVersion: updatedReview.version,

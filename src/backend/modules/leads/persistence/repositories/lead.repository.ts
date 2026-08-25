@@ -1,4 +1,19 @@
 import type { ModuleTransaction } from "@/backend/platform/database";
+import type { CandidateQueryV1 } from "../../domain/identity-candidate-set.domain";
+
+export type LeadIntakeContext = Record<string, unknown> & {
+  id: string; version: number; intake_version: number; candidate_query?: CandidateQueryV1;
+  owner_membership_id: string | null; responsible_team_id: string | null; visibility: string;
+  company: string | null; display_name: string; person_name_normalized: string;
+  first_name: string | null; last_name: string | null; email_display: string | null;
+  email_normalized: string | null; phone: string | null; phone_normalized: string | null;
+  phone_country_code_used: string | null;
+};
+
+function context(row: Record<string, unknown>): LeadIntakeContext {
+  const outcome = row.outcome as Record<string, unknown> | null;
+  return { ...row, candidate_query: outcome?._candidateQuery as CandidateQueryV1 | undefined } as LeadIntakeContext;
+}
 
 export function leadTransactionParticipant(tx: ModuleTransaction) {
   return {
@@ -52,6 +67,29 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
       const row = (await tx.query(`select * from leads where workspace_id=$1 and id=$2 for update`, [workspaceId, leadId])).rows[0];
       if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
       return row;
+    },
+    async readIntakeLeadContext(workspaceId: string, intakeId: string, leadId: string) {
+      const row = (await tx.query(
+        `select l.*,i.version intake_version,i.outcome from lead_intakes i join leads l
+          on l.workspace_id=i.workspace_id and l.id=i.lead_id
+          where i.workspace_id=$1 and i.id=$2 and l.id=$3`, [workspaceId, intakeId, leadId])).rows[0];
+      if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return context(row);
+    },
+    async lockIntakeLeadContext(workspaceId: string, intakeId: string, leadId: string) {
+      const intake = (await tx.query(`select version,outcome from lead_intakes where workspace_id=$1 and id=$2 for update`,
+        [workspaceId, intakeId])).rows[0];
+      const lead = (await tx.query(`select * from leads where workspace_id=$1 and id=$2 for update`, [workspaceId, leadId])).rows[0];
+      if (!intake || !lead) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return context({ ...lead, intake_version: intake.version, outcome: intake.outcome });
+    },
+    async assertIntakeLeadVersions(input: { workspaceId: string; intakeId: string; leadId: string;
+      expectedIntakeVersion: number; expectedLeadVersion: number }) {
+      const row = (await tx.query(
+        `select 1 from lead_intakes i join leads l on l.workspace_id=i.workspace_id and l.id=i.lead_id
+          where i.workspace_id=$1 and i.id=$2 and l.id=$3 and i.version=$4 and l.version=$5`,
+        [input.workspaceId, input.intakeId, input.leadId, input.expectedIntakeVersion, input.expectedLeadVersion])).rows[0];
+      if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
     },
     async resolveIdentity(input: { workspaceId: string; leadId: string; expectedVersion: number; contactId: string | null; companyId: string | null }) {
       const row = (await tx.query(
