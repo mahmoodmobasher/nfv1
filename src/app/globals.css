@@ -22,6 +22,13 @@
   --ring: #6366f1;
 }
 
+/* P1A feature-scoped surfaces */
+.product-shell .p1a-form{display:grid;gap:1.5rem}.product-shell .p1a-form section{display:grid;gap:.85rem}.product-shell .p1a-readonly{display:grid;gap:.2rem;padding:1rem;border:1px solid var(--border);border-radius:.75rem;background:var(--surface-muted)}.product-shell .p1a-result{display:grid;gap:1rem}.product-shell .p1a-form details{border:1px solid var(--border);border-radius:.75rem;padding:1rem}.product-shell .p1a-form summary{cursor:pointer;font-weight:700}
+.product-shell .p1a-review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:1rem}.product-shell .p1a-review-card{display:grid;gap:.8rem;min-width:0;overflow-wrap:anywhere}.product-shell .p1a-decision,.product-shell .p1a-summary{display:grid;gap:.75rem;padding:1rem;border:1px solid var(--border);border-radius:.8rem;min-width:0}.product-shell .p1a-candidate{display:flex;gap:.7rem;align-items:flex-start;padding:.75rem;border:1px solid var(--border);border-radius:.65rem;overflow-wrap:anywhere}.product-shell .p1a-candidate span{display:grid;gap:.2rem;min-width:0}.product-shell .p1a-more{margin-top:1rem}
+@media(max-width:420px){.product-shell .p1a-form{gap:1rem}.product-shell .p1a-form .row-actions{align-items:stretch}.product-shell .p1a-form .row-actions>*{width:100%;justify-content:center}.product-shell .p1a-decision,.product-shell .p1a-summary{padding:.75rem}.product-shell .p1a-candidate{padding:.65rem}}
+@media(forced-colors:active){.product-shell .p1a-readonly,.product-shell .p1a-form details,.product-shell .p1a-decision,.product-shell .p1a-summary,.product-shell .p1a-candidate{border:1px solid CanvasText}}
+@media(prefers-reduced-motion:reduce){.product-shell .p1a-form *,.product-shell .p1a-review-grid *,.product-shell .p1a-decision *{scroll-behavior:auto!important;transition:none!important}}
+
 @theme {
   --color-brand-purple: #5856d6;
   --color-brand-indigo: #6366f1;
@@ -153,6 +160,7 @@ html[data-theme="light"] {
   --nx-selected-text: var(--spectrum-brand-700);
   --nx-link: var(--spectrum-brand-700);
   --nx-focus: var(--spectrum-brand-600);
+  --nx-focus-ring: 0 0 0 4px color-mix(in srgb,var(--nx-focus) 20%,transparent);
   --nx-blanket: rgb(11 17 24 / 52%);
   --nx-success: #16745b; --nx-success-surface: #e6f5ef;
   --nx-warning: #8a5b00; --nx-warning-surface: #fff2cc;
@@ -531,7 +539,7 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .marketing-footer a { color: inherit; }
 .marketing-footer-muted { color: color-mix(in srgb, var(--nf-text-inverse) 72%, transparent); }
 .marketing-footer-divider { border-color: color-mix(in srgb, var(--nf-text-inverse) 20%, transparent); }
-.marketing-site :focus-visible { outline: 2px solid var(--nx-focus) !important; outline-offset: 3px !important; box-shadow: 0 0 0 4px color-mix(in srgb,var(--nx-focus) 20%,transparent) !important; }
+.marketing-site :focus-visible { outline: 2px solid var(--nx-focus) !important; outline-offset: 3px !important; box-shadow: var(--nx-focus-ring) !important; }
 .marketing-pricing-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: var(--nf-space-4); align-items: stretch; }
 .marketing-pricing-card { position: relative; display: flex; min-width: 0; flex-direction: column; padding: var(--nf-space-6); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); color: var(--nx-text-strong); box-shadow: var(--nf-shadow-1); }
 .marketing-pricing-card.is-recommended { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }

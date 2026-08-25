@@ -1,0 +1,1 @@
+export default function Loading(){return <section className="admin-content narrow-admin" aria-busy="true"><p className="eyebrow">Leads</p><h1>Loading manual intake…</h1><p role="status">Preparing the lead form.</p></section>}

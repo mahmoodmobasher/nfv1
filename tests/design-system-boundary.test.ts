@@ -197,7 +197,7 @@ describe("design-system document boundary", () => {
       "../src/app/crm/page.tsx",
       "../src/app/crm/home/page.tsx",
       "../src/app/crm/pipeline/page.tsx",
-      "../src/app/crm/leads/new/page.tsx",
+      "../src/frontend/features/leads/components/manual-lead-intake-page.tsx",
       "../src/app/crm/leads/[leadId]/page.tsx",
       "../src/app/crm/leads/lead-editor.tsx",
     ]) {
@@ -210,7 +210,7 @@ describe("design-system document boundary", () => {
       "../src/app/crm/page.tsx",
       "../src/app/crm/home/page.tsx",
       "../src/app/crm/pipeline/page.tsx",
-      "../src/app/crm/leads/new/page.tsx",
+      "../src/frontend/features/leads/components/manual-lead-intake-page.tsx",
       "../src/app/crm/leads/[leadId]/page.tsx",
     ]) {
       expect(

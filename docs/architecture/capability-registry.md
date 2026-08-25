@@ -9,6 +9,10 @@
 
 Physical schema definitions remain centralized in `src/server/db/schema.ts`; this registry defines logical write ownership. Legacy `src/server/crm` remains a compatibility/read boundary and is not a second P1A write owner.
 
+### P1A frontend activation
+
+The P1A Lead Intake frontend is active at `src/frontend/features/leads` and `/crm/leads/new`. The P1A Identity Review frontend is active at `src/frontend/features/identity-review`, `/crm/identity-reviews`, and `/crm/identity-reviews/:leadId`. The `Deferred` cells above describe the original backend-only registry snapshot and are superseded for these two frontend surfaces by this accepted activation record.
+
 ## Table ownership inventory
 
 | Table | Single write owner | P1A access |

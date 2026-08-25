@@ -1,0 +1,2 @@
+import{ManualLeadIntakeForm}from"./manual-lead-intake-form";
+export function ManualLeadIntakePage({workspaceId,receivedAt}:{workspaceId:string;receivedAt:string}){return <section className="admin-content narrow-admin p1a-feature"><header className="product-page-header"><div><p className="eyebrow">Leads / New</p><h1>Add a lead</h1><p className="lead">Record an inquiry and preserve where it came from. NexaFlow will show possible Contact or Company matches for review.</p></div></header><ManualLeadIntakeForm workspaceId={workspaceId} receivedAt={receivedAt}/></section>}

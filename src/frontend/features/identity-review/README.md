@@ -1,0 +1,3 @@
+# Identity Review frontend feature
+
+P1A pending-review queue and atomic Contact/Company decision UI. Public entry: `index.ts`. Server loaders consume only Leads module public queries; clients consume presentation-safe HTTP view models and render only server capabilities. Hold is non-mutating and remains pending; Resolve requires complete Contact and Company create/link/dismiss choices. No client matching, ranking, permission, assignment or tenant authority. Imports, merge, conversion and broad identity workspaces are deferred. Tests: focused frontend contract/boundary and P1A browser journeys.
