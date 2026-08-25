@@ -42,9 +42,27 @@ suite("P1A representative PostgreSQL performance", () => {
         '+1416'||lpad(g::text,7,'0'),'+1416'||lpad(g::text,7,'0'),'CA',case when g=100000 then $2::uuid else null end
       from generate_series(1,100000) g`, [workspace.id, companyId]);
     await pool.query(`insert into leads(workspace_id,display_name,person_name_normalized,email_display,email_normalized,company,
-      source,stage_id,status,visibility) select $1,'Scale Lead '||g,'scale lead '||g,'lead-'||g||'@example.test',
-      'lead-'||g||'@example.test','Scale','website',$2,'open','workspace' from generate_series(1,100000) g`, [workspace.id, stage.id]);
-    await pool.query("analyze contacts"); await pool.query("analyze companies"); await pool.query("analyze leads");
+      source,original_source_category,original_source_medium,original_source_detail,original_campaign_context,
+      attribution_contract_version,intake_channel,lifecycle_definition_id,stage_id,status,visibility)
+      select $1,'Scale Lead '||g,'scale lead '||g,'lead-'||g||'@example.test','lead-'||g||'@example.test','Scale',
+        'manual','manual','unknown','{}','{}','p1a-attribution-v1','manual','00000000-0000-4000-8000-000000000001',$2,'open','workspace'
+      from generate_series(1,100000) g`, [workspace.id, stage.id]);
+    await pool.query(`with selected as (
+        select id,row_number() over(order by id) sequence from leads where workspace_id=$1 order by id limit 10000
+      ) insert into lead_intakes(workspace_id,intake_channel,idempotency_key,actor_membership_id,request_hash,contract_version,
+        normalization_version,attribution_contract_version,source_category,source_medium,source_detail,campaign_context,state,lead_id,outcome,version)
+      select $1,'manual','performance-review-'||sequence,$2,repeat('a',64),'lead-inquiry-intake.v1','p1a-identity-v1',
+        'p1a-attribution-v1','manual','unknown','{}','{}','committed',id,'{}',2 from selected`, [workspace.id, membership.id]);
+    await pool.query(`insert into lead_identity_reviews(workspace_id,intake_id,lead_id)
+      select workspace_id,id,lead_id from lead_intakes where workspace_id=$1`, [workspace.id]);
+    await pool.query(`with target as (
+        select id,version from contacts where workspace_id=$1 order by id limit 1
+      ) insert into lead_identity_candidates(workspace_id,review_id,contact_id,evidence_kind,evidence_strength,
+        normalization_version,target_version,evidence_metadata)
+      select $1,r.id,t.id,'email','strong','p1a-identity-v1',t.version,'{"match_key_version":"p1a-identity-v1"}'
+      from lead_identity_reviews r cross join target t where r.workspace_id=$1`, [workspace.id]);
+    for (const table of ["contacts", "companies", "leads", "lead_intakes", "lead_identity_reviews", "lead_identity_candidates"])
+      await pool.query(`analyze ${table}`);
   }, 120_000);
   afterAll(async () => { await pool.end(); });
 
@@ -54,19 +72,37 @@ suite("P1A representative PostgreSQL performance", () => {
     const nameSql = `select c.id,c.version from contacts c join companies o on o.workspace_id=c.workspace_id and o.id=c.company_id and o.status='active'
       where c.workspace_id=$1 and c.status='active' and c.person_name_normalized=$2 and o.name_normalized=$3 order by c.id limit 10`;
     const companySql = `select id,version from companies where workspace_id=$1 and status='active' and name_normalized=$2 order by id limit 10`;
+    const fullEmail = "full-candidates@example.test", fullPhone = "+14165559999";
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      select $1,'Strong '||g,'strong '||g,$2,$2 from generate_series(1,10) g`, [workspaceId, fullEmail]);
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,phone_display,phone_normalized,phone_country_code_used)
+      select $1,'Supplementary '||g,'supplementary '||g,$2,$2,'CA' from generate_series(1,10) g`, [workspaceId, fullPhone]);
+    await pool.query(`insert into companies(workspace_id,display_name,name_normalized)
+      select $1,'Full Candidate Company '||g,'full candidate company' from generate_series(1,10) g`, [workspaceId]);
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized,company_id)
+      select $1,'Full Candidate Person','full candidate person','probable-'||row_number() over(order by id)||'@example.test',
+        'probable-'||row_number() over(order by id)||'@example.test',id from companies
+      where workspace_id=$1 and name_normalized='full candidate company'`, [workspaceId]);
     const held = await submitLeadInquiryV1(pool, { actor, idempotencyKey: randomUUID(), command: {
-      contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual", person: { displayName: "Person 100000",
-        email: "person-100000@example.test" }, organization: { name: "Company 25000" },
+      contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual", person: { displayName: "Full Candidate Person",
+        email: fullEmail, phone: fullPhone }, organization: { name: "Full Candidate Company" },
       inquiry: { receivedAt: "2026-08-25T12:00:00.000Z" }, source: { sourceCategory: "manual", sourceMedium: "unknown",
         sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" } } });
     const reviewId = held.reviewCaseId!;
+    expect(held.candidateSummary).toEqual({ strong: 10, supplementary: 10, probable: 10 });
+    const fullCandidateView = await getIdentityReviewCandidatesV1(pool, actor, held.leadId);
+    expect(fullCandidateView.candidates).toHaveLength(30);
+    await pool.query("analyze contacts"); await pool.query("analyze companies");
+    await pool.query("analyze leads"); await pool.query("analyze lead_intakes");
+    await pool.query("analyze lead_identity_reviews"); await pool.query("analyze lead_identity_candidates");
     const reviewQueueSql = `select id,lead_id,version from lead_identity_reviews
       where workspace_id=$1 and state='pending' order by updated_at,id limit 50`;
     const candidateDetailSql = `select id,contact_id,company_id,target_version,evidence_kind,evidence_strength
       from lead_identity_candidates where workspace_id=$1 and review_id=$2
       order by case evidence_strength when 'strong' then 1 when 'supplementary' then 2 else 3 end,
         coalesce(contact_id,company_id),id limit 30`;
-    await pool.query("set enable_seqscan=off");
+    expect((await pool.query("show enable_seqscan")).rows[0].enable_seqscan).toBe("on");
+    const planNames = ["contact_email", "contact_phone", "contact_name_company", "company_name", "review_queue", "candidate_detail"];
     const plans = await Promise.all([
       pool.query(`explain (analyze,buffers,format text) ${emailSql}`, [workspaceId, "person-100000@example.test"]),
       pool.query(`explain (analyze,buffers,format text) ${phoneSql}`, [workspaceId, "+14160099999"]),
@@ -75,12 +111,14 @@ suite("P1A representative PostgreSQL performance", () => {
       pool.query(`explain (analyze,buffers,format text) ${reviewQueueSql}`, [workspaceId]),
       pool.query(`explain (analyze,buffers,format text) ${candidateDetailSql}`, [workspaceId, reviewId]),
     ]);
-    await pool.query("reset enable_seqscan");
-    for (const plan of plans) {
+    const planEvidence: Record<string, string> = {};
+    for (const [index, plan] of plans.entries()) {
       const text = plan.rows.map(row => row["QUERY PLAN"]).join("\n");
+      planEvidence[planNames[index]] = text;
       expect(text).toMatch(/Index (?:Only )?Scan|Bitmap Index Scan/);
-      expect(text).not.toMatch(/Seq Scan on (?:contacts|companies|leads)/);
+      expect(text).not.toMatch(/Seq Scan on (?:contacts|companies|leads|lead_identity_reviews|lead_identity_candidates)/);
     }
+    console.info("P1A_PLAN_EVIDENCE", JSON.stringify({ planner: { enableSeqscan: "on" }, plans: planEvidence }));
     const metrics = { emailP95Ms: await latency(emailSql, [workspaceId, "person-100000@example.test"]),
       phoneP95Ms: await latency(phoneSql, [workspaceId, "+14160099999"]),
       nameCompanyP95Ms: await latency(nameSql, [workspaceId, "person 100000", "company 25000"]),
@@ -100,8 +138,9 @@ suite("P1A representative PostgreSQL performance", () => {
       manual.push(performance.now() - start);
     }
     metrics.manualP95Ms = percentile95(manual);
-    console.info("P1A_PERFORMANCE_EVIDENCE", JSON.stringify({ samplesPerMeasurement: 30, rows: {
-      leads: 100000, contacts: 100000, companies: 25000 }, ...metrics }));
+    console.info("P1A_PERFORMANCE_EVIDENCE", JSON.stringify({ samplesPerMeasurement: 30, rowsAtMeasurement: {
+      leads: 100001, contacts: 100030, companies: 25010, pendingReviews: 10001, identityCandidates: 10030,
+      fullCandidateReviewSize: 30 }, ...metrics }));
     expect(metrics.emailP95Ms).toBeLessThan(100);
     expect(metrics.phoneP95Ms).toBeLessThan(100);
     expect(metrics.nameCompanyP95Ms).toBeLessThan(200);

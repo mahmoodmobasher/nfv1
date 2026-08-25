@@ -51,6 +51,20 @@ function command(overrides: Record<string, unknown> = {}) {
     ...overrides };
 }
 
+async function waitForActivity(predicate: (row: { pid: number; query: string; wait_event_type: string | null }) => boolean) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const rows = (await pool.query<{ pid: number; query: string; wait_event_type: string | null }>(
+      `select pid,query,wait_event_type from pg_stat_activity
+        where datname=current_database() and pid<>pg_backend_pid() and state='active'`,
+    )).rows;
+    const found = rows.find(predicate);
+    if (found) return found;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error("timed out waiting for controlled PostgreSQL lock overlap");
+}
+
 suite("P1A manual intake modular transaction", () => {
   beforeAll(async () => { await pool.query("select 1"); });
   beforeEach(async () => { await pool.query("truncate users cascade"); });
@@ -318,25 +332,49 @@ suite("P1A manual intake modular transaction", () => {
   });
 
   it("avoids deadlock when intake and resolution contend on the same Company and Contact identities", async () => {
-    const f = await fixture(), email = "intake-resolution-race@example.test";
-    await pool.query(`insert into companies(workspace_id,display_name,name_normalized) values($1,'North Labs','north labs')`, [f.workspace.id]);
+    const f = await fixture(), email = "intake-resolution-race@example.test", domain = "shared-lock.example";
+    await pool.query(`insert into companies(workspace_id,display_name,name_normalized,domain_normalized)
+      values($1,'North Labs','north labs',$2)`, [f.workspace.id, domain]);
     await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
       values($1,'Race Seed','race seed',$2,$2)`, [f.workspace.id, email]);
     const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email } }),
       idempotencyKey: randomUUID() });
     const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
-    const settled = await Promise.allSettled([
-      decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
+    const blocker = await pool.connect();
+    let resolution: Promise<unknown> | undefined, intake: Promise<unknown> | undefined, barrierError: unknown;
+    let blockerPid = 0, resolutionPid = 0, intakePid = 0;
+    try {
+      await blocker.query("begin");
+      blockerPid = (await blocker.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0].pid;
+      await blocker.query("select pg_advisory_xact_lock(hashtextextended($1,7102))",
+        [`${f.workspace.id}:contact:p1a-identity-v1:${email}`]);
+      resolution = decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
         contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
         expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
-        contact: { action: "create" }, company: { action: "create" } } }),
-      submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email } }),
-        idempotencyKey: randomUUID() }),
-    ]);
-    for (const item of settled) if (item.status === "rejected") {
-      expect(String(item.reason?.code ?? item.reason?.message)).not.toMatch(/40P01|deadlock/i);
+        contact: { action: "create" }, company: { action: "create" } } });
+      resolutionPid = (await waitForActivity(row => row.wait_event_type === "Lock" &&
+        row.query.includes("pg_advisory_xact_lock") && row.query.includes("7102"))).pid;
+      expect((await pool.query<{ blockers: number[] }>("select pg_blocking_pids($1) blockers", [resolutionPid])).rows[0].blockers)
+        .toContain(blockerPid);
+      intake = submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email },
+        organization: { name: "Alternate Labs", domain } }), idempotencyKey: randomUUID() });
+      intakePid = (await waitForActivity(row => row.pid !== resolutionPid && row.wait_event_type === "Lock" &&
+        row.query.includes("from companies") && row.query.includes("for update"))).pid;
+      expect((await pool.query<{ blockers: number[] }>("select pg_blocking_pids($1) blockers", [intakePid])).rows[0].blockers)
+        .toContain(resolutionPid);
+    } catch (error) {
+      barrierError = error;
+    } finally {
+      await blocker.query("commit").catch(() => undefined);
+      blocker.release();
     }
-    expect(settled.some(item => item.status === "fulfilled")).toBe(true);
+    const settled = await Promise.allSettled([resolution, intake].filter((item): item is Promise<unknown> => Boolean(item)));
+    if (barrierError) throw barrierError;
+    expect({ blockerPid, resolutionPid, intakePid }).toMatchObject({ blockerPid: expect.any(Number),
+      resolutionPid: expect.any(Number), intakePid: expect.any(Number) });
+    expect(new Set([blockerPid, resolutionPid, intakePid]).size).toBe(3);
+    expect(settled).toHaveLength(2);
+    expect(settled.every(item => item.status === "fulfilled")).toBe(true);
   });
 
   it("rejects stale candidate targets and caps deterministic Workspace-scoped disclosure at ten", async () => {
