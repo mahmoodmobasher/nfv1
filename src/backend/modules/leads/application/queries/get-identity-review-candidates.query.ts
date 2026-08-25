@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { runModuleTransaction } from "@/backend/platform/database";
-import { revalidateActiveActor, workspaceAuthorityParticipant, type TrustedActor } from "@/backend/platform/authorization";
+import { lookupActiveActor, revalidateActiveActor, workspaceAuthorityParticipant, type TrustedActor } from "@/backend/platform/authorization";
 import { contactTransactionParticipant } from "@/backend/modules/contacts";
 import { companyTransactionParticipant } from "@/backend/modules/companies";
 import { assertIdentityReviewPresentationSafe, identityReviewTransactionParticipant, type IdentityReviewCandidateViewV1,
@@ -35,17 +35,35 @@ export function identityReviewCapabilities(actor: TrustedActor, input: {
 export async function getIdentityReviewCandidatesV1(pool: Pool, actor: TrustedActor, leadId: string,
   requestId: string = randomUUID()): Promise<IdentityReviewCandidateViewV1> {
   return runModuleTransaction(pool, async tx => {
-    const current = await revalidateActiveActor(tx, actor), reviews = identityReviewTransactionParticipant(tx);
-    const review = await reviews.findByLead(current.workspaceId, leadId);
-    if (review.state !== "pending") throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
-    const lead = await leadTransactionParticipant(tx).readIntakeLeadContext(current.workspaceId, review.intake_id, review.lead_id);
-    if (!(await workspaceAuthorityParticipant(tx).canDiscloseLead(current, lead)))
+    const previewActor = await lookupActiveActor(tx, actor), reviews = identityReviewTransactionParticipant(tx);
+    const previewReview = await reviews.findByLead(previewActor.workspaceId, leadId);
+    if (previewReview.state !== "pending") throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+    const leads = leadTransactionParticipant(tx), authority = workspaceAuthorityParticipant(tx);
+    const previewLead = await leads.readIntakeLeadContext(previewActor.workspaceId, previewReview.intake_id, previewReview.lead_id);
+    if (!(await authority.canDiscloseLead(previewActor, previewLead)))
       throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
-    const evidence = await reviews.evidence(current.workspaceId, review.id);
+
+    const lead = await leads.lockIntakeLeadContext(previewActor.workspaceId, previewReview.intake_id, previewReview.lead_id);
+    const review = await reviews.lockDisclosureReview(previewActor.workspaceId, previewReview.id);
+    if (review.state !== "pending" || review.version !== previewReview.version || lead.version !== previewLead.version ||
+        lead.intake_version !== previewLead.intake_version)
+      throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+    const evidence = await reviews.evidence(previewActor.workspaceId, review.id);
     const contactIds = evidence.flatMap(item => item.contactId ? [String(item.contactId)] : []);
     const companyIds = evidence.flatMap(item => item.companyId ? [String(item.companyId)] : []);
-    const contacts = new Map((await contactTransactionParticipant(tx).present(current.workspaceId, contactIds)).map(item => [item.id, item]));
-    const companies = new Map((await companyTransactionParticipant(tx).present(current.workspaceId, companyIds)).map(item => [item.id, item]));
+    const contactParticipant = contactTransactionParticipant(tx), companyParticipant = companyTransactionParticipant(tx);
+    let targetFresh = true;
+    try { await companyParticipant.lockCandidateSet(previewActor.workspaceId, evidence.flatMap(item => item.companyId
+      ? [{ id: String(item.companyId), version: Number(item.targetVersion) }] : [])); } catch { targetFresh = false; }
+    try { await contactParticipant.lockCandidateSet(previewActor.workspaceId, evidence.flatMap(item => item.contactId
+      ? [{ id: String(item.contactId), version: Number(item.targetVersion) }] : [])); } catch { targetFresh = false; }
+    await authority.lockReferences({ workspaceId: previewActor.workspaceId, leadId: lead.id,
+      membershipIds: [previewActor.membershipId, lead.owner_membership_id], teamIds: [lead.responsible_team_id] });
+    const current = await revalidateActiveActor(tx, actor);
+    if (!(await authority.canDiscloseLead(current, lead)))
+      throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+    const contacts = new Map((await contactParticipant.present(current.workspaceId, contactIds)).map(item => [item.id, item]));
+    const companies = new Map((await companyParticipant.present(current.workspaceId, companyIds)).map(item => [item.id, item]));
     const presented = evidence.flatMap(item => {
       const identity = item.contactId ? contacts.get(String(item.contactId)) : companies.get(String(item.companyId));
       if (!identity || identity.version !== item.targetVersion) return [];
@@ -59,7 +77,7 @@ export async function getIdentityReviewCandidatesV1(pool: Pool, actor: TrustedAc
         evidenceStrength: item.evidenceStrength as "strong" | "supplementary" | "probable",
         canLink: current.role !== "member" }];
     });
-    const currentSnapshot = presented.length === evidence.length, candidates = currentSnapshot ? presented : [];
+    const currentSnapshot = targetFresh && presented.length === evidence.length, candidates = currentSnapshot ? presented : [];
     const capabilities = identityReviewCapabilities(current, { hasCompany: Boolean(lead.company),
       contactCandidates: candidates.some(item => item.targetType === "contact"),
       companyCandidates: candidates.some(item => item.targetType === "company"), current: currentSnapshot });

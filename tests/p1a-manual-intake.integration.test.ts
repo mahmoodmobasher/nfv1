@@ -65,6 +65,51 @@ async function waitForActivity(predicate: (row: { pid: number; query: string; wa
   throw new Error("timed out waiting for controlled PostgreSQL lock overlap");
 }
 
+async function presentationRace(operation: "detail" | "queue",
+  change: "reassignment" | "team_visibility" | "membership" | "session" | "candidate") {
+  const f = await fixture(), email = `${operation}-${change}@example.test`;
+  const target = (await pool.query<{ id: string }>(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+    values($1,'Race Candidate','race candidate',$2,$2) returning id`, [f.workspace.id, email])).rows[0];
+  const held = await submitLeadInquiryV1(pool, { actor: f.member, command: command({ person: { displayName: "Race Candidate", email },
+    requestedAssignment: { responsibleMembershipId: f.member.membershipId } }), idempotencyKey: randomUUID() });
+  let teamId: string | undefined;
+  if (change === "team_visibility") {
+    teamId = (await pool.query<{ id: string }>(`insert into teams(workspace_id,name,name_normalized,status,created_by_membership_id)
+      values($1,'Disclosure Team','disclosure team','active',$2) returning id`, [f.workspace.id, f.owner.membershipId])).rows[0].id;
+    await pool.query(`insert into team_memberships(workspace_id,team_id,workspace_membership_id,created_by_membership_id)
+      values($1,$2,$3,$4)`, [f.workspace.id, teamId, f.member.membershipId, f.owner.membershipId]);
+    await pool.query("update leads set visibility='teams' where workspace_id=$1 and id=$2", [f.workspace.id, held.leadId]);
+    await pool.query("insert into lead_visible_teams(workspace_id,lead_id,team_id) values($1,$2,$3)", [f.workspace.id, held.leadId, teamId]);
+  }
+  const blocker = await pool.connect(); await blocker.query("begin");
+  if (change === "reassignment") await blocker.query("update leads set owner_membership_id=null where workspace_id=$1 and id=$2",
+    [f.workspace.id, held.leadId]);
+  if (change === "team_visibility") await blocker.query(
+    "delete from team_memberships where workspace_id=$1 and team_id=$2 and workspace_membership_id=$3",
+    [f.workspace.id, teamId, f.member.membershipId]);
+  if (change === "candidate") await blocker.query("update contacts set status='archived',version=version+1 where workspace_id=$1 and id=$2",
+    [f.workspace.id, target.id]);
+  if (change === "membership") await blocker.query(
+    "update workspace_memberships set status='suspended' where workspace_id=$1 and id=$2", [f.workspace.id, f.member.membershipId]);
+  if (change === "session") await blocker.query("update sessions set revoked_at=now() where id=$1", [f.member.sessionId]);
+  let released = false;
+  try {
+    const pending = operation === "detail" ? getIdentityReviewCandidatesV1(pool, f.member, held.leadId)
+      : listIdentityReviewQueueV1(pool, f.member, { assignment: "all", evidence: "any", limit: 50 });
+    const blockedQuery = change === "reassignment" ? "from leads" : change === "team_visibility" ? "team_memberships" :
+      change === "candidate" ? "from contacts" : "from workspace_memberships";
+    await waitForActivity(row => row.wait_event_type === "Lock" && row.query.includes(blockedQuery));
+    await blocker.query("commit"); blocker.release(); released = true;
+    if (change !== "candidate") await expect(pending).rejects.toMatchObject({ code: "resource_not_found" });
+    else if (operation === "detail") expect(await pending).toMatchObject({ candidates: [], reconciliation: { status: "stale" },
+      capabilities: { canHold: true, canResolve: false } });
+    else expect(await pending).toMatchObject({ items: [{ candidateSummary: { strong: 0 }, reconciliation: { status: "stale" },
+      capabilities: { canHold: true, canResolve: false } }] });
+  } finally {
+    if (!released) { await blocker.query("rollback").catch(() => undefined); blocker.release(); }
+  }
+}
+
 suite("P1A manual intake modular transaction", () => {
   beforeAll(async () => { await pool.query("select 1"); });
   beforeEach(async () => { await pool.query("truncate users cascade"); });
@@ -202,6 +247,59 @@ suite("P1A manual intake modular transaction", () => {
     expect(found).toEqual([visible.leadId]);
   });
 
+  it.each(["detail", "queue"] as const)("withholds %s when responsibility changes at the disclosure boundary", async operation => {
+    await presentationRace(operation, "reassignment");
+  });
+
+  it.each(["detail", "queue"] as const)("withholds %s when team visibility is removed at the disclosure boundary", async operation => {
+    await presentationRace(operation, "team_visibility");
+  });
+
+  it.each(["detail", "queue"] as const)("withholds %s when Membership authority is suspended at the disclosure boundary", async operation => {
+    await presentationRace(operation, "membership");
+  });
+
+  it.each(["detail", "queue"] as const)("withholds %s when Session authority is revoked at the disclosure boundary", async operation => {
+    await presentationRace(operation, "session");
+  });
+
+  it.each(["detail", "queue"] as const)("returns stale %s reconciliation when a candidate changes at the disclosure boundary", async operation => {
+    await presentationRace(operation, "candidate");
+  });
+
+  it.each(["detail", "queue"] as const)("withholds %s when the review resolves during disclosure", async operation => {
+    const f = await fixture(), email = `${operation}-resolution@example.test`;
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      values($1,'Resolution Candidate','resolution candidate',$2,$2)`, [f.workspace.id, email]);
+    const held = await submitLeadInquiryV1(pool, { actor: f.member, command: command({ person: {
+      displayName: "Resolution Candidate", email }, requestedAssignment: { responsibleMembershipId: f.member.membershipId } }),
+      idempotencyKey: randomUUID() });
+    const view = await getIdentityReviewCandidatesV1(pool, f.member, held.leadId);
+    await pool.query(`create function p1a_disclosure_delay() returns trigger language plpgsql as $$
+      begin perform pg_advisory_xact_lock(812501); return new; end $$`);
+    await pool.query(`create trigger p1a_disclosure_delay before insert on audit_events
+      for each row execute function p1a_disclosure_delay()`);
+    const blocker = await pool.connect(); let blockerReleased = false; await blocker.query("begin");
+    await blocker.query("select pg_advisory_xact_lock(812501)");
+    try {
+      const resolution = decideLeadIdentityReviewV1(pool, { actor: f.member, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
+        contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
+        expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
+        contact: { action: "dismiss" }, company: { action: "dismiss" } } });
+      await waitForActivity(row => row.wait_event_type === "Lock" && row.query.includes("insert into audit_events"));
+      const pending = operation === "detail" ? getIdentityReviewCandidatesV1(pool, f.member, held.leadId)
+        : listIdentityReviewQueueV1(pool, f.member, { assignment: "all", evidence: "any", limit: 50 });
+      await waitForActivity(row => row.wait_event_type === "Lock" && row.query.includes("from lead_intakes"));
+      await blocker.query("commit"); blocker.release(); blockerReleased = true;
+      await expect(resolution).resolves.toMatchObject({ outcome: "resolve" });
+      await expect(pending).rejects.toMatchObject({ code: "resource_not_found" });
+    } finally {
+      if (!blockerReleased) { await blocker.query("rollback").catch(() => undefined); blocker.release(); }
+      await pool.query("drop trigger if exists p1a_disclosure_delay on audit_events");
+      await pool.query("drop function if exists p1a_disclosure_delay()");
+    }
+  });
+
   it("lets an Owner atomically link candidates and replays the resolution", async () => {
     const f = await fixture(), company = (await pool.query<{ id: string }>(
       `insert into companies(workspace_id,display_name,name_normalized) values($1,'North Labs','north labs') returning id`, [f.workspace.id],
@@ -258,6 +356,11 @@ suite("P1A manual intake modular transaction", () => {
       reviewVersion: 2, replayed: true, nextView: { kind: "identity_review_detail", leadId: held.leadId } });
     await expect(decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId,
       command: { ...decision, reasonCode: "changed" }, idempotencyKey: key })).rejects.toMatchObject({ code: "idempotency_conflict" });
+    await pool.query(`update workspace_memberships set role_id=(select id from roles where workspace_id=$1 and code='owner')
+      where workspace_id=$1 and id=$2`, [f.workspace.id, f.member.membershipId]);
+    await expect(decideLeadIdentityReviewV1(pool, { actor: { ...f.member, role: "owner" }, leadId: held.leadId,
+      command: { ...decision, reasonCode: "cross-actor-changed" }, idempotencyKey: key }))
+      .rejects.toMatchObject({ code: "resource_not_found" });
     expect((await pool.query("select state,version from lead_identity_reviews where id=$1", [view.reviewId])).rows[0]).toMatchObject({ state: "pending", version: 2 });
     expect((await pool.query("select count(*)::int count from contacts")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from companies")).rows[0].count).toBe(0);

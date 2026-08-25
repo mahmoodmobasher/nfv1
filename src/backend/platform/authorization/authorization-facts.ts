@@ -19,7 +19,7 @@ async function actorFacts(tx: ModuleTransaction, actor: TrustedActor, lock: bool
        join sessions s on s.id=$2 and s.user_id=m.user_id and s.revoked_at is null
       where m.workspace_id=$1 and m.id=$3 and m.user_id=$4 and m.status='active'
         and s.idle_expires_at>now() and s.absolute_expires_at>now()
-      ${lock ? "for no key update of m" : ""}`,
+      ${lock ? "for no key update of m,r,w,u,s" : ""}`,
     [actor.workspaceId, actor.sessionId, actor.membershipId, actor.userId],
   );
   const current = result.rows[0];
@@ -37,20 +37,24 @@ export async function revalidateActiveActor(tx: ModuleTransaction, actor: Truste
 
 export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
   return {
-    async lockReferences(input: { workspaceId: string; leadId?: string; membershipIds?: Array<string | null>; teamIds?: Array<string | null> }) {
+    async lockReferences(input: { workspaceId: string; leadId?: string; leadIds?: string[];
+      membershipIds?: Array<string | null>; teamIds?: Array<string | null> }) {
       const membershipIds = [...new Set((input.membershipIds ?? []).filter((id): id is string => Boolean(id)))].sort();
       const teamIds = [...new Set((input.teamIds ?? []).filter((id): id is string => Boolean(id)))].sort();
       if (membershipIds.length) await tx.query(
         `select id from workspace_memberships where workspace_id=$1 and id=any($2::uuid[]) order by id for no key update`, [input.workspaceId, membershipIds]);
       if (teamIds.length) await tx.query(
         `select id from teams where workspace_id=$1 and id=any($2::uuid[]) order by id for no key update`, [input.workspaceId, teamIds]);
-      if (input.leadId) {
-        await tx.query(`select team_id from lead_visible_teams where workspace_id=$1 and lead_id=$2 order by team_id for update`,
-          [input.workspaceId, input.leadId]);
+      const leadIds = [...new Set([...(input.leadIds ?? []), ...(input.leadId ? [input.leadId] : [])])].sort();
+      if (leadIds.length) {
+        await tx.query(`select lead_id,team_id from lead_visible_teams where workspace_id=$1 and lead_id=any($2::uuid[])
+          order by lead_id,team_id for update`, [input.workspaceId, leadIds]);
         await tx.query(
-          `select tm.team_id from team_memberships tm join lead_visible_teams lvt on lvt.workspace_id=tm.workspace_id and lvt.team_id=tm.team_id
-            where tm.workspace_id=$1 and lvt.lead_id=$2 order by tm.team_id,tm.workspace_membership_id for no key update of tm`,
-          [input.workspaceId, input.leadId]);
+          `select lvt.lead_id,tm.team_id from team_memberships tm join lead_visible_teams lvt
+             on lvt.workspace_id=tm.workspace_id and lvt.team_id=tm.team_id
+            where tm.workspace_id=$1 and lvt.lead_id=any($2::uuid[])
+            order by lvt.lead_id,tm.team_id,tm.workspace_membership_id for no key update of tm`,
+          [input.workspaceId, leadIds]);
       }
     },
     async validateAssignment(workspaceId: string, membershipId: string | null, teamId: string | null) {

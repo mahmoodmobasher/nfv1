@@ -34,6 +34,21 @@ async function authorizeDisclosure(tx: ModuleTransaction, actorInput: TrustedAct
   return actor;
 }
 
+async function revalidateConflictDisclosure(pool: Pool, actorInput: TrustedActor, leadId: string) {
+  try {
+    await runModuleTransaction(pool, async tx => {
+      const trusted = await lookupActiveActor(tx, actorInput), reviews = identityReviewTransactionParticipant(tx);
+      const refs = await reviews.findByLead(trusted.workspaceId, leadId);
+      const lead = await leadTransactionParticipant(tx).lockIntakeLeadContext(trusted.workspaceId, refs.intake_id, refs.lead_id);
+      const review = await reviews.lockDisclosureReview(trusted.workspaceId, refs.id);
+      if (review.state !== "pending") throw new LeadIntakeError("resource_not_found", 404);
+      await authorizeDisclosure(tx, actorInput, lead, trusted.membershipId);
+    });
+  } catch {
+    throw new LeadIntakeError("resource_not_found", 404);
+  }
+}
+
 export async function decideLeadIdentityReviewV1(pool: Pool, input: {
   actor: TrustedActor; leadId: string; command: IdentityReviewDecisionCommandV1; idempotencyKey: string; requestId?: string;
 }): Promise<LeadIdentityReviewDecisionResultV1> {
@@ -44,10 +59,11 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
       const reviews = identityReviewTransactionParticipant(tx), leads = leadTransactionParticipant(tx);
       const receipt = await reviews.findDecisionReceipt(input.actor.workspaceId, input.idempotencyKey);
       if (receipt) {
-        if (receipt.request_hash !== requestHash) throw new LeadIntakeError("idempotency_conflict", 409);
         const disclosure = await leads.lockIntakeLeadContext(input.actor.workspaceId, receipt.intake_id, receipt.lead_id);
         await reviews.lockDisclosureReview(input.actor.workspaceId, receipt.review_id);
         await authorizeDisclosure(tx, input.actor, disclosure, receipt.actor_membership_id);
+        if (receipt.request_hash !== requestHash)
+          throw new LeadIntakeError("idempotency_conflict", 409, undefined, undefined, true);
         return { contractVersion: "lead-identity-review-decision-result.v1", outcome: receipt.governing_outcome,
           disposition: "replayed", reviewId: receipt.review_id, leadId: receipt.lead_id,
           contactId: receipt.contact_id ?? null, companyId: receipt.company_id ?? null,
@@ -61,8 +77,8 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
       const lead = await leads.lockIntakeLeadContext(trusted.workspaceId, refs.intake_id, refs.lead_id);
       const reviewsLocked = await reviews.lockReview(trusted.workspaceId, refs.id);
       const priorHead = await reviews.currentHead(trusted.workspaceId, refs.intake_id);
-      if (reviewsLocked.version !== input.command.expectedReviewVersion || lead.version !== input.command.expectedLeadVersion ||
-          lead.intake_version !== input.command.expectedIntakeVersion) throw new LeadIntakeError("stale_version", 409);
+      if (reviewsLocked.state !== "pending" || !(await workspaceAuthorityParticipant(tx).canDiscloseLead(trusted, lead)))
+        throw new LeadIntakeError("resource_not_found", 404);
       const candidateQuery = lead.candidate_query as CandidateQueryV1 | undefined;
       if (!candidateQuery || candidateQuery.contractVersion !== "p1a-candidate-query.v1")
         throw new LeadIntakeError("stale_version", 409);
@@ -134,18 +150,20 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         membershipIds: [trusted.membershipId, lead.owner_membership_id], teamIds: [lead.responsible_team_id] });
       const actor = await revalidateActiveActor(tx, input.actor);
       if (!(await authority.canDiscloseLead(actor, lead))) throw new LeadIntakeError("resource_not_found", 404);
+      const authorizedConflict = (code: "stale_version" | "invalid_match_decision") =>
+        new LeadIntakeError(code, 409, undefined, { kind: "identity_review_detail", leadId: lead.id }, true);
       if (actor.role === "member" && input.command.outcome === "resolve" &&
           (input.command.contact.action === "link" || input.command.company.action === "link")) throw new LeadIntakeError("permission_required", 403);
       if (companyCandidate) {
         const fresh = await reviews.candidate(actor.workspaceId, reviewsLocked.id, companyCandidate.id, "company");
         if (fresh.target_id !== companyCandidate.target_id || fresh.target_version !== companyCandidate.target_version)
-          throw new LeadIntakeError("stale_version", 409);
+          throw authorizedConflict("stale_version");
         await companies.assertFresh(actor.workspaceId, fresh.target_id, fresh.target_version);
       }
       if (contactCandidate) {
         const fresh = await reviews.candidate(actor.workspaceId, reviewsLocked.id, contactCandidate.id, "contact");
         if (fresh.target_id !== contactCandidate.target_id || fresh.target_version !== contactCandidate.target_version)
-          throw new LeadIntakeError("stale_version", 409);
+          throw authorizedConflict("stale_version");
         await contacts.assertFresh(actor.workspaceId, fresh.target_id, fresh.target_version);
       }
       if (input.command.outcome === "resolve") {
@@ -153,13 +171,19 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
           await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
         if (!sameCandidateSet(finalCandidates.contacts, await reviews.targetSnapshot(actor.workspaceId, reviewsLocked.id, "contact")) ||
             !sameCandidateSet(finalCandidates.companies, await reviews.targetSnapshot(actor.workspaceId, reviewsLocked.id, "company")))
-          throw new LeadIntakeError("stale_version", 409);
+          throw authorizedConflict("stale_version");
       }
-      await leads.assertIntakeLeadVersions({ workspaceId: actor.workspaceId, intakeId: reviewsLocked.intake_id,
-        leadId: lead.id, expectedIntakeVersion: input.command.expectedIntakeVersion,
-        expectedLeadVersion: input.command.expectedLeadVersion });
-      await reviews.assertPendingReviewHead({ workspaceId: actor.workspaceId, reviewId: reviewsLocked.id,
-        intakeId: reviewsLocked.intake_id, expectedReviewVersion: input.command.expectedReviewVersion, expectedHead: priorHead });
+      try {
+        await leads.assertIntakeLeadVersions({ workspaceId: actor.workspaceId, intakeId: reviewsLocked.intake_id,
+          leadId: lead.id, expectedIntakeVersion: input.command.expectedIntakeVersion,
+          expectedLeadVersion: input.command.expectedLeadVersion });
+        await reviews.assertPendingReviewHead({ workspaceId: actor.workspaceId, reviewId: reviewsLocked.id,
+          intakeId: reviewsLocked.intake_id, expectedReviewVersion: input.command.expectedReviewVersion, expectedHead: priorHead });
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "stale_version")
+          throw authorizedConflict("stale_version");
+        throw error;
+      }
 
       if (input.command.outcome === "hold") {
         const resultReviewVersion = reviewsLocked.version + 1;
@@ -238,6 +262,9 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         replayed: false, requestId, nextView: { kind: "identity_review_queue" } };
     });
   } catch (error) {
+    if (error && typeof error === "object" && "status" in error && Number(error.status) === 409 &&
+        !(error instanceof LeadIntakeError && error.disclosureAuthorized))
+      await revalidateConflictDisclosure(pool, input.actor, input.leadId);
     if (error instanceof LeadIntakeError) throw error;
     if (error && typeof error === "object" && "code" in error && "status" in error) {
       const value = error as { code: string; status: number }; throw new LeadIntakeError(value.code as never, value.status);

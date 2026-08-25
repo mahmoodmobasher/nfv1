@@ -35,8 +35,25 @@ const stableStatus = {
   rate_limited: 429, intake_unavailable: 503, unexpected_error: 500,
 } as const;
 
-export function leadIntakeFailure(error: unknown, requestId: string,
-  safeNextView?: { kind: "identity_review_detail"; leadId: string }) {
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function safeValidationDetails(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => key !== "fields")) return undefined;
+  const fields = (value as { fields?: unknown }).fields;
+  if (!Array.isArray(fields) || fields.length > 32 || fields.some(field => typeof field !== "string" || field.length < 1 || field.length > 128 ||
+      !/^[A-Za-z0-9_.-]+$/.test(field))) return undefined;
+  return { fields };
+}
+
+function safeErrorNavigation(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const entry = value as Record<string, unknown>;
+  if (Object.keys(entry).length !== 2 || entry.kind !== "identity_review_detail" || typeof entry.leadId !== "string" ||
+      !uuidPattern.test(entry.leadId)) return undefined;
+  return { kind: "identity_review_detail" as const, leadId: entry.leadId };
+}
+
+export function leadIntakeFailure(error: unknown, requestId: string) {
   const known = error instanceof LeadIntakeError ? error :
     error && typeof error === "object" && "code" in error && "status" in error
       ? new LeadIntakeError((error as { code: never }).code, (error as { status: number }).status)
@@ -47,8 +64,9 @@ export function leadIntakeFailure(error: unknown, requestId: string,
   const action = entry[2];
   const body: Record<string, unknown> = { code: normalized.code, message: entry[0], retryable: entry[1],
     reconciliation: { required: action !== "none", action } };
-  if (normalized.safe && normalized.status === 400) body.details = normalized.safe;
-  const discloseNext = safeNextView && normalized.status === 409;
-  return Response.json({ error: body, requestId, ...(discloseNext ? { nextView: safeNextView } : {}) },
+  const details = normalized.status === 400 ? safeValidationDetails(normalized.safe) : undefined;
+  if (details) body.details = details;
+  const nextView = normalized.status === 409 ? safeErrorNavigation(normalized.nextView) : undefined;
+  return Response.json({ error: body, requestId, ...(nextView ? { nextView } : {}) },
     { status: normalized.status, headers: privateHeaders });
 }

@@ -9,13 +9,14 @@ import { enforceManualIntakeRate } from "@/backend/platform/authorization";
 
 export async function GET(request:Request,{params}:{params:Promise<{workspaceId:string}>}){const{workspaceId}=await params,{pool}=localDatabase();try{return success(await listLeads(pool,await tenant(pool,request,workspaceId),new URL(request.url).searchParams.get("q")??""))}catch(error){return failure(error)}finally{await pool.end()}}
 export async function POST(request:Request,{params}:{params:Promise<{workspaceId:string}>}){
-  const blocked=mutationGuard(request);if(blocked)return blocked;
-  const{workspaceId}=await params,{pool}=localDatabase(),requestId=crypto.randomUUID();
+  const requestId=crypto.randomUUID(),blocked=mutationGuard(request);
+  if(blocked)return leadIntakeFailure({code:"permission_required",status:403},requestId);
+  const{workspaceId}=await params,{pool}=localDatabase();
   try{
     const context=await tenant(pool,request,workspaceId);
     await enforceManualIntakeRate(pool,request,context);
     const key=request.headers.get("idempotency-key");
-    if(!key||key.length<16||key.length>128||!/^\x20-\x7e+$/.test(key))throw new TenantAdminError("validation_failed",400);
+    if(!key||key.length<16||key.length>128||[...key].some(character=>character<" "||character>"~"))throw new TenantAdminError("validation_failed",400);
     const body=await request.json().catch(()=>null);
     if(body&&typeof body==="object"&&"contractVersion" in body)
       return leadIntakeJson(await submitLeadInquiryV1(pool,{actor:context,command:body as LeadInquiryIntakeCommandV1,idempotencyKey:key,requestId}),201);

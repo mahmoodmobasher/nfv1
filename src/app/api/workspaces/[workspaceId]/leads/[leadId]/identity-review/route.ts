@@ -13,16 +13,17 @@ export async function GET(request:Request,{params}:Context){
 }
 
 export async function POST(request:Request,{params}:Context){
-  const blocked=mutationGuard(request);if(blocked)return blocked;
-  const{workspaceId,leadId}=await params,{pool}=localDatabase(),requestId=crypto.randomUUID();
+  const requestId=crypto.randomUUID(),blocked=mutationGuard(request);
+  if(blocked)return leadIntakeFailure({code:"permission_required",status:403},requestId);
+  const{workspaceId,leadId}=await params,{pool}=localDatabase();
   try{
     const context=await tenant(pool,request,workspaceId);await enforceManualIntakeRate(pool,request,context);
-    const key=request.headers.get("idempotency-key");if(!key||key.length<16||key.length>128||!/^\x20-\x7e+$/.test(key))throw Object.assign(new Error("validation_failed"),{code:"validation_failed",status:400});
+    const key=request.headers.get("idempotency-key");if(!key||key.length<16||key.length>128||[...key].some(character=>character<" "||character>"~"))throw Object.assign(new Error("validation_failed"),{code:"validation_failed",status:400});
     const body=await request.json().catch(()=>null);
     if(body&&typeof body==="object"&&"contractVersion" in body&&body.contractVersion!=="lead-identity-review-decision.v1")
       throw Object.assign(new Error("unsupported_contract_version"),{code:"unsupported_contract_version",status:400});
     const parsed=identityReviewDecisionCommandV1Schema.safeParse(body);
     if(!parsed.success)throw Object.assign(new Error("validation_failed"),{code:"validation_failed",status:400});
     return leadIntakeJson(await decideLeadIdentityReviewV1(pool,{actor:context,leadId,command:parsed.data,idempotencyKey:key,requestId}));
-  }catch(error){return leadIntakeFailure(error,requestId,{kind:"identity_review_detail",leadId})}finally{await pool.end()}
+  }catch(error){return leadIntakeFailure(error,requestId)}finally{await pool.end()}
 }

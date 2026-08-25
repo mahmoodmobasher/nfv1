@@ -3,7 +3,8 @@ import type { Pool } from "pg";
 import { submitLeadInquiryV1 } from "../src/backend/modules/leads";
 import { writeGoverningAudit } from "../src/backend/platform/audit";
 import { writeDomainEventSet } from "../src/backend/platform/outbox";
-import { assertIdentityReviewPresentationSafe } from "../src/backend/modules/identity-review";
+import { assertIdentityReviewPresentationSafe, identityReviewDetailViewV1Schema,
+  identityReviewQueueViewV1Schema } from "../src/backend/modules/identity-review";
 
 const actor = { userId: crypto.randomUUID(), sessionId: crypto.randomUUID(), workspaceId: crypto.randomUUID(),
   membershipId: crypto.randomUUID(), role: "owner" as const };
@@ -78,6 +79,69 @@ describe("P1A stable errors and privacy allowlists", () => {
     expect(() => assertIdentityReviewPresentationSafe({ contractVersion: "lead-identity-review-detail.v1",
       candidates: [{ email: "raw@example.test" }] } as never)).toThrow("identity_review_presentation_privacy_violation");
     expect(() => assertIdentityReviewPresentationSafe({ contractVersion: "lead-identity-review-queue.v1",
-      items: Array.from({ length: 51 }, () => ({})) } as never)).toThrow("identity_review_presentation_unbounded");
+      items: Array.from({ length: 51 }, () => ({})) } as never)).toThrow("identity_review_presentation_contract_violation");
+  });
+
+  it("runtime-validates every protected presentation shape and bounded allowlist", () => {
+    const leadId = crypto.randomUUID(), reviewId = crypto.randomUUID(), candidateId = crypto.randomUUID(), targetId = crypto.randomUUID();
+    const capabilities = { canCreateContact: true, canCreateCompany: true, canLinkContact: true, canLinkCompany: false,
+      canDismiss: true, canHold: true, canResolve: true };
+    const detail = { contractVersion: "lead-identity-review-detail.v1", requestId: crypto.randomUUID(), leadId, reviewId,
+      leadVersion: 1, reviewVersion: 1, intakeVersion: 2, lead: { displayName: "Safe Lead", maskedEmail: "s***@example.test",
+        maskedPhone: "***1234", companyName: "Safe Co", lifecycle: "new", receivedAt: "2026-08-25T12:00:00.000Z" },
+      originalAttribution: { sourceCategory: "manual", sourcePlatform: null, sourceMedium: "unknown", sourceDetail: {},
+        campaignContext: { campaign: "Launch" }, attributionContractVersion: "p1a-attribution-v1", intakeChannel: "manual" },
+      assignment: { responsibleMembershipId: null, responsibleTeamId: null, visibility: "workspace" }, capabilities,
+      candidateSummary: { strong: 1, supplementary: 0, probable: 0 },
+      reconciliation: { status: "current", retryable: false, action: "none" }, candidates: [{ candidateId,
+        targetType: "contact", targetId, targetVersion: 1, expectedTargetVersion: 1, displayName: "Candidate",
+        maskedEmail: "c***@example.test", maskedPhone: null, evidenceKind: "email", evidenceStrength: "strong", canLink: true }],
+      nextView: { kind: "identity_review_detail", leadId, reviewId } };
+    expect(identityReviewDetailViewV1Schema.safeParse(detail).success).toBe(true);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, unexpected: true }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, capabilities: { ...capabilities, canMerge: true } }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, reconciliation: {
+      status: "current", retryable: true, action: "none" } }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, originalAttribution: {
+      ...detail.originalAttribution, sourceDetail: { operator_context: "x".repeat(201) } } }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, candidates: [{ ...detail.candidates[0],
+      expectedTargetVersion: 2 }] }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, reconciliation: {
+      status: "stale", retryable: true, action: "refresh_identity_review" } }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, candidates: [], candidateSummary: {
+      strong: 0, supplementary: 0, probable: 0 }, capabilities: { ...capabilities, canCreateContact: false,
+      canCreateCompany: false, canLinkContact: false, canLinkCompany: false, canDismiss: false, canHold: false,
+      canResolve: false }, reconciliation: { status: "stale", retryable: true, action: "refresh_identity_review" } }).success)
+      .toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, candidates: [{ ...detail.candidates[0],
+      evidenceKind: "phone", evidenceStrength: "strong" }] }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, candidates: [{ ...detail.candidates[0],
+      targetType: "company", companyName: "Safe Co", evidenceKind: "email" }] }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, capabilities: { ...capabilities, canLinkContact: false } }).success)
+      .toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail,
+      candidateSummary: { strong: 0, supplementary: 0, probable: 1 } }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, nextView: { ...detail.nextView, extra: true } }).success).toBe(false);
+    expect(identityReviewDetailViewV1Schema.safeParse({ ...detail, nextView: { ...detail.nextView,
+      leadId: crypto.randomUUID() } }).success).toBe(false);
+    const queue = { contractVersion: "lead-identity-review-queue.v1", requestId: crypto.randomUUID(), items: [{ reviewId, leadId,
+      lead: { displayName: "Safe Lead", companyName: "Safe Co", receivedAt: "2026-08-25T12:00:00.000Z" },
+      originalAttribution: { sourceCategory: "manual", sourcePlatform: null, sourceMedium: "unknown", intakeChannel: "manual" },
+      assignment: { responsibleMembershipId: null, responsibleTeamId: null, visibility: "workspace" },
+      versions: { lead: 1, review: 1, intake: 2 }, candidateSummary: { strong: 1, supplementary: 0, probable: 0 },
+      capabilities, reconciliation: { status: "current", retryable: false, action: "none" },
+      updatedAt: "2026-08-25T12:00:00.000Z", nextView: { kind: "identity_review_detail", leadId, reviewId } }], nextCursor: "abc_DEF-123" };
+    expect(identityReviewQueueViewV1Schema.safeParse(queue).success).toBe(true);
+    expect(identityReviewQueueViewV1Schema.safeParse({ ...queue, items: [{ ...queue.items[0], nextView: {
+      ...queue.items[0].nextView, reviewId: crypto.randomUUID() } }] }).success).toBe(false);
+    expect(identityReviewQueueViewV1Schema.safeParse({ ...queue, items: [{ ...queue.items[0], reconciliation: {
+      status: "stale", retryable: true, action: "refresh_identity_review" } }] }).success).toBe(false);
+    expect(identityReviewQueueViewV1Schema.safeParse({ ...queue, items: [{ ...queue.items[0], candidateSummary: {
+      strong: 0, supplementary: 0, probable: 0 }, capabilities: { ...capabilities, canCreateContact: false,
+      canCreateCompany: false, canLinkContact: false, canLinkCompany: false, canDismiss: false, canHold: false,
+      canResolve: false }, reconciliation: { status: "stale", retryable: true, action: "refresh_identity_review" } }] }).success)
+      .toBe(false);
+    expect(identityReviewQueueViewV1Schema.safeParse({ ...queue, nextCursor: "not valid!" }).success).toBe(false);
+    expect(identityReviewQueueViewV1Schema.safeParse({ ...queue, items: Array.from({ length: 51 }, () => queue.items[0]) }).success).toBe(false);
   });
 });

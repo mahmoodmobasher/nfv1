@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { runModuleTransaction } from "@/backend/platform/database";
-import { revalidateActiveActor, workspaceAuthorityParticipant, type TrustedActor } from "@/backend/platform/authorization";
+import { lookupActiveActor, revalidateActiveActor, workspaceAuthorityParticipant, type TrustedActor } from "@/backend/platform/authorization";
 import { assertIdentityReviewPresentationSafe, identityReviewTransactionParticipant, type IdentityReviewQueueFilterV1,
   type IdentityReviewQueueViewV1 } from "@/backend/modules/identity-review";
 import { contactTransactionParticipant } from "@/backend/modules/contacts";
@@ -52,7 +52,8 @@ export function parseIdentityReviewQueueFilters(url: URL): IdentityReviewQueueFi
 export async function listIdentityReviewQueueV1(pool: Pool, actorInput: TrustedActor, filters: IdentityReviewQueueFilterV1,
   requestId: string = randomUUID()): Promise<IdentityReviewQueueViewV1> {
   return runModuleTransaction(pool, async tx => {
-    const actor = await revalidateActiveActor(tx, actorInput);
+    const previewActor = await lookupActiveActor(tx, actorInput), authority = workspaceAuthorityParticipant(tx);
+    let actor = previewActor;
     let cursor = decodeCursor(filters.cursor, { assignment: filters.assignment, evidence: filters.evidence });
     const items: IdentityReviewQueueViewV1["items"] = [];
     let lastScanned: { updatedAt: string; reviewId: string } | null = null, exhausted = false;
@@ -61,19 +62,54 @@ export async function listIdentityReviewQueueV1(pool: Pool, actorInput: TrustedA
         beforeUpdatedAt: cursor?.updatedAt ?? null, beforeId: cursor?.reviewId ?? null,
         limit: Math.min(MAX_LIMIT, filters.limit + 1), evidence: filters.evidence });
       if (!refs.length) { exhausted = true; break; }
-      const contexts = new Map((await leadTransactionParticipant(tx).readReviewPresentationContexts(actor.workspaceId,
+      lastScanned = { updatedAt: new Date(refs.at(-1)!.updatedAt).toISOString(), reviewId: refs.at(-1)!.reviewId };
+      const leadParticipant = leadTransactionParticipant(tx), reviewParticipant = identityReviewTransactionParticipant(tx);
+      const previewContexts = new Map((await leadParticipant.readReviewPresentationContexts(actor.workspaceId,
         refs.map(ref => ({ leadId: ref.leadId, intakeId: ref.intakeId })))).map(item => [item.id, item]));
-      const snapshots = await identityReviewTransactionParticipant(tx).queueTargetSnapshots(actor.workspaceId, refs.map(ref => ref.reviewId));
+      const eligible: typeof refs = [];
+      for (const ref of refs) {
+        const lead = previewContexts.get(ref.leadId);
+        if (!lead || !(await authority.canDiscloseLead(previewActor, lead))) continue;
+        if (filters.assignment === "mine" && lead.owner_membership_id !== previewActor.membershipId) continue;
+        if (filters.assignment === "unassigned" && lead.owner_membership_id !== null) continue;
+        eligible.push(ref);
+      }
+      if (!eligible.length) {
+        if (refs.length < Math.min(MAX_LIMIT, filters.limit + 1)) { exhausted = true; break; }
+        cursor = { v: 1, updatedAt: lastScanned.updatedAt, reviewId: lastScanned.reviewId,
+          assignment: filters.assignment, evidence: filters.evidence };
+        continue;
+      }
+      const contexts = new Map((await leadParticipant.lockReviewPresentationContexts(actor.workspaceId,
+        eligible.map(ref => ({ leadId: ref.leadId, intakeId: ref.intakeId })))).map(item => [item.id, item]));
+      const lockedReviews = new Map((await reviewParticipant.lockQueueDisclosureReviews(actor.workspaceId,
+        eligible.map(ref => ref.reviewId))).map(item => [item.id, item]));
+      const snapshots = await reviewParticipant.queueTargetSnapshots(actor.workspaceId, eligible.map(ref => ref.reviewId));
       const contactIds = snapshots.flatMap(item => item.contactId ? [item.contactId] : []);
       const companyIds = snapshots.flatMap(item => item.companyId ? [item.companyId] : []);
-      const contacts = new Map((await contactTransactionParticipant(tx).present(actor.workspaceId, contactIds)).map(item => [item.id, item.version]));
-      const companies = new Map((await companyTransactionParticipant(tx).present(actor.workspaceId, companyIds)).map(item => [item.id, item.version]));
-      for (const ref of refs) {
+      const contactParticipant = contactTransactionParticipant(tx), companyParticipant = companyTransactionParticipant(tx);
+      try { await companyParticipant.lockCandidateSet(actor.workspaceId, snapshots.flatMap(item => item.companyId
+        ? [{ id: item.companyId, version: item.targetVersion }] : [])); } catch { /* stale rows are reconciled below */ }
+      try { await contactParticipant.lockCandidateSet(actor.workspaceId, snapshots.flatMap(item => item.contactId
+        ? [{ id: item.contactId, version: item.targetVersion }] : [])); } catch { /* stale rows are reconciled below */ }
+      const orderedLeads = [...eligible].sort((left, right) => left.leadId.localeCompare(right.leadId))
+        .map(ref => contexts.get(ref.leadId)!);
+      await authority.lockReferences({ workspaceId: actor.workspaceId, leadIds: orderedLeads.map(lead => lead.id),
+        membershipIds: [previewActor.membershipId, ...orderedLeads.map(lead => lead.owner_membership_id)],
+        teamIds: orderedLeads.map(lead => lead.responsible_team_id) });
+      actor = await revalidateActiveActor(tx, actorInput);
+      const contacts = new Map((await contactParticipant.present(actor.workspaceId, contactIds)).map(item => [item.id, item.version]));
+      const companies = new Map((await companyParticipant.present(actor.workspaceId, companyIds)).map(item => [item.id, item.version]));
+      for (const ref of eligible) {
         const lead = contexts.get(ref.leadId), updatedAt = new Date(ref.updatedAt).toISOString();
-        lastScanned = { updatedAt, reviewId: ref.reviewId };
-        if (!lead || !(await workspaceAuthorityParticipant(tx).canDiscloseLead(actor, lead))) continue;
-        if (filters.assignment === "mine" && lead.owner_membership_id !== actor.membershipId) continue;
-        if (filters.assignment === "unassigned" && lead.owner_membership_id !== null) continue;
+        const lockedReview = lockedReviews.get(ref.reviewId);
+        if (!lead || !lockedReview || lockedReview.state !== "pending" || lockedReview.version !== ref.reviewVersion ||
+            Number(lead.version) !== Number(previewContexts.get(ref.leadId)?.version) ||
+            Number(lead.intake_version) !== Number(previewContexts.get(ref.leadId)?.intake_version) ||
+            !(await authority.canDiscloseLead(actor, lead)) ||
+            (filters.assignment === "mine" && lead.owner_membership_id !== actor.membershipId) ||
+            (filters.assignment === "unassigned" && lead.owner_membership_id !== null))
+          throw new LeadIntakeError("resource_not_found", 404);
         if (filters.assignment === "all" || filters.assignment === "mine" || filters.assignment === "unassigned") {
           const targets = snapshots.filter(item => item.reviewId === ref.reviewId);
           const currentTargets = targets.every(item => item.contactId
@@ -99,13 +135,13 @@ export async function listIdentityReviewQueueV1(pool: Pool, actorInput: TrustedA
           if (items.length >= filters.limit + 1) break;
         }
       }
-      if (refs.length < Math.min(MAX_LIMIT, filters.limit + 1)) { exhausted = true; break; }
-      cursor = { v: 1, updatedAt: lastScanned!.updatedAt, reviewId: lastScanned!.reviewId,
-        assignment: filters.assignment, evidence: filters.evidence };
+      if (refs.length < Math.min(MAX_LIMIT, filters.limit + 1)) exhausted = true;
+      break;
     }
     const overflow = items.length > filters.limit, hasMore = overflow || !exhausted;
     if (overflow) items.length = filters.limit;
     const boundary = overflow ? items.at(-1)! : lastScanned;
+    await revalidateActiveActor(tx, actorInput);
     return assertIdentityReviewPresentationSafe({ contractVersion: "lead-identity-review-queue.v1", requestId, items,
       nextCursor: hasMore && boundary ? encodeCursor({ updatedAt: boundary.updatedAt, reviewId: boundary.reviewId }, filters) : null });
   });

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { GET as detailGet } from "../src/app/api/workspaces/[workspaceId]/leads/[leadId]/identity-review/route";
+import { GET as detailGet, POST as decisionPost } from "../src/app/api/workspaces/[workspaceId]/leads/[leadId]/identity-review/route";
 import { GET as queueGet } from "../src/app/api/workspaces/[workspaceId]/identity-reviews/route";
 import { submitLeadInquiryV1 } from "../src/backend/modules/leads";
 import { getServerEnv } from "../src/server/env";
@@ -10,6 +10,7 @@ import { createSession } from "../src/server/security/session";
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
 const env = getServerEnv(), params = <T extends Record<string, string>>(value: T) => ({ params: Promise.resolve(value) });
+const csrf = "p1a-presentation-csrf";
 
 async function fixture() {
   const user = (await pool.query<{ id: string }>(`insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at)
@@ -31,7 +32,20 @@ async function fixture() {
     contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual", person: { displayName: "Route Candidate", email: "route@example.test" },
     inquiry: { receivedAt: "2026-08-25T12:00:00.000Z" }, source: { sourceCategory: "manual", sourceMedium: "unknown",
       sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" } } });
-  return { workspace, held, headers: { cookie: `${env.SESSION_COOKIE_NAME}=${session.token}` } };
+  return { workspace, held, actor, headers: { cookie: `${env.SESSION_COOKIE_NAME}=${session.token}; nexaflow_csrf=${csrf}` } };
+}
+
+function decisionRequest(workspaceId: string, leadId: string, body: unknown, cookie: string) {
+  return new Request(`${env.APP_ORIGIN}/api/workspaces/${workspaceId}/leads/${leadId}/identity-review`, { method: "POST",
+    headers: { cookie, origin: env.APP_ORIGIN, "x-csrf-token": csrf, "content-type": "application/json",
+      "idempotency-key": randomUUID() }, body: JSON.stringify(body) });
+}
+
+function assertPrivate(response: Response) {
+  expect(response.headers.get("cache-control")).toContain("private");
+  expect(response.headers.get("cache-control")).toContain("no-store");
+  expect(response.headers.get("pragma")).toBe("no-cache");
+  expect(response.headers.get("vary")).toBe("cookie");
 }
 
 suite("P1A presentation routes", () => {
@@ -43,14 +57,14 @@ suite("P1A presentation routes", () => {
     const f = await fixture();
     const detail = await detailGet(new Request(`${env.APP_ORIGIN}/api/workspaces/${f.workspace.id}/leads/${f.held.leadId}/identity-review`,
       { headers: f.headers }), params({ workspaceId: f.workspace.id, leadId: f.held.leadId }));
-    expect(detail.status).toBe(200); expect(detail.headers.get("cache-control")).toContain("no-store");
+    expect(detail.status).toBe(200); assertPrivate(detail);
     const detailBody = await detail.json();
     expect(detailBody.data).toMatchObject({ contractVersion: "lead-identity-review-detail.v1", requestId: expect.any(String),
       capabilities: { canCreateContact: true, canLinkContact: true }, candidates: [{ maskedEmail: "r***@example.test" }] });
     expect(JSON.stringify(detailBody)).not.toContain("route@example.test");
     const queue = await queueGet(new Request(`${env.APP_ORIGIN}/api/workspaces/${f.workspace.id}/identity-reviews?limit=25`,
       { headers: f.headers }), params({ workspaceId: f.workspace.id }));
-    expect(queue.status).toBe(200); expect(queue.headers.get("cache-control")).toContain("no-store");
+    expect(queue.status).toBe(200); assertPrivate(queue);
     const queueBody = await queue.json();
     expect(queueBody.data).toMatchObject({ contractVersion: "lead-identity-review-queue.v1", requestId: expect.any(String),
       items: [{ leadId: f.held.leadId, capabilities: { canHold: true } }] });
@@ -63,9 +77,55 @@ suite("P1A presentation routes", () => {
       await queueGet(new Request(`${env.APP_ORIGIN}/api/workspaces/${workspaceId}/identity-reviews?unknown=true`), params({ workspaceId })),
       await detailGet(new Request(`${env.APP_ORIGIN}/api/workspaces/${workspaceId}/leads/${leadId}/identity-review`), params({ workspaceId, leadId })),
     ]) {
-      expect(response.status).toBe(401); expect(response.headers.get("cache-control")).toContain("no-store");
+      expect(response.status).toBe(401); assertPrivate(response);
       expect(await response.json()).toMatchObject({ error: { code: "authentication_required", retryable: false,
         reconciliation: { required: false, action: "none" } }, requestId: expect.any(String) });
     }
+  });
+
+  it("never returns guessed/resolved navigation and returns typed navigation only after current disclosure", async () => {
+    const f = await fixture(), base = { contractVersion: "lead-identity-review-decision.v1", outcome: "hold",
+      expectedLeadVersion: 1, expectedReviewVersion: 1, expectedIntakeVersion: 2 };
+    const guessedId = randomUUID();
+    const guessed = await decisionPost(decisionRequest(f.workspace.id, guessedId, base, f.headers.cookie),
+      params({ workspaceId: f.workspace.id, leadId: guessedId }));
+    const guessedBody = await guessed.json();
+    expect({ status: guessed.status, body: guessedBody }).toEqual({ status: 404, body: expect.objectContaining({
+      error: expect.objectContaining({ code: "resource_not_found" }),
+    }) }); assertPrivate(guessed);
+    expect(guessedBody).not.toHaveProperty("nextView");
+
+    const stale = await decisionPost(decisionRequest(f.workspace.id, f.held.leadId, { ...base, expectedLeadVersion: 99 }, f.headers.cookie),
+      params({ workspaceId: f.workspace.id, leadId: f.held.leadId }));
+    expect(stale.status).toBe(409); assertPrivate(stale);
+    expect(await stale.json()).toMatchObject({ error: { code: "stale_version" },
+      nextView: { kind: "identity_review_detail", leadId: f.held.leadId } });
+
+    const resolved = await decisionPost(decisionRequest(f.workspace.id, f.held.leadId, { ...base, outcome: "resolve",
+      contact: { action: "dismiss" }, company: { action: "dismiss" } }, f.headers.cookie),
+      params({ workspaceId: f.workspace.id, leadId: f.held.leadId }));
+    expect(resolved.status).toBe(200); assertPrivate(resolved);
+    for (const command of [base, { ...base, expectedLeadVersion: 99, expectedReviewVersion: 99 }]) {
+      const after = await decisionPost(decisionRequest(f.workspace.id, f.held.leadId, command, f.headers.cookie),
+        params({ workspaceId: f.workspace.id, leadId: f.held.leadId }));
+      expect(after.status).toBe(404); assertPrivate(after);
+      const body = await after.json();
+      expect(body).toMatchObject({ error: { code: "resource_not_found" } }); expect(body).not.toHaveProperty("nextView");
+      expect(JSON.stringify(body)).not.toContain(f.held.leadId);
+    }
+  });
+
+  it("applies private cache headers to authenticated validation and tenant-safe not-found errors", async () => {
+    const f = await fixture();
+    const rejectedMutation = await decisionPost(new Request(
+      `${env.APP_ORIGIN}/api/workspaces/${f.workspace.id}/leads/${f.held.leadId}/identity-review`, { method: "POST" }),
+    params({ workspaceId: f.workspace.id, leadId: f.held.leadId }));
+    expect(rejectedMutation.status).toBe(403); assertPrivate(rejectedMutation);
+    const validation = await queueGet(new Request(`${env.APP_ORIGIN}/api/workspaces/${f.workspace.id}/identity-reviews?unknown=true`,
+      { headers: f.headers }), params({ workspaceId: f.workspace.id }));
+    expect(validation.status).toBe(400); assertPrivate(validation);
+    const missing = await detailGet(new Request(`${env.APP_ORIGIN}/api/workspaces/${f.workspace.id}/leads/${randomUUID()}/identity-review`,
+      { headers: f.headers }), params({ workspaceId: f.workspace.id, leadId: randomUUID() }));
+    expect(missing.status).toBe(404); assertPrivate(missing);
   });
 });

@@ -13,19 +13,35 @@ describe("P1A route boundary", () => {
   });
   it("marks success and errors private/no-store and exposes only stable errors", async () => {
     const success = leadIntakeJson({ ok: true }, 201);
-    expect(success.headers.get("cache-control")).toContain("no-store");
+    const assertPrivate = (response: Response) => {
+      expect(response.headers.get("cache-control")).toContain("private");
+      expect(response.headers.get("cache-control")).toContain("no-store");
+      expect(response.headers.get("pragma")).toBe("no-cache");
+      expect(response.headers.get("vary")).toBe("cookie");
+    };
+    assertPrivate(success);
     const failure = leadIntakeFailure(new LeadIntakeError("resource_not_found", 404), "request-1");
     expect(failure.status).toBe(404);
     expect(await failure.json()).toEqual({ error: { code: "resource_not_found", message: "The requested resource is unavailable.",
       retryable: false, reconciliation: { required: false, action: "none" } }, requestId: "request-1" });
     const leadId = crypto.randomUUID();
-    const stale = leadIntakeFailure(new LeadIntakeError("stale_version", 409), "request-2",
-      { kind: "identity_review_detail", leadId });
+    const stale = leadIntakeFailure(new LeadIntakeError("stale_version", 409, undefined,
+      { kind: "identity_review_detail", leadId }), "request-2");
     expect(await stale.json()).toEqual({ error: { code: "stale_version", message: "The identity review has changed.",
       retryable: false, reconciliation: { required: true, action: "refetch_identity_review" } }, requestId: "request-2",
       nextView: { kind: "identity_review_detail", leadId } });
+    const invalidNavigation = leadIntakeFailure(new LeadIntakeError("stale_version", 409, undefined,
+      { kind: "identity_review_detail", leadId: "not-a-uuid" }), "request-invalid-navigation");
+    expect(await invalidNavigation.json()).not.toHaveProperty("nextView");
+    const invalidDetails = leadIntakeFailure(new LeadIntakeError("validation_failed", 400,
+      { fields: ["person.email"], unexpected: "raw" }), "request-invalid-details");
+    expect((await invalidDetails.json()).error).not.toHaveProperty("details");
     const unknown = leadIntakeFailure({ code: "postgres_internal", status: 418 }, "request-3");
     expect(unknown.status).toBe(500);
     expect(await unknown.json()).toMatchObject({ error: { code: "unexpected_error", message: "The request could not be completed." } });
+    for (const response of [failure, stale, unknown,
+      leadIntakeFailure(new LeadIntakeError("validation_failed", 400), "request-4"),
+      leadIntakeFailure(new LeadIntakeError("authentication_required", 401), "request-5"),
+      leadIntakeFailure(new LeadIntakeError("permission_required", 403), "request-6")]) assertPrivate(response);
   });
 });

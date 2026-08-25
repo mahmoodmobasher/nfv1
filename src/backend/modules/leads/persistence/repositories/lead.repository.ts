@@ -28,6 +28,22 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
         [workspaceId, leadIds, intakeIds],
       )).rows.map(context);
     },
+    async lockReviewPresentationContexts(workspaceId: string, refs: Array<{ leadId: string; intakeId: string }>) {
+      if (!refs.length) return [];
+      const intakeIds = [...new Set(refs.map(ref => ref.intakeId))].sort();
+      const leadIds = [...new Set(refs.map(ref => ref.leadId))].sort();
+      await tx.query(`select id from lead_intakes where workspace_id=$1 and id=any($2::uuid[]) order by id for update`,
+        [workspaceId, intakeIds]);
+      await tx.query(`select id from leads where workspace_id=$1 and id=any($2::uuid[]) order by id for update`,
+        [workspaceId, leadIds]);
+      return (await tx.query(
+        `select l.*,i.id intake_id,i.version intake_version,d.code lifecycle_code
+           from leads l join lead_intakes i on i.workspace_id=l.workspace_id and i.lead_id=l.id
+           join lead_lifecycle_definitions d on d.id=l.lifecycle_definition_id
+          where l.workspace_id=$1 and l.id=any($2::uuid[]) and i.id=any($3::uuid[])`,
+        [workspaceId, leadIds, intakeIds],
+      )).rows.map(context);
+    },
     async activeStage(workspaceId: string, requestedId?: string) {
       const row = (await tx.query(
         `select id from pipeline_stages where workspace_id=$1 and status='active' and ($2::uuid is null or id=$2)

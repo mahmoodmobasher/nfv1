@@ -28,7 +28,7 @@ Physical schema definitions remain centralized in `src/server/db/schema.ts`; thi
 | `audit_events` | Platform Audit | one governing write |
 | `outbox_messages` | Platform Outbox | exact event-set writes |
 
-Workspace Administration remains the write owner for `workspaces`, `users`, `sessions`, `roles`, `workspace_memberships`, `teams`, and `team_memberships`. P1A consumes these only through the Platform Workspace Authority participant, whose reviewed read/lock model also covers Lead-owned visibility references. Platform Database owns transaction mechanics; Platform Idempotency owns advisory authorities but no table; Platform Authorization owns trusted-current authority facts but no administration table.
+Workspace Administration remains the write owner for `workspaces`, `users`, `sessions`, `roles`, `workspace_memberships`, `teams`, and `team_memberships`. P1A consumes these only through the Platform Workspace Authority participant. Its reviewed read/lock model globally sorts bounded Membership/Team/Lead visibility references and fences the current Workspace, User, Session, Role, and Membership before protected disclosure; it also covers Lead-owned visibility references. Platform Database owns transaction mechanics; Platform Idempotency owns advisory authorities but no table; Platform Authorization owns trusted-current authority facts but no administration table.
 
 ## Stable identity inventory
 

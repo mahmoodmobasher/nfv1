@@ -36,6 +36,13 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
             from ranked where rank<=10 order by review_id,coalesce(contact_id,company_id),id`, [workspaceId, reviewIds],
       )).rows as Array<{ reviewId: string; contactId: string | null; companyId: string | null; targetVersion: number }>;
     },
+    async lockQueueDisclosureReviews(workspaceId: string, reviewIds: string[]) {
+      if (!reviewIds.length) return [];
+      return (await tx.query(
+        `select id,lead_id "leadId",intake_id "intakeId",state,version from lead_identity_reviews
+          where workspace_id=$1 and id=any($2::uuid[]) order by id for update`, [workspaceId, [...new Set(reviewIds)].sort()],
+      )).rows as Array<{ id: string; leadId: string; intakeId: string; state: string; version: number }>;
+    },
     async open(workspaceId: string, intakeId: string, leadId: string, reviewId: string) {
       return (await tx.query(
         `insert into lead_identity_reviews(id,workspace_id,intake_id,lead_id) values($4,$1,$2,$3) returning id,version`,
@@ -75,7 +82,6 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
       const review = (await tx.query(`select * from lead_identity_reviews where workspace_id=$1 and id=$2 for update`,
         [workspaceId, reviewId])).rows[0];
       if (!review) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
-      if (review.state !== "pending") throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return review;
     },
     async lockDisclosureReview(workspaceId: string, reviewId: string) {

@@ -104,5 +104,6 @@ export type LeadIntakeErrorCode =
   | "assignment_unavailable" | "rate_limited" | "intake_unavailable" | "unexpected_error";
 
 export class LeadIntakeError extends Error {
-  constructor(public code: LeadIntakeErrorCode, public status: number, public safe?: unknown) { super(code); }
+  constructor(public code: LeadIntakeErrorCode, public status: number, public safe?: unknown,
+    public nextView?: { kind: "identity_review_detail"; leadId: string }, public disclosureAuthorized = false) { super(code); }
 }
