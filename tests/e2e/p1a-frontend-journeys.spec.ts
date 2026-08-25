@@ -48,7 +48,7 @@ async function browserFixture(page: Page): Promise<BrowserFixture> {
      values($1,$2,$3,now()+interval '1 hour',now()+interval '1 day',now(),'password') returning id`,
     [user.id, keyedHash(token, sessionSecret), workspace.id],
   )).rows[0];
-  await page.context().addCookies([{ name: "nexaflow_session", value: token, url: "http://127.0.0.1:3000" }]);
+  await page.context().addCookies([{ name: "nexaflow_session", value: token, url: test.info().project.use.baseURL as string }]);
   return {
     token,
     workspaceId: workspace.id,
@@ -82,10 +82,25 @@ function successfulIntake(index: number) {
     },
   };
 }
+function heldIntake(index:number){const envelope=successfulIntake(index),reviewId=`13000000-0000-4000-8000-${String(index).padStart(12,"0")}`;return{data:{...envelope.data,disposition:"held_for_review",reviewCaseId:reviewId,reviewVersion:1,nextView:{kind:"identity_review_detail",leadId:envelope.data.leadId,reviewId}}}}
 
 async function fillMinimumIntake(page: Page, name = "Taylor Browser") {
   await page.locator("#displayName").fill(name);
   await page.locator("#email").fill("taylor@example.test");
+}
+
+function p1aError(code: "authentication_required" | "permission_required" | "resource_not_found" | "validation_failed" | "intake_unavailable"|"stale_version", fields?: string[]) {
+  const presentation = {
+    authentication_required: ["Authentication is required.", "none", false],
+    permission_required: ["This action is not available.", "none", false],
+    resource_not_found: ["The requested resource is unavailable.", "none", false],
+    validation_failed: ["The request is invalid.", "none", false],
+    intake_unavailable: ["Lead intake is temporarily unavailable.", "retry_same_request", true],
+    stale_version: ["The identity review has changed.", "refetch_identity_review", false],
+  } as const;
+  const [message, action, retryable] = presentation[code];
+  return { error: { code, message, retryable, reconciliation: { required: action !== "none", action },
+    ...(fields ? { details: { fields } } : {}) }, requestId: randomUUID() };
 }
 
 test.afterAll(async () => database.end());
@@ -144,6 +159,109 @@ test("a new inquiry receives a new timestamp and idempotency key", async ({ page
   expect(requests[1].postDataJSON().inquiry.receivedAt).not.toBe(requests[0].postDataJSON().inquiry.receivedAt);
 });
 
+test("a replayed intake is presented as already committed without a second action", async ({ page }, testInfo) => {
+  await browserFixture(page);
+  const replay = successfulIntake(2);
+  replay.data.disposition = "replayed";
+  replay.data.replayed = true;
+  let posts = 0;
+  await page.route("**/api/workspaces/*/leads", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    posts++;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(replay) });
+  });
+  await page.goto("/crm/leads/new");
+  await fillMinimumIntake(page, "Replayed Lead");
+  await page.getByRole("button", { name: "Create lead" }).dblclick();
+  await expect(page.getByRole("heading", { name: "This lead was already created." })).toBeVisible();
+  expect(posts).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath("manual-intake-replayed-committed.png"), fullPage: true });
+});
+
+test("held intake truthfully routes to the pending identity review",async({page})=>{await browserFixture(page);await page.route("**/api/workspaces/*/leads",route=>route.request().method()==="POST"?route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(heldIntake(8))}):route.continue());await page.goto("/crm/leads/new");await fillMinimumIntake(page,"Held Inquiry");await page.getByRole("button",{name:"Create lead"}).click();await expect(page.getByRole("heading",{name:"Lead created and ready for identity review."})).toBeVisible();await expect(page.getByRole("link",{name:"Review possible matches"})).toHaveAttribute("href",/\/crm\/identity-reviews\//)});
+
+test("editing a held intake body rotates its request identity before commit", async ({ page }) => {
+  await browserFixture(page);
+  const requests: Request[] = [];
+  await page.route("**/api/workspaces/*/leads", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    requests.push(route.request());
+    if (requests.length === 1) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify(p1aError("intake_unavailable")) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(successfulIntake(3)) });
+  });
+  await page.goto("/crm/leads/new");
+  await fillMinimumIntake(page, "Original Body");
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "temporarily unavailable" })).toBeVisible();
+  await page.locator("#displayName").fill("Edited Body");
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page.getByRole("heading", { name: "Lead created." })).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(requests[1].headers()["idempotency-key"]).not.toBe(requests[0].headers()["idempotency-key"]);
+  expect(requests[0].postDataJSON().person.displayName).toBe("Original Body");
+  expect(requests[1].postDataJSON().person.displayName).toBe("Edited Body");
+});
+
+test("backend canonical field errors focus, announce, describe, and clear every real control", async ({ page }, testInfo) => {
+  await browserFixture(page);
+  const fields = [
+    "person.displayName", "person.email", "person.phone", "person.phoneCountryOverride", "organization.name", "organization.domain",
+    "inquiry.subject", "inquiry.message", "source.sourceCategory", "source.sourcePlatform", "source.sourceMedium",
+    "source.sourceDetail.operator_context", "source.sourceDetail.page", "source.sourceDetail.account", "source.sourceDetail.campaign",
+    "source.sourceDetail.ad", "source.sourceDetail.form", "source.sourceDetail.post",
+  ];
+  await page.route("**/api/workspaces/*/leads", route => route.fulfill({ status: 400, contentType: "application/json",
+    body: JSON.stringify(p1aError("validation_failed", fields)) }));
+  await page.goto("/crm/leads/new");
+  await fillMinimumIntake(page);
+  await page.locator("#sourceCategory").selectOption("social_media");
+  await page.locator("#sourcePlatform").selectOption("other_social");
+  await page.locator("#platformDetail").fill("Community network");
+  await page.getByText("Optional attribution context").click();
+  await page.getByRole("button", { name: "Create lead" }).click();
+  const summary = page.getByRole("alert").filter({ hasText: "The request is invalid." });
+  await expect(summary).toBeFocused();
+  for (const id of ["displayName", "email", "phone", "phoneCountry", "organizationName", "organizationDomain", "subject", "message",
+    "sourceCategory", "sourcePlatform", "sourceMedium", "platformDetail", "page", "account", "campaign", "ad", "form", "post"]) {
+    const control = page.locator(`#${id}`);
+    await expect(control).toHaveAttribute("aria-invalid", "true");
+    await expect(control).toHaveAttribute("aria-describedby", new RegExp(`(?:^| )${id}-error(?: |$)`));
+    await expect(page.locator(`#${id}-error`)).toBeVisible();
+  }
+  await summary.getByRole("link").first().click();
+  await expect(page.locator("#displayName")).toBeFocused();
+  await page.locator("#phone").fill("+1 416 555 0100");
+  await expect(page.locator("#phone")).not.toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator("#phone-error")).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("manual-intake-server-field-errors.png"), fullPage: true });
+});
+
+test("social taxonomy is conditional and submits bounded attribution context", async ({ page }, testInfo) => {
+  await browserFixture(page);
+  let submitted: Request | undefined;
+  await page.route("**/api/workspaces/*/leads", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    submitted = route.request();
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(successfulIntake(4)) });
+  });
+  await page.goto("/crm/leads/new");
+  await expect(page.locator("#sourcePlatform")).toHaveCount(0);
+  await fillMinimumIntake(page);
+  await page.locator("#sourceCategory").selectOption("social_media");
+  await expect(page.locator("#sourcePlatform")).toBeVisible();
+  await page.locator("#sourcePlatform").selectOption("other_social");
+  await expect(page.locator("#platformDetail")).toBeVisible();
+  await page.locator("#platformDetail").fill("Community forum");
+  await page.getByText("Optional attribution context").click();
+  for (const name of ["Page", "Account", "Campaign", "Ad", "Form", "Post"]) await page.getByLabel(name, { exact: true }).fill(`${name} context`);
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page.getByRole("heading", { name: "Lead created." })).toBeVisible();
+  expect(submitted?.postDataJSON().source).toMatchObject({ sourceCategory: "social_media", sourcePlatform: "other_social", sourceMedium: "unknown",
+    sourceDetail: { operator_context: "Community forum", page: "Page context", account: "Account context", campaign: "Campaign context",
+      ad: "Ad context", form: "Form context", post: "Post context" } });
+  await page.screenshot({ path: testInfo.outputPath("manual-intake-social-attribution-success.png"), fullPage: true });
+});
+
 test("identity review keeps identifiers out of decision copy and separates Hold from Resolve", async ({ page }, testInfo) => {
   const fixture = await browserFixture(page);
   const candidateEmail = `candidate-${randomUUID()}@example.test`;
@@ -166,15 +284,15 @@ test("identity review keeps identifiers out of decision copy and separates Hold 
   const decisions: unknown[] = [];
   await page.route("**/api/workspaces/*/leads/*/identity-review", async route => {
     if (route.request().method() !== "POST") return route.continue();
-    decisions.push(route.request().postDataJSON());
+    const command=route.request().postDataJSON();decisions.push(command);
     return route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ data: {
-        contractVersion: "lead-identity-review-decision-result.v1", outcome: "hold", disposition: "held_for_review",
-        reviewId: held.reviewCaseId, leadId: held.leadId, contactId: null, companyId: null, leadVersion: 1,
+        contractVersion: "lead-identity-review-decision-result.v1", outcome: command.outcome, disposition: command.outcome==="hold"?"held_for_review":"resolved",
+        reviewId: held.reviewCaseId, leadId: held.leadId, contactId: command.outcome==="resolve"?target.id:null, companyId: null, leadVersion: 1,
         reviewVersion: 1, replayed: false, requestId: randomUUID(),
-        nextView: { kind: "identity_review_detail", leadId: held.leadId, reviewId: held.reviewCaseId },
+        nextView: command.outcome==="hold"?{ kind: "identity_review_detail", leadId: held.leadId, reviewId: held.reviewCaseId }:{kind:"identity_review_queue"},
       } }),
     });
   });
@@ -187,13 +305,55 @@ test("identity review keeps identifiers out of decision copy and separates Hold 
   expect(visibleText).not.toContain(candidateEmail);
   expect(visibleText).not.toMatch(/link:|candidateId|targetId|expectedTargetVersion/);
   await page.screenshot({ path: testInfo.outputPath("identity-review-safe-decision.png"), fullPage: true });
-
+  await page.getByRole("radio",{name:/Dismiss company candidates/}).check();
+  await page.getByRole("button",{name:"Apply identity decision"}).click();
+  await expect(page.getByRole("heading",{name:"Identity review completed."})).toBeVisible();
+  await expect(page.getByRole("link",{name:"Return to review queue"})).toBeVisible();
+  expect(decisions[0]).toMatchObject({outcome:"resolve",contact:{action:"link"},company:{action:"dismiss"}});
+  await page.goto(`/crm/identity-reviews/${held.leadId}`);
   await page.getByRole("button", { name: "Hold for review" }).click();
   await expect(page.getByRole("heading", { name: /Review remains Pending/i })).toBeVisible();
-  expect(decisions).toHaveLength(1);
-  expect(decisions[0]).toMatchObject({ outcome: "hold" });
-  expect(decisions[0]).not.toHaveProperty("contact");
-  expect(decisions[0]).not.toHaveProperty("company");
+  expect(decisions).toHaveLength(2);
+  expect(decisions[1]).toMatchObject({ outcome: "hold" });
+  expect(decisions[1]).not.toHaveProperty("contact");
+  expect(decisions[1]).not.toHaveProperty("company");
+});
+
+test("authority loss clears protected detail, selections, and draft and focuses the generic state", async ({ page }, testInfo) => {
+  const fixture = await browserFixture(page);
+  const email = `authority-${randomUUID()}@example.test`;
+  await database.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Existing Authority','existing authority',$2,$2)`,[fixture.workspaceId,email]);
+  const held=await submitLeadInquiryV1(database,{actor:fixture.actor,idempotencyKey:randomUUID(),command:{contractVersion:"lead-inquiry-intake.v1",intakeChannel:"manual",person:{displayName:"Existing Authority",email},inquiry:{receivedAt:"2026-08-25T12:00:00.000Z"},source:{sourceCategory:"manual",sourceMedium:"unknown",sourceDetail:{},campaignContext:{},attributionContractVersion:"p1a-attribution-v1"}}});
+  await page.route("**/api/workspaces/*/leads/*/identity-review",async route=>{if(route.request().method()!=="POST")return route.continue();return route.fulfill({status:403,contentType:"application/json",body:JSON.stringify(p1aError("permission_required"))})});
+  await page.goto(`/crm/identity-reviews/${held.leadId}`);
+  await page.getByRole("radio",{name:/Existing Authority/}).check();
+  await page.getByRole("radio",{name:/Dismiss company candidates/}).check();
+  await page.getByRole("button",{name:"Apply identity decision"}).click();
+  const state=page.getByRole("alert").filter({hasText:"Review no longer available"});
+  await expect(state).toBeFocused();
+  await expect(page.getByText("Existing Authority",{exact:true})).toHaveCount(0);
+  await expect(page.getByText(/matches exactly after normalization/)).toHaveCount(0);
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.screenshot({path:testInfo.outputPath("identity-review-authority-loss.png"),fullPage:true});
+});
+
+test("stale reconciliation preserves a safe proposal, removes lost candidates, and requires reselection", async ({ page }) => {
+  const fixture=await browserFixture(page),email=`stale-${randomUUID()}@example.test`;
+  await database.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Existing Stale','existing stale',$2,$2)`,[fixture.workspaceId,email]);
+  const held=await submitLeadInquiryV1(database,{actor:fixture.actor,idempotencyKey:randomUUID(),command:{contractVersion:"lead-inquiry-intake.v1",intakeChannel:"manual",person:{displayName:"Existing Stale",email},inquiry:{receivedAt:"2026-08-25T12:00:00.000Z"},source:{sourceCategory:"manual",sourceMedium:"unknown",sourceDetail:{},campaignContext:{},attributionContractVersion:"p1a-attribution-v1"}}});
+  await page.goto(`/crm/identity-reviews/${held.leadId}`);
+  const current=await page.evaluate(async({workspaceId,leadId})=>await(await fetch(`/api/workspaces/${workspaceId}/leads/${leadId}/identity-review`,{cache:"no-store"})).json(),{workspaceId:fixture.workspaceId,leadId:held.leadId});
+  const latest={...current,data:{...current.data,candidates:current.data.candidates.map((candidate:{canLink:boolean})=>({...candidate,canLink:false})),capabilities:{...current.data.capabilities,canLinkContact:false,canLinkCompany:false}}};
+  await page.route("**/api/workspaces/*/leads/*/identity-review",async route=>route.request().method()==="POST"?route.fulfill({status:409,contentType:"application/json",body:JSON.stringify(p1aError("stale_version"))}):route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(latest)}));
+  await page.getByRole("radio",{name:/Existing Stale/}).check();
+  await page.getByRole("radio",{name:/Dismiss company candidates/}).check();
+  await page.getByRole("button",{name:"Apply identity decision"}).click();
+  await expect(page.getByRole("heading",{name:"Previous proposal — not applied"})).toBeVisible();
+  await expect(page.getByRole("status").filter({hasText:"Latest information loaded"})).toBeFocused();
+  await expect(page.getByRole("radio",{name:/Existing Stale/})).toHaveCount(0);
+  await expect(page.getByText(/Linking is unavailable/)).toBeVisible();
+  await expect(page.getByRole("radio",{name:/Create new contact/})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Apply identity decision"})).toBeDisabled();
 });
 
 test("P1A pages remain operable at an effective 320px and 200% zoom without horizontal overflow", async ({ page }, testInfo) => {
@@ -222,6 +382,13 @@ test("identity queue exposes empty, filter reset, and retry-safe page context", 
   await expect(page.getByRole("status")).toContainText("email");
   await page.getByRole("button", { name: "Clear filters" }).first().click();
   await expect(page.getByLabel("Evidence")).toHaveValue("any");
+});
+
+test("populated queue preserves cursor filters, forward/back recovery, and focused retained-state errors", async ({page})=>{
+ const fixture=await browserFixture(page),reviewA="40000000-0000-4000-8000-000000000001",leadA="40000000-0000-4000-8000-000000000002",reviewB="40000000-0000-4000-8000-000000000003",leadB="40000000-0000-4000-8000-000000000004",requestId="40000000-0000-4000-8000-000000000005";
+ const item=(name:string,reviewId:string,leadId:string)=>({reviewId,leadId,lead:{displayName:name,companyName:null,receivedAt:"2026-08-25T12:00:00.000Z"},originalAttribution:{sourceCategory:"manual",sourcePlatform:null,sourceMedium:"unknown",intakeChannel:"manual"},assignment:{responsibleMembershipId:null,responsibleTeamId:null,visibility:"workspace"},versions:{lead:1,review:1,intake:1},candidateSummary:{strong:0,supplementary:0,probable:0},capabilities:{canCreateContact:true,canCreateCompany:false,canLinkContact:false,canLinkCompany:false,canDismiss:true,canHold:true,canResolve:true},reconciliation:{status:"current",retryable:false,action:"none"},updatedAt:"2026-08-25T12:00:00.000Z",nextView:{kind:"identity_review_detail",leadId,reviewId}});
+ let fail=false;await page.goto("/crm/identity-reviews");await page.route("**/api/workspaces/*/identity-reviews?*",async route=>{if(fail)return route.fulfill({status:503,contentType:"application/json",body:JSON.stringify(p1aError("intake_unavailable"))});const cursor=new URL(route.request().url()).searchParams.get("cursor");return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({data:{contractVersion:"lead-identity-review-queue.v1",requestId,items:[cursor?item("Beta Lead",reviewB,leadB):item("Alpha Lead",reviewA,leadA)],nextCursor:cursor?null:"cursor_one"}})})});
+ await page.getByRole("button",{name:"Apply filters"}).click();await expect(page.getByText("Alpha Lead")).toBeVisible();await page.getByRole("button",{name:"Next page"}).click();await expect(page.getByText("Beta Lead")).toBeVisible();await expect(page.getByRole("status")).toContainText("Page 2");await page.getByRole("button",{name:"Previous page"}).click();await expect(page.getByText("Alpha Lead")).toBeVisible();await expect(page.getByText("Beta Lead")).toHaveCount(0);fail=true;await page.getByRole("button",{name:"Apply filters"}).click();const error=page.getByRole("alert").filter({hasText:"remain on screen"});await expect(error).toBeFocused();await expect(error).toContainText("remain on screen");await expect(page.getByText("Alpha Lead")).toBeVisible();expect(fixture.workspaceId).toBeTruthy();
 });
 
 test("P1A surfaces retain focus and semantic boundaries under dark, forced colours, and reduced motion", async ({ page }, testInfo) => {

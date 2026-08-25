@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { toJSONSchema, type ZodType } from "zod";
+import { readFileSync } from "node:fs";
+import { LeadIntakeError } from "../src/backend/modules/leads/contracts/lead-inquiry-intake.contract";
+import { leadIntakeFailure } from "../src/backend/modules/leads/presentation/lead-intake.http";
 import { identityReviewDecisionCommandV1Schema as backendDecisionCommand,
   identityReviewDetailViewV1Schema as backendDetail, identityReviewQueueViewV1Schema as backendQueue } from "../src/backend/modules/identity-review";
 import { leadInquiryIntakeCommandV1Schema as backendIntakeCommand } from "../src/backend/modules/leads";
@@ -18,13 +22,65 @@ const decisionResult = { contractVersion: "lead-identity-review-decision-result.
 const retryError = { error: { code: "intake_unavailable", message: "Lead intake is temporarily unavailable.", retryable: true,
   reconciliation: { required: true, action: "retry_same_request" } }, requestId: identifiers.requestId } as const;
 
+function canonicalSchema(schema: ZodType): unknown {
+  const normalize = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(normalize).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$schema").sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => [key, normalize(child)]));
+  };
+  return normalize(toJSONSchema(schema));
+}
+
+function backendErrorStatuses(): Array<[string, number]> {
+  const source = readFileSync(new URL("../src/backend/modules/leads/presentation/lead-intake.http.ts", import.meta.url), "utf8");
+  const block = source.match(/const stableStatus = \{([\s\S]*?)\} as const;/)?.[1];
+  if (!block) throw new Error("backend_error_status_registry_missing");
+  return [...block.matchAll(/([a-z_]+):\s*(\d+)/g)].map(([, code, status]) => [code, Number(status)]);
+}
+
 describe("P1A frontend executable transport contract", () => {
+  it("fails deterministically on backend-authoritative shape, constraint, or nullability drift", () => {
+    for (const [frontend, backend] of [[leadInquiryIntakeCommandV1Schema, backendIntakeCommand],
+      [decisionCommandSchema, backendDecisionCommand], [reviewDetailSchema, backendDetail], [reviewQueueSchema, backendQueue]] as const)
+      expect(canonicalSchema(frontend)).toEqual(canonicalSchema(backend));
+  });
+
+  it("accepts every backend-authoritative stable error presentation and reconciliation branch", async () => {
+    const statuses = backendErrorStatuses();
+    expect(statuses.length).toBeGreaterThan(0);
+    for (const [code, status] of statuses) {
+      const response = leadIntakeFailure(new LeadIntakeError(code as never, status), identifiers.requestId);
+      const payload = await response.json();
+      const parsed = errorEnvelopeSchema.safeParse(payload);
+      expect(parsed.success, code).toBe(true);
+      if (parsed.success) expect(parsed.data.error.code).toBe(code);
+    }
+  });
+
   it("keeps accepted frontend fixtures executable and in parity with backend command/view schemas", () => {
     for (const [frontend, backend, value] of [[leadInquiryIntakeCommandV1Schema, backendIntakeCommand, manualInstagramFixture],
       [decisionCommandSchema, backendDecisionCommand, decision], [reviewDetailSchema, backendDetail, reviewDetailFixture],
       [reviewQueueSchema, backendQueue, emptyQueueFixture]] as const) {
       expect(frontend.safeParse(value).success).toBe(true);
       expect(backend.safeParse(value).success).toBe(true);
+    }
+  });
+
+  it("keeps backend-authoritative conditional and reconciliation refinements in parity", () => {
+    const staleWithAuthority = { ...reviewDetailFixture, reconciliation: { status: "stale", retryable: true,
+      action: "refresh_identity_review" }, capabilities: { ...reviewDetailFixture.capabilities, canResolve: true } };
+    const mismatchedNavigation = { ...reviewDetailFixture, nextView: { ...reviewDetailFixture.nextView,
+      leadId: "30000000-0000-4000-8000-000000000099" } };
+    const invalidCases = [
+      [leadInquiryIntakeCommandV1Schema, backendIntakeCommand, { ...manualInstagramFixture,
+        source: { ...manualInstagramFixture.source, sourcePlatform: undefined } }],
+      [reviewDetailSchema, backendDetail, staleWithAuthority],
+      [reviewDetailSchema, backendDetail, mismatchedNavigation],
+    ] as const;
+    for (const [frontend, backend, value] of invalidCases) {
+      expect(frontend.safeParse(value).success).toBe(false);
+      expect(backend.safeParse(value).success).toBe(false);
     }
   });
 
