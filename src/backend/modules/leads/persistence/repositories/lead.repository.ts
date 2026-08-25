@@ -59,11 +59,11 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
           original_source_platform,original_source_medium,original_source_detail,original_campaign_context,attribution_contract_version,
           intake_channel,received_at,status,lifecycle_definition_id,identity_review_status,stage_id,owner_membership_id,
           responsible_team_id,visibility)
-         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'p1a-identity-v1',$12,$12,$13,$14,$15,$16,$17,'manual',$18,'open',
-          '00000000-0000-4000-8000-000000000001','not_required',$19,null,null,$20) returning id,version`,
+         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13,$14,$15,$16,$17,$18,'manual',$19,'open',
+          '00000000-0000-4000-8000-000000000001','not_required',$20,null,null,$21) returning id,version`,
         [input.workspaceId, input.displayName, input.personNameNormalized, input.firstName, input.lastName,
           input.emailNormalized, input.emailDisplay, input.organizationName, input.phoneDisplay, input.phoneNormalized,
-          input.phoneCountryCodeUsed, input.sourceCategory, input.sourcePlatform, input.sourceMedium,
+          input.phoneCountryCodeUsed, input.normalizationVersion, input.sourceCategory, input.sourcePlatform, input.sourceMedium,
           JSON.stringify(input.sourceDetail), JSON.stringify(input.campaignContext), input.attributionContractVersion,
           input.receivedAt, input.stageId, input.visibility ?? "workspace"],
       )).rows[0] as { id: string; version: number };

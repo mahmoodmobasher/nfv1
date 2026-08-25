@@ -14,8 +14,8 @@ export function manualIntakeRepository(tx: ModuleTransaction) {
         `insert into lead_intakes(workspace_id,operation,intake_channel,idempotency_key,actor_membership_id,request_hash,
           contract_version,normalization_version,attribution_contract_version,source_category,source_platform,source_medium,
           source_detail,campaign_context,state)
-         values($1,'lead-inquiry-intake.v1','manual',$2,$3,$4,'lead-inquiry-intake.v1','p1a-identity-v1',$5,$6,$7,$8,$9,$10,'pending') returning id,version`,
-        [input.workspaceId, input.idempotencyKey, input.actorMembershipId, input.requestHash, input.attributionContractVersion,
+         values($1,'lead-inquiry-intake.v1','manual',$2,$3,$4,'lead-inquiry-intake.v1',$5,$6,$7,$8,$9,$10,$11,'pending') returning id,version`,
+        [input.workspaceId, input.idempotencyKey, input.actorMembershipId, input.requestHash, input.normalizationVersion, input.attributionContractVersion,
           input.sourceCategory, input.sourcePlatform, input.sourceMedium, JSON.stringify(input.sourceDetail), JSON.stringify(input.campaignContext)],
       )).rows[0] as { id: string; version: number };
     },

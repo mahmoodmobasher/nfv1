@@ -61,9 +61,10 @@ export function contactTransactionParticipant(tx: ModuleTransaction) {
       return (await tx.query(
         `insert into contacts(workspace_id,display_name,person_name_normalized,first_name,last_name,email_display,email_normalized,
           phone_display,phone_normalized,phone_country_code_used,normalization_version,company_id)
-         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'p1a-identity-v1',$11) returning id,version`,
+         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id,version`,
         [input.workspaceId, input.displayName, input.personNameNormalized, input.firstName, input.lastName,
-          input.emailDisplay, input.emailNormalized, input.phoneDisplay, input.phoneNormalized, input.phoneCountryCodeUsed, input.companyId],
+          input.emailDisplay, input.emailNormalized, input.phoneDisplay, input.phoneNormalized, input.phoneCountryCodeUsed,
+          input.normalizationVersion, input.companyId],
       )).rows[0] as { id: string; version: number };
     },
   };

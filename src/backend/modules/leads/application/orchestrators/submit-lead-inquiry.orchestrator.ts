@@ -46,9 +46,10 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
   idempotencyKey: string;
   requestId?: string;
   compatibility?: Compatibility;
+  normalized?: ReturnType<typeof canonicalizeIntake>;
 }): Promise<LeadInquiryIntakeResultV1> {
   const requestId = input.requestId ?? randomUUID();
-  const normalized = canonicalizeIntake(input.command);
+  const normalized = input.normalized ?? canonicalizeIntake(input.command);
   const hashedCommand = input.compatibility ? { ...input.command, inquiry: {
     subject: input.command.inquiry.subject, message: input.command.inquiry.message,
   } } : input.command;
@@ -90,7 +91,7 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         companyDomainNormalized: normalized.organizationDomainNormalized };
       const companyKey = `${candidateQuery.companyNameNormalized ?? ""}:${candidateQuery.companyDomainNormalized ?? ""}`;
       if (companyKey !== ":") await lockIdentityKeyAuthority(tx,
-        `${actorLookup.workspaceId}:company:p1a-identity-v1:${companyKey}`);
+        `${actorLookup.workspaceId}:company:${normalized.normalizationVersion}:${companyKey}`);
       const companyQuery = { workspaceId: actorLookup.workspaceId, nameNormalized: candidateQuery.companyNameNormalized,
         domainNormalized: candidateQuery.companyDomainNormalized };
       const probableQuery = { workspaceId: actorLookup.workspaceId, personNameNormalized: candidateQuery.personNameNormalized,
@@ -110,7 +111,7 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         throw new LeadIntakeError("stale_version", 409);
       const contactKey = normalized.emailNormalized ?? normalized.phoneNormalized ??
         `${normalized.personNameNormalized}:${normalized.organizationNameNormalized ?? ""}`;
-      await lockIdentityKeyAuthority(tx, `${actorLookup.workspaceId}:contact:p1a-identity-v1:${contactKey}`);
+      await lockIdentityKeyAuthority(tx, `${actorLookup.workspaceId}:contact:${normalized.normalizationVersion}:${contactKey}`);
       const contactQuery = { workspaceId: actorLookup.workspaceId, emailNormalized: candidateQuery.emailNormalized,
         phoneNormalized: candidateQuery.phoneNormalized };
       const initialDirect = await contacts.findCandidates(contactQuery);
@@ -159,12 +160,13 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
       let review: { id: string; version: number } | undefined;
       if (reviewId) {
         review = await reviews.open(actor.workspaceId, intake.id, lead.id, reviewId);
-        await reviews.recordCandidates(actor.workspaceId, review.id, contactCandidates, companyCandidates);
+        await reviews.recordCandidates(actor.workspaceId, review.id, contactCandidates, companyCandidates, normalized.normalizationVersion);
         await leads.setInitialReview(actor.workspaceId, lead.id, "pending");
         const decision = await reviews.appendDecision({ workspaceId: actor.workspaceId, intakeId: intake.id, reviewId: review.id,
           idempotencyKey: canonicalRequestHash({ intakeId: intake.id, outcome: "hold" }), requestHash, requestId, correlationId: requestId, governingOutcome: "hold",
           actorMembershipId: actor.membershipId, expectedLeadVersion: lead.version, expectedReviewVersion: review.version,
-          expectedIntakeVersion: committed.version, resultLeadVersion: lead.version, resultReviewVersion: review.version });
+          expectedIntakeVersion: committed.version, resultLeadVersion: lead.version, resultReviewVersion: review.version,
+          normalizationVersion: normalized.normalizationVersion });
         await reviews.setDecisionHead(actor.workspaceId, intake.id, decision.id);
       }
       const auditAction = review ? "crm.inquiry_held_for_review" : "crm.inquiry_created";
@@ -173,7 +175,7 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
           contract_version: "lead-inquiry-intake.v1", intake_channel: "manual", source_category: normalized.sourceCategory,
           source_platform: normalized.sourcePlatform, source_medium: normalized.sourceMedium, disposition: baseResult.disposition,
           candidate_strong_count: summary.strong, candidate_supplementary_count: summary.supplementary,
-          candidate_probable_count: summary.probable, normalization_version: "p1a-identity-v1" } });
+          candidate_probable_count: summary.probable, normalization_version: normalized.normalizationVersion } });
       const payload = { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: lead.id, leadVersion: lead.version,
         lifecycle: "new", disposition: baseResult.disposition, intakeChannel: "manual", sourceCategory: normalized.sourceCategory,
         sourcePlatform: normalized.sourcePlatform, sourceMedium: normalized.sourceMedium, candidateSummary: summary, requestId };

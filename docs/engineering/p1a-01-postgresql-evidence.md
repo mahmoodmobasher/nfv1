@@ -5,8 +5,8 @@ Date: 2026-08-25. Runtime: isolated native PostgreSQL using accepted migrations 
 ## Correctness and concurrency
 
 - Focused contract/module/route/security suite: 4 files, 18 tests passed.
-- Focused P1A presentation/transaction PostgreSQL suites: 2 files, 41 tests passed.
-- Full serialized repository PostgreSQL suite: 22 files, 206 tests passed; the performance gate is separate and was executed explicitly.
+- Focused P1A manual-intake/read transaction suite: 44 tests passed, including five new rejection/zero-mutation fixtures, canonical phone replay, canonical nullable list/detail, and controlled lock overlap.
+- Full serialized repository PostgreSQL suite: 22 files, 213 tests passed; the performance gate is separate and was executed explicitly.
 - Replay coverage binds intake and decision results to the original actor and revalidates current Workspace, User, Session, Membership, Role, assignment, visibility, and disclosure before hash/result disclosure. Same-hash replay, same-actor changed-hash conflict, cross-actor changed-hash pending-Hold denial, authority-loss, assignment-loss, and Workspace-switch attempts are covered with no new effects.
 - Concurrency coverage includes same-key intake, competing Hold/Resolve, same-identity distinct-key creation, and controlled intake-versus-resolution contention. The deadlock regression holds the shared Contact advisory key externally, waits until resolution holds the matching Company row and blocks on that Contact key, then starts intake with a distinct Company key that resolves to the same Company row. `pg_blocking_pids` must prove `barrier -> resolution -> intake` before the barrier is released. Both commands then complete, so the test cannot pass through serial scheduling and would expose the former Contact-before-Company inversion.
 - Candidate fidelity coverage includes exact command target ID/version mismatch for Contact and Company, stale locked targets, normalized Company-domain rerun, mixed probable Contact+Company rerun, exact email/phone/name+Company per-class caps, deterministic UUID ordering, and a protected combined result of 30.
@@ -20,13 +20,16 @@ Fixture at measurement: 100,001 Leads, 100,030 Contacts, 25,010 Companies, 10,00
 
 | Query/command | Samples | Observed p95 | Target |
 | --- | ---: | ---: | ---: |
-| Contact normalized email | 30 | 0.347 ms | <100 ms |
-| Contact normalized phone | 30 | 0.213 ms | <100 ms |
-| Contact name + Company | 30 | 0.409 ms | <200 ms |
-| Company normalized name | 30 | 0.229 ms | <200 ms |
-| Protected review-queue operation | 30 | 10.828 ms | <200 ms |
-| Protected candidate-detail operation | 30 | 6.164 ms | <200 ms |
-| Canonical manual intake | 30 | 4.677 ms | <500 ms |
+| Contact normalized email | 30 | 0.580 ms | <100 ms |
+| Contact normalized phone | 30 | 0.209 ms | <100 ms |
+| Contact name + Company | 30 | 0.366 ms | <200 ms |
+| Company normalized name | 30 | 0.184 ms | <200 ms |
+| Protected review-queue operation | 30 | 9.760 ms | <200 ms |
+| Protected candidate-detail operation | 30 | 5.458 ms | <200 ms |
+| Canonical Lead detail operation | 30 | 3.721 ms | <200 ms |
+| Canonical Lead list operation | 30 | 5.262 ms | <200 ms |
+| Canonical Lead exact-email search operation | 30 | 85.465 ms | <200 ms |
+| Canonical manual intake | 30 | 4.505 ms | <500 ms |
 
 Default-planner EXPLAIN ANALYZE observations:
 
@@ -40,6 +43,9 @@ Default-planner EXPLAIN ANALYZE observations:
 | Protected presentation queue | Backward `lead_identity_reviews_workspace_state_idx`, then candidate lookups through `lead_identity_candidates_workspace_review_id_uq`; 51 review refs/80 joined rows/36 kB sort | 0.700 ms | 225 shared hits |
 | Queue target freshness/cap | `lead_identity_candidates_workspace_review_id_uq` plus partition window; 51 review IDs/80 rows | 0.518 ms | 122 shared hits |
 | Full capped candidate detail | `lead_identity_candidates_review_idx` plus evidence partition window; actual 30 rows/29 kB sorts | 0.500 ms | 18 shared hits |
+| Canonical Lead detail | Index Only Scan, `leads_workspace_id_id_uq` | 0.131 ms | 4 shared hits |
+| Canonical Lead list | backward Index Only Scan, `leads_workspace_updated_idx`, bounded to 51 | 0.380 ms | 55 shared hits |
+| Canonical Lead exact-email search | Index Scan, `leads_workspace_email_idx` | 0.021 ms | 4 shared hits |
 
 The executable test logs the complete plans as `P1A_PLAN_EVIDENCE` and the exact 30-sample measurements as `P1A_PERFORMANCE_EVIDENCE`. It explicitly rejects sequential scans on `leads`, `contacts`, `companies`, `lead_identity_reviews`, and `lead_identity_candidates`. Candidate SQL remains Workspace-leading, exact-only, deterministically ordered, and capped; no fuzzy predicate or unbounded scan was introduced.
 
@@ -47,9 +53,9 @@ The executable test logs the complete plans as `P1A_PLAN_EVIDENCE` and the exact
 
 - `npx tsc --noEmit`: passed.
 - scoped ESLint over backend, Workspace Lead routes, and P1A tests: passed with no findings.
-- Next.js 16.3.1 production build: passed; the Lead and identity-review route handlers compiled as dynamic server routes.
+- Next.js 16.3.1 production build: passed; canonical Lead collection/detail and identity-review handlers compiled as dynamic server routes.
 - focused contract/module/route/security Vitest suite: 18/18 passed.
 - focused P1A presentation/transaction PostgreSQL suites: 41/41 passed.
-- full serialized repository PostgreSQL suite: 206/206 passed across 22 files; performance test intentionally skipped there and executed separately.
+- full serialized repository PostgreSQL suite: 213/213 passed across 22 files; performance test intentionally skipped there and executed separately.
 - representative-scale PostgreSQL performance suite: 1/1 passed with the 30-sample results above.
-- ordinary full Vitest suite: 268 active tests passed; one unchanged unrelated `design-system-boundary` test failed on the existing `box-shadow` token assertion in untouched frontend CSS. No P1A test failed.
+- ordinary full Vitest suite: 320/320 active tests passed across 35 files; 23 integration files skipped by their explicit environment gates.

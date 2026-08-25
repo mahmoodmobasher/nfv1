@@ -37,6 +37,28 @@ export async function revalidateActiveActor(tx: ModuleTransaction, actor: Truste
 
 export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
   return {
+    async visibleLeadIds(actor: TrustedActor, leads: Array<{ id: string; visibility: string; ownerMembershipId: string | null }>) {
+      if (actor.role !== "member") return new Set(leads.map(lead => lead.id));
+      if (!leads.length) return new Set<string>();
+      const teamVisible = new Set((await tx.query<{ leadId: string }>(
+        `select distinct lvt.lead_id "leadId" from lead_visible_teams lvt
+          join team_memberships tm on tm.workspace_id=lvt.workspace_id and tm.team_id=lvt.team_id
+          join teams t on t.workspace_id=tm.workspace_id and t.id=tm.team_id and t.status='active'
+         where lvt.workspace_id=$1 and lvt.lead_id=any($2::uuid[]) and tm.workspace_membership_id=$3`,
+        [actor.workspaceId, leads.map(lead => lead.id), actor.membershipId])).rows.map(row => row.leadId));
+      return new Set(leads.filter(lead => lead.visibility === "workspace" || lead.ownerMembershipId === actor.membershipId || teamVisible.has(lead.id))
+        .map(lead => lead.id));
+    },
+    async presentAssignments(workspaceId: string, membershipIds: string[], teamIds: string[]) {
+      const memberships = membershipIds.length ? (await tx.query<{ id: string; label: string }>(
+        `select m.id,u.display_name label from workspace_memberships m join users u on u.id=m.user_id
+          where m.workspace_id=$1 and m.id=any($2::uuid[])`, [workspaceId, [...new Set(membershipIds)].sort()])).rows : [];
+      const teams = teamIds.length ? (await tx.query<{ id: string; label: string }>(
+        `select id,name label from teams where workspace_id=$1 and id=any($2::uuid[])`,
+        [workspaceId, [...new Set(teamIds)].sort()])).rows : [];
+      return { memberships: new Map(memberships.map(value => [value.id, value.label])),
+        teams: new Map(teams.map(value => [value.id, value.label])) };
+    },
     async lockReferences(input: { workspaceId: string; leadId?: string; leadIds?: string[];
       membershipIds?: Array<string | null>; teamIds?: Array<string | null> }) {
       const membershipIds = [...new Set((input.membershipIds ?? []).filter((id): id is string => Boolean(id)))].sort();

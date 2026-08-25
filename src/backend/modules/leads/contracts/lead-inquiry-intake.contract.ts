@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const LEAD_INQUIRY_INTAKE_OPERATION = "lead-inquiry-intake.v1" as const;
 export const LEAD_INQUIRY_INTAKE_RESULT = "lead-inquiry-intake-result.v1" as const;
-export const IDENTITY_NORMALIZATION_VERSION = "p1a-identity-v1" as const;
+export const IDENTITY_NORMALIZATION_VERSION = "p1a-identity-v2" as const;
 export const ATTRIBUTION_CONTRACT_VERSION = "p1a-attribution-v1" as const;
 
 const boundedContext = z.partialRecord(

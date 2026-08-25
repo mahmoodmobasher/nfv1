@@ -20,5 +20,6 @@ export type CreateContactIdentityV1 = {
   phoneDisplay: string | null;
   phoneNormalized: string | null;
   phoneCountryCodeUsed: string | null;
+  normalizationVersion: string;
   companyId: string | null;
 };

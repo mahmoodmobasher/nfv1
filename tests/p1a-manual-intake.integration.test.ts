@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { decideLeadIdentityReviewV1, getIdentityReviewCandidatesV1, listIdentityReviewQueueV1, submitLeadInquiryV1,
+import { decideLeadIdentityReviewV1, getIdentityReviewCandidatesV1, getLeadDetailV1, listIdentityReviewQueueV1,
+  listLeadSummariesV1, submitLeadInquiryV1,
   resolveLeadIdentityReviewV1 } from "../src/backend/modules/leads";
 import type { TrustedActor } from "../src/backend/platform/authorization";
 
@@ -532,7 +533,7 @@ suite("P1A manual intake modular transaction", () => {
       await blocker.query("begin");
       blockerPid = (await blocker.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0].pid;
       await blocker.query("select pg_advisory_xact_lock(hashtextextended($1,7102))",
-        [`${f.workspace.id}:contact:p1a-identity-v1:${email}`]);
+        [`${f.workspace.id}:contact:p1a-identity-v2:${email}`]);
       resolution = decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
         contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
         expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
@@ -806,4 +807,58 @@ suite("P1A manual intake modular transaction", () => {
       expect((await pool.query("select count(*)::int count from audit_events where action='crm.inquiry_review_resolved'")).rows[0].count).toBe(1);
     }
   });
+
+  it("persists authoritative phone display, E.164, calling code and normalization version and replays exactly once", async () => {
+    const f = await fixture(), key = randomUUID();
+    const input = command({ person: { displayName: "Phone Only", phone: "(647) 389-4802", phoneCountryOverride: "CA" } });
+    const first = await submitLeadInquiryV1(pool, { actor: f.owner, command: input, idempotencyKey: key });
+    const replay = await submitLeadInquiryV1(pool, { actor: f.owner, command: input, idempotencyKey: key });
+    expect(replay).toMatchObject({ leadId: first.leadId, replayed: true });
+    expect((await pool.query(`select phone,phone_normalized,phone_country_code_used,normalization_version
+      from leads where workspace_id=$1 and id=$2`, [f.workspace.id, first.leadId])).rows[0]).toEqual({
+        phone: "(647) 389-4802", phone_normalized: "+16473894802", phone_country_code_used: "+1",
+        normalization_version: "p1a-identity-v2",
+      });
+    expect((await pool.query("select count(*)::int count from lead_intakes")).rows[0].count).toBe(1);
+    expect((await pool.query("select count(*)::int count from audit_events")).rows[0].count).toBe(1);
+    expect((await pool.query("select count(*)::int count from outbox_messages")).rows[0].count).toBe(1);
+  });
+
+  it("returns strict nullable-safe canonical list/detail views with deterministic cursor and no read effects", async () => {
+    const f = await fixture();
+    const created = await submitLeadInquiryV1(pool, { actor: f.owner, idempotencyKey: randomUUID(), command: command({
+      person: { displayName: "Display Authority", email: "display-authority@example.test" }, organization: undefined,
+    }) });
+    const before = { audit: (await pool.query("select count(*)::int count from audit_events")).rows[0].count,
+      outbox: (await pool.query("select count(*)::int count from outbox_messages")).rows[0].count };
+    const detail = await getLeadDetailV1(pool, f.owner, created.leadId);
+    expect(detail).toMatchObject({ contractVersion: "getLeadDetail.v1", lead: { displayName: "Display Authority",
+      structuredName: { firstName: null, lastName: null }, company: { companyId: null, displayName: null },
+      assignment: { responsibleMembershipId: null, responsibleTeamId: null, isUnassigned: true },
+      lifecycle: { code: "new" }, identityReviewStatus: "not_required", capabilities: { canView: true, canEdit: false },
+      originalAttribution: { sourceCategory: "manual", intakeChannel: "manual" } } });
+    expect(JSON.stringify(detail)).not.toContain("emailNormalized");
+    expect(JSON.stringify(detail)).not.toContain("display-authority@example.test");
+    const firstPage = await listLeadSummariesV1(pool, f.owner, { q: "display authority", limit: 1 });
+    expect(firstPage.items.map(item => item.leadId)).toContain(created.leadId);
+    expect(firstPage.items[0].contact.maskedEmail).toBe("d***@example.test");
+    expect((await pool.query("select count(*)::int count from audit_events")).rows[0].count).toBe(before.audit);
+    expect((await pool.query("select count(*)::int count from outbox_messages")).rows[0].count).toBe(before.outbox);
+    await expect(getLeadDetailV1(pool, { ...f.member, workspaceId: randomUUID() }, created.leadId))
+      .rejects.toMatchObject({ code: "resource_not_found" });
+  });
+
+  it.each(["6473894802 x123", "26473894802", "64738", "++16473894802", "647+3894802"])(
+    "rejects invalid phone %j before any governing transaction mutation", async phone => {
+      const f = await fixture();
+      const before = Object.fromEntries(await Promise.all(["leads", "lead_intakes", "lead_identity_reviews", "lead_activities",
+        "audit_events", "outbox_messages"].map(async table => [table,
+          (await pool.query(`select count(*)::int count from ${table}`)).rows[0].count])));
+      const fields = phone === "26473894802" ? ["person.phone", "person.phoneCountryOverride"] : ["person.phone"];
+      await expect(submitLeadInquiryV1(pool, { actor: f.owner,
+        command: command({ person: { displayName: "Rejected Phone", phone, phoneCountryOverride: "CA" } }),
+        idempotencyKey: randomUUID() })).rejects.toMatchObject({ code: "validation_failed", safe: { fields } });
+      for (const [table, count] of Object.entries(before))
+        expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count, table).toBe(count);
+    });
 });

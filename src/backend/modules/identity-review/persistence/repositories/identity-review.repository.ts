@@ -49,16 +49,16 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
         [workspaceId, intakeId, leadId, reviewId],
       )).rows[0] as { id: string; version: number };
     },
-    async recordCandidates(workspaceId: string, reviewId: string, contacts: ContactCandidateV1[], companies: CompanyCandidateV1[]) {
+    async recordCandidates(workspaceId: string, reviewId: string, contacts: ContactCandidateV1[], companies: CompanyCandidateV1[], normalizationVersion: string) {
       for (const candidate of contacts) await tx.query(
         `insert into lead_identity_candidates(workspace_id,review_id,contact_id,evidence_kind,evidence_strength,normalization_version,target_version,evidence_metadata)
-         values($1,$2,$3,$4,$5,'p1a-identity-v1',$6,'{"match_key_version":"p1a-identity-v1"}')`,
-        [workspaceId, reviewId, candidate.id, candidate.evidenceKind, candidate.evidenceStrength, candidate.version],
+         values($1,$2,$3,$4,$5,$6,$7,jsonb_build_object('match_key_version',$6::text))`,
+        [workspaceId, reviewId, candidate.id, candidate.evidenceKind, candidate.evidenceStrength, normalizationVersion, candidate.version],
       );
       for (const candidate of companies) await tx.query(
         `insert into lead_identity_candidates(workspace_id,review_id,company_id,evidence_kind,evidence_strength,normalization_version,target_version,evidence_metadata)
-         values($1,$2,$3,'name_company','probable','p1a-identity-v1',$4,'{"match_key_version":"p1a-identity-v1"}')`,
-        [workspaceId, reviewId, candidate.id, candidate.version],
+         values($1,$2,$3,'name_company','probable',$4,$5,jsonb_build_object('match_key_version',$4::text))`,
+        [workspaceId, reviewId, candidate.id, normalizationVersion, candidate.version],
       );
     },
     async evidence(workspaceId: string, reviewId: string) {
@@ -135,13 +135,13 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
           company_candidate_id,contact_target_version,company_target_version,actor_membership_id,expected_lead_version,
           expected_review_version,expected_intake_version,result_lead_version,result_review_version,contract_version,normalization_version,reason_code)
          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
-          'lead-identity-review-decision.v1','p1a-identity-v1',$24) returning id`,
+          'lead-identity-review-decision.v1',$24,$25) returning id`,
         [input.workspaceId, input.intakeId, input.reviewId, input.idempotencyKey, input.requestHash, input.requestId,
           input.correlationId, input.supersedesDecisionId ?? null, input.governingOutcome, input.contactAction ?? null,
           input.companyAction ?? null, input.contactId ?? null, input.companyId ?? null, input.contactCandidateId ?? null,
           input.companyCandidateId ?? null, input.contactTargetVersion ?? null, input.companyTargetVersion ?? null,
           input.actorMembershipId, input.expectedLeadVersion, input.expectedReviewVersion, input.expectedIntakeVersion,
-          input.resultLeadVersion, input.resultReviewVersion, input.reasonCode ?? null],
+          input.resultLeadVersion, input.resultReviewVersion, input.normalizationVersion, input.reasonCode ?? null],
       )).rows[0] as { id: string };
     },
     async setDecisionHead(workspaceId: string, intakeId: string, decisionId: string, supersedesDecisionId?: string) {

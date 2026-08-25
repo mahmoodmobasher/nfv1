@@ -103,7 +103,7 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
 
       const companyKey = `${candidateQuery.companyNameNormalized ?? ""}:${candidateQuery.companyDomainNormalized ?? ""}`;
       if (input.command.outcome === "resolve" && input.command.company.action === "create" && companyKey !== ":")
-        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:company:p1a-identity-v1:${companyKey}`);
+        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:company:${String(lead.normalization_version)}:${companyKey}`);
       const companyQuery = { workspaceId: trusted.workspaceId, nameNormalized: candidateQuery.companyNameNormalized,
         domainNormalized: candidateQuery.companyDomainNormalized };
       const probableQuery = { workspaceId: trusted.workspaceId, personNameNormalized: candidateQuery.personNameNormalized,
@@ -128,7 +128,7 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         if (input.command.contact.action === "create") {
           const key = candidateQuery.emailNormalized ?? candidateQuery.phoneNormalized ??
             `${candidateQuery.personNameNormalized}:${candidateQuery.companyNameNormalized ?? ""}`;
-          await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:contact:p1a-identity-v1:${key}`);
+          await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:contact:${String(lead.normalization_version)}:${key}`);
         }
         const selected = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
           await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));
@@ -192,13 +192,14 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
           supersedesDecisionId: priorHead, governingOutcome: "hold", actorMembershipId: actor.membershipId,
           expectedLeadVersion: lead.version, expectedReviewVersion: reviewsLocked.version,
           expectedIntakeVersion: lead.intake_version, resultLeadVersion: lead.version,
-          resultReviewVersion, reasonCode: input.command.reasonCode });
+          resultReviewVersion, reasonCode: input.command.reasonCode,
+          normalizationVersion: String(lead.normalization_version) });
         await reviews.setDecisionHead(actor.workspaceId, reviewsLocked.intake_id, decision.id, priorHead);
         const held = await reviews.touchPending(actor.workspaceId, reviewsLocked.id, reviewsLocked.version);
         await writeGoverningAudit(tx, { actor, operation: "lead-identity-review-decision.v1", action: "crm.inquiry_held_for_review",
           targetType: "identity_review", targetId: reviewsLocked.id, requestId, correlationId: requestId, resultVersion: held.version,
           metadata: { contract_version: "lead-identity-review-decision.v1", disposition: "held_for_review",
-            expected_version: reviewsLocked.version, normalization_version: "p1a-identity-v1" } });
+            expected_version: reviewsLocked.version, normalization_version: String(lead.normalization_version) } });
         await writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: decision.id, events: [{
           topic: "crm.inquiry.review_required.v1", aggregateType: "lead", aggregateId: lead.id, resultVersion: held.version,
           payload: { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: lead.id, leadVersion: lead.version,
@@ -225,7 +226,8 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         const created = await contacts.create({ workspaceId: actor.workspaceId, displayName: lead.display_name,
           personNameNormalized: lead.person_name_normalized, firstName: lead.first_name, lastName: lead.last_name,
           emailDisplay: lead.email_display, emailNormalized: lead.email_normalized, phoneDisplay: lead.phone,
-          phoneNormalized: lead.phone_normalized, phoneCountryCodeUsed: lead.phone_country_code_used, companyId });
+          phoneNormalized: lead.phone_normalized, phoneCountryCodeUsed: lead.phone_country_code_used,
+          normalizationVersion: String(lead.normalization_version), companyId });
         contactId = created.id; contactVersion = created.version; contactCreated = true;
       }
       const resultLeadVersion = lead.version + 1, resultReviewVersion = reviewsLocked.version + 1;
@@ -236,7 +238,8 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         companyCandidateId: companyCandidate?.id, contactTargetVersion: contactVersion, companyTargetVersion: companyVersion,
         actorMembershipId: actor.membershipId, expectedLeadVersion: lead.version,
         expectedReviewVersion: reviewsLocked.version, expectedIntakeVersion: lead.intake_version,
-        resultLeadVersion, resultReviewVersion, reasonCode: input.command.reasonCode });
+        resultLeadVersion, resultReviewVersion, reasonCode: input.command.reasonCode,
+        normalizationVersion: String(lead.normalization_version) });
       await reviews.setDecisionHead(actor.workspaceId, reviewsLocked.intake_id, decision.id, priorHead);
       const updatedLead = await leads.resolveIdentity({ workspaceId: actor.workspaceId, leadId: reviewsLocked.lead_id,
         expectedVersion: lead.version, contactId, companyId });
@@ -244,7 +247,7 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
       await writeGoverningAudit(tx, { actor, operation: "lead-identity-review-decision.v1", action: "crm.inquiry_review_resolved",
         targetType: "identity_review", targetId: reviewsLocked.id, requestId, correlationId: requestId, resultVersion: updatedReview.version,
         metadata: { contract_version: "lead-identity-review-decision.v1", disposition: "resolved",
-          expected_version: reviewsLocked.version, normalization_version: "p1a-identity-v1" } });
+          expected_version: reviewsLocked.version, normalization_version: String(lead.normalization_version) } });
       const basePayload = { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: reviewsLocked.lead_id,
         reviewId: reviewsLocked.id, leadVersion: updatedLead.version, reviewVersion: updatedReview.version, contactId, companyId, requestId };
       const events: DomainEventV1[] = [{ topic: "crm.inquiry.review_resolved.v1", aggregateType: "lead",

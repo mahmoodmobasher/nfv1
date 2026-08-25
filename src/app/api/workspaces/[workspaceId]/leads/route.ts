@@ -1,13 +1,16 @@
 import { localDatabase, mutationGuard } from "@/server/http";
-import { listLeads } from "@/server/crm/leads";
 import { leadInputSchema } from "@/server/crm/http";
-import { failure, success, tenant } from "@/server/tenant-admin/http";
+import { tenant } from "@/server/tenant-admin/http";
 import { TenantAdminError } from "@/server/tenant-admin/permissions";
 import { leadIntakeFailure, leadIntakeJson, submitLeadInquiryV1, submitLegacyManualLeadV1,
-  type LeadInquiryIntakeCommandV1 } from "@/backend/modules/leads";
+  listLeadSummariesV1, parseLeadSummaryFiltersV1, type LeadInquiryIntakeCommandV1 } from "@/backend/modules/leads";
 import { enforceManualIntakeRate } from "@/backend/platform/authorization";
 
-export async function GET(request:Request,{params}:{params:Promise<{workspaceId:string}>}){const{workspaceId}=await params,{pool}=localDatabase();try{return success(await listLeads(pool,await tenant(pool,request,workspaceId),new URL(request.url).searchParams.get("q")??""))}catch(error){return failure(error)}finally{await pool.end()}}
+export async function GET(request:Request,{params}:{params:Promise<{workspaceId:string}>}){
+  const requestId=crypto.randomUUID(),{workspaceId}=await params,{pool}=localDatabase();
+  try{return leadIntakeJson(await listLeadSummariesV1(pool,await tenant(pool,request,workspaceId),parseLeadSummaryFiltersV1(new URL(request.url)),requestId))}
+  catch(error){return leadIntakeFailure(error,requestId)}finally{await pool.end()}
+}
 export async function POST(request:Request,{params}:{params:Promise<{workspaceId:string}>}){
   const requestId=crypto.randomUUID(),blocked=mutationGuard(request);
   if(blocked)return leadIntakeFailure({code:"permission_required",status:403},requestId);

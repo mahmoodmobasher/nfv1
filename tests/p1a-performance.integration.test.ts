@@ -2,7 +2,8 @@ import { performance } from "node:perf_hooks";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { getIdentityReviewCandidatesV1, listIdentityReviewQueueV1, submitLeadInquiryV1 } from "../src/backend/modules/leads";
+import { getIdentityReviewCandidatesV1, getLeadDetailV1, listIdentityReviewQueueV1, listLeadSummariesV1,
+  submitLeadInquiryV1 } from "../src/backend/modules/leads";
 import type { TrustedActor } from "../src/backend/platform/authorization";
 
 const suite = process.env.RUN_P1A_PERFORMANCE === "1" ? describe : describe.skip;
@@ -85,7 +86,7 @@ suite("P1A representative PostgreSQL performance", () => {
       where workspace_id=$1 and name_normalized='full candidate company'`, [workspaceId]);
     const held = await submitLeadInquiryV1(pool, { actor, idempotencyKey: randomUUID(), command: {
       contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual", person: { displayName: "Full Candidate Person",
-        email: fullEmail, phone: fullPhone }, organization: { name: "Full Candidate Company" },
+        email: fullEmail, phone: fullPhone, phoneCountryOverride: "CA" }, organization: { name: "Full Candidate Company" },
       inquiry: { receivedAt: "2026-08-25T12:00:00.000Z" }, source: { sourceCategory: "manual", sourceMedium: "unknown",
         sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" } } });
     const reviewId = held.reviewCaseId!;
@@ -118,9 +119,13 @@ suite("P1A representative PostgreSQL performance", () => {
       from lead_identity_candidates where workspace_id=$1 and review_id=any($2::uuid[])
     ) select review_id,contact_id,company_id,target_version from ranked where rank<=10
       order by review_id,coalesce(contact_id,company_id),id`;
+    const leadId = (await pool.query<{ id: string }>(`select id from leads where workspace_id=$1 order by updated_at desc,id desc limit 1`, [workspaceId])).rows[0].id;
+    const leadDetailSql = `select id from leads where workspace_id=$1 and id=$2`;
+    const leadListSql = `select id,updated_at from leads where workspace_id=$1 order by updated_at desc,id desc limit 51`;
+    const leadSearchSql = `select id from leads where workspace_id=$1 and email_normalized=$2 order by id limit 51`;
     expect((await pool.query("show enable_seqscan")).rows[0].enable_seqscan).toBe("on");
     const planNames = ["contact_email", "contact_phone", "contact_name_company", "company_name", "review_queue",
-      "presentation_queue", "queue_target_freshness", "candidate_detail"];
+      "presentation_queue", "queue_target_freshness", "candidate_detail", "lead_detail", "lead_list", "lead_search"];
     const plans = await Promise.all([
       pool.query(`explain (analyze,buffers,format text) ${emailSql}`, [workspaceId, "person-100000@example.test"]),
       pool.query(`explain (analyze,buffers,format text) ${phoneSql}`, [workspaceId, "+14160099999"]),
@@ -130,6 +135,9 @@ suite("P1A representative PostgreSQL performance", () => {
       pool.query(`explain (analyze,buffers,format text) ${presentationQueueSql}`, [workspaceId]),
       pool.query(`explain (analyze,buffers,format text) ${queueTargetSql}`, [workspaceId, reviewIds]),
       pool.query(`explain (analyze,buffers,format text) ${candidateDetailSql}`, [workspaceId, reviewId]),
+      pool.query(`explain (analyze,buffers,format text) ${leadDetailSql}`, [workspaceId, leadId]),
+      pool.query(`explain (analyze,buffers,format text) ${leadListSql}`, [workspaceId]),
+      pool.query(`explain (analyze,buffers,format text) ${leadSearchSql}`, [workspaceId, "lead-100000@example.test"]),
     ]);
     const planEvidence: Record<string, string> = {};
     for (const [index, plan] of plans.entries()) {
@@ -143,7 +151,7 @@ suite("P1A representative PostgreSQL performance", () => {
       phoneP95Ms: await latency(phoneSql, [workspaceId, "+14160099999"]),
       nameCompanyP95Ms: await latency(nameSql, [workspaceId, "person 100000", "company 25000"]),
       companyP95Ms: await latency(companySql, [workspaceId, "company 25000"]),
-      reviewQueueP95Ms: 0, candidateDetailP95Ms: 0, manualP95Ms: 0 };
+      reviewQueueP95Ms: 0, candidateDetailP95Ms: 0, leadDetailP95Ms: 0, leadListP95Ms: 0, leadSearchP95Ms: 0, manualP95Ms: 0 };
     const reviewQueue: number[] = [];
     for (let index = 0; index < 30; index++) { const start = performance.now();
       const page = await listIdentityReviewQueueV1(pool, actor, { assignment: "all", evidence: "any", limit: 50 });
@@ -153,6 +161,14 @@ suite("P1A representative PostgreSQL performance", () => {
     for (let index = 0; index < 30; index++) { const start = performance.now();
       await getIdentityReviewCandidatesV1(pool, actor, held.leadId); candidateDetails.push(performance.now() - start); }
     metrics.candidateDetailP95Ms = percentile95(candidateDetails);
+    const leadDetails: number[] = [], leadLists: number[] = [], leadSearches: number[] = [];
+    for (let index = 0; index < 30; index++) {
+      let start = performance.now(); await getLeadDetailV1(pool, actor, leadId); leadDetails.push(performance.now() - start);
+      start = performance.now(); await listLeadSummariesV1(pool, actor, { q: "", limit: 50 }); leadLists.push(performance.now() - start);
+      start = performance.now(); await listLeadSummariesV1(pool, actor, { q: "lead-100000@example.test", limit: 50 }); leadSearches.push(performance.now() - start);
+    }
+    metrics.leadDetailP95Ms = percentile95(leadDetails); metrics.leadListP95Ms = percentile95(leadLists);
+    metrics.leadSearchP95Ms = percentile95(leadSearches);
     const manual: number[] = [];
     for (let index = 0; index < 30; index++) {
       const start = performance.now();
@@ -172,6 +188,9 @@ suite("P1A representative PostgreSQL performance", () => {
     expect(metrics.companyP95Ms).toBeLessThan(200);
     expect(metrics.reviewQueueP95Ms).toBeLessThan(200);
     expect(metrics.candidateDetailP95Ms).toBeLessThan(200);
+    expect(metrics.leadDetailP95Ms).toBeLessThan(200);
+    expect(metrics.leadListP95Ms).toBeLessThan(200);
+    expect(metrics.leadSearchP95Ms).toBeLessThan(200);
     expect(metrics.manualP95Ms).toBeLessThan(500);
   }, 120_000);
 });
