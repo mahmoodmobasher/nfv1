@@ -67,5 +67,7 @@ export function optionalPersonPhoneV2(
   original?: string,
   countryOverride?: PhoneCountryOverrideV1,
 ): PersonPhoneV2 | null {
-  return original === undefined ? null : parsePersonPhoneV2(original, countryOverride);
+  return original === undefined || original.normalize("NFKC").trim() === ""
+    ? null
+    : parsePersonPhoneV2(original, countryOverride);
 }

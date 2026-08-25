@@ -9,6 +9,29 @@ export type TrustedActor = {
   role: ActorRole;
 };
 
+export const WORKSPACE_VISIBLE_LEAD_IDS_SQL_V1=`select distinct lvt.lead_id "leadId" from lead_visible_teams lvt
+  join team_memberships tm on tm.workspace_id=lvt.workspace_id and tm.team_id=lvt.team_id
+  join teams t on t.workspace_id=tm.workspace_id and t.id=tm.team_id and t.status='active'
+ where lvt.workspace_id=$1 and lvt.lead_id=any($2::uuid[]) and tm.workspace_membership_id=$3`;
+/**
+ * Reviewed read-model predicate used only by the Leads public presentation query.
+ * Platform remains the owner of Team membership/visibility reads; the enclosing
+ * query must bind Workspace, role, and Membership as parameters 1, 7, and 8.
+ */
+export const WORKSPACE_LEAD_DISCLOSURE_SQL_PREDICATE_V1=`(
+  $7::text<>'member' or l.visibility='workspace' or l.owner_membership_id=$8::uuid or exists(
+    select 1 from lead_visible_teams disclosure_lvt
+    join team_memberships disclosure_tm on disclosure_tm.workspace_id=disclosure_lvt.workspace_id
+      and disclosure_tm.team_id=disclosure_lvt.team_id and disclosure_tm.workspace_membership_id=$8::uuid
+    join teams disclosure_team on disclosure_team.workspace_id=disclosure_tm.workspace_id
+      and disclosure_team.id=disclosure_tm.team_id and disclosure_team.status='active'
+    where disclosure_lvt.workspace_id=$1 and disclosure_lvt.lead_id=l.id
+  ))`;
+export const WORKSPACE_MEMBERSHIP_PRESENTATION_SQL_V1=`select m.id,u.display_name label from workspace_memberships m join users u on u.id=m.user_id
+  where m.workspace_id=$1 and m.id=any($2::uuid[]) and m.status='active' and u.status='active'`;
+export const WORKSPACE_TEAM_PRESENTATION_SQL_V1=`select id,name label from teams
+  where workspace_id=$1 and id=any($2::uuid[]) and status='active'`;
+
 async function actorFacts(tx: ModuleTransaction, actor: TrustedActor, lock: boolean): Promise<TrustedActor> {
   const result = await tx.query<TrustedActor>(
     `select m.user_id "userId",s.id "sessionId",m.workspace_id "workspaceId",m.id "membershipId",r.code role
@@ -40,21 +63,16 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
     async visibleLeadIds(actor: TrustedActor, leads: Array<{ id: string; visibility: string; ownerMembershipId: string | null }>) {
       if (actor.role !== "member") return new Set(leads.map(lead => lead.id));
       if (!leads.length) return new Set<string>();
-      const teamVisible = new Set((await tx.query<{ leadId: string }>(
-        `select distinct lvt.lead_id "leadId" from lead_visible_teams lvt
-          join team_memberships tm on tm.workspace_id=lvt.workspace_id and tm.team_id=lvt.team_id
-          join teams t on t.workspace_id=tm.workspace_id and t.id=tm.team_id and t.status='active'
-         where lvt.workspace_id=$1 and lvt.lead_id=any($2::uuid[]) and tm.workspace_membership_id=$3`,
+      const teamVisible = new Set((await tx.query<{ leadId: string }>(WORKSPACE_VISIBLE_LEAD_IDS_SQL_V1,
         [actor.workspaceId, leads.map(lead => lead.id), actor.membershipId])).rows.map(row => row.leadId));
       return new Set(leads.filter(lead => lead.visibility === "workspace" || lead.ownerMembershipId === actor.membershipId || teamVisible.has(lead.id))
         .map(lead => lead.id));
     },
     async presentAssignments(workspaceId: string, membershipIds: string[], teamIds: string[]) {
       const memberships = membershipIds.length ? (await tx.query<{ id: string; label: string }>(
-        `select m.id,u.display_name label from workspace_memberships m join users u on u.id=m.user_id
-          where m.workspace_id=$1 and m.id=any($2::uuid[])`, [workspaceId, [...new Set(membershipIds)].sort()])).rows : [];
+        WORKSPACE_MEMBERSHIP_PRESENTATION_SQL_V1, [workspaceId, [...new Set(membershipIds)].sort()])).rows : [];
       const teams = teamIds.length ? (await tx.query<{ id: string; label: string }>(
-        `select id,name label from teams where workspace_id=$1 and id=any($2::uuid[])`,
+        WORKSPACE_TEAM_PRESENTATION_SQL_V1,
         [workspaceId, [...new Set(teamIds)].sort()])).rows : [];
       return { memberships: new Map(memberships.map(value => [value.id, value.label])),
         teams: new Map(teams.map(value => [value.id, value.label])) };

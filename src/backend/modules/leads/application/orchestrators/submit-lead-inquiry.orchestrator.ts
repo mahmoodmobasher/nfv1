@@ -20,6 +20,14 @@ import {
 
 type Compatibility = Pick<LegacyLeadCreateV1, "stageId" | "visibility" | "teamIds" | "note">;
 
+function contactIdentityLockKeys(identity: Pick<CandidateQueryV1, "emailNormalized" | "phoneNormalized" |
+  "personNameNormalized" | "companyNameNormalized">): string[] {
+  const comparable = [identity.emailNormalized ? `email:${identity.emailNormalized}` : null,
+    identity.phoneNormalized ? `phone:${identity.phoneNormalized}` : null].filter((key): key is string => key !== null);
+  return (comparable.length > 0 ? comparable :
+    [`name-company:${identity.personNameNormalized}:${identity.companyNameNormalized ?? ""}`]).sort();
+}
+
 function asKnownError(error: unknown): never {
   if (error instanceof LeadIntakeError) throw error;
   if (error && typeof error === "object" && "code" in error && "status" in error) {
@@ -50,12 +58,19 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
 }): Promise<LeadInquiryIntakeResultV1> {
   const requestId = input.requestId ?? randomUUID();
   const normalized = input.normalized ?? canonicalizeIntake(input.command);
-  const hashedCommand = input.compatibility ? { ...input.command, inquiry: {
+  const { phone: _phone, phoneCountryOverride: _phoneCountryOverride, ...personWithoutPhone } = input.command.person;
+  void _phone;
+  const semanticCommand = { ...input.command, person: personWithoutPhone };
+  const hashedCommand = input.compatibility ? { ...semanticCommand, inquiry: {
     subject: input.command.inquiry.subject, message: input.command.inquiry.message,
-  } } : input.command;
+  } } : semanticCommand;
   const requestHash = canonicalRequestHash({ command: hashedCommand, effectiveAttribution: {
     category: normalized.sourceCategory, platform: normalized.sourcePlatform, medium: normalized.sourceMedium,
     detail: normalized.sourceDetail, campaign: normalized.campaignContext, version: normalized.attributionContractVersion,
+  }, canonicalPhone: normalized.phoneNormalized === null ? null : {
+    display: normalized.phoneDisplay, e164: normalized.phoneNormalized,
+    callingCode: normalized.phoneCountryCodeUsed, normalizationVersion: normalized.normalizationVersion,
+    effectiveCountryInput: normalized.phoneDisplay?.startsWith("+") ? null : _phoneCountryOverride ?? null,
   }, compatibility: input.compatibility });
   try {
     return await runModuleTransaction(pool, async tx => {
@@ -91,7 +106,7 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         companyDomainNormalized: normalized.organizationDomainNormalized };
       const companyKey = `${candidateQuery.companyNameNormalized ?? ""}:${candidateQuery.companyDomainNormalized ?? ""}`;
       if (companyKey !== ":") await lockIdentityKeyAuthority(tx,
-        `${actorLookup.workspaceId}:company:${normalized.normalizationVersion}:${companyKey}`);
+        `${actorLookup.workspaceId}:company:${companyKey}`);
       const companyQuery = { workspaceId: actorLookup.workspaceId, nameNormalized: candidateQuery.companyNameNormalized,
         domainNormalized: candidateQuery.companyDomainNormalized };
       const probableQuery = { workspaceId: actorLookup.workspaceId, personNameNormalized: candidateQuery.personNameNormalized,
@@ -109,9 +124,8 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
       if (!sameCandidateSet(initialCompanies, companyRerun) || !sameCandidateSet(initialProbable, probableRerun) ||
           !sameVersionSet(probableCompanyRows, probableCompanyRerun))
         throw new LeadIntakeError("stale_version", 409);
-      const contactKey = normalized.emailNormalized ?? normalized.phoneNormalized ??
-        `${normalized.personNameNormalized}:${normalized.organizationNameNormalized ?? ""}`;
-      await lockIdentityKeyAuthority(tx, `${actorLookup.workspaceId}:contact:${normalized.normalizationVersion}:${contactKey}`);
+      for (const contactKey of contactIdentityLockKeys(candidateQuery))
+        await lockIdentityKeyAuthority(tx, `${actorLookup.workspaceId}:contact:${contactKey}`);
       const contactQuery = { workspaceId: actorLookup.workspaceId, emailNormalized: candidateQuery.emailNormalized,
         phoneNormalized: candidateQuery.phoneNormalized };
       const initialDirect = await contacts.findCandidates(contactQuery);

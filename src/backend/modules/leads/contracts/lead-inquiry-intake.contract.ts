@@ -18,7 +18,7 @@ export const leadInquiryIntakeCommandV1Schema = z.object({
     firstName: z.string().trim().min(1).max(100).optional(),
     lastName: z.string().trim().min(1).max(100).optional(),
     email: z.string().trim().email().max(320).optional(),
-    phone: z.string().trim().min(3).max(50).optional(),
+    phone: z.string().trim().max(50).optional(),
     phoneCountryOverride: z.enum(["CA", "US"]).optional(),
   }).superRefine((person, context) => {
     if (!person.email && !person.phone) context.addIssue({ code: "custom", message: "email_or_phone_required" });

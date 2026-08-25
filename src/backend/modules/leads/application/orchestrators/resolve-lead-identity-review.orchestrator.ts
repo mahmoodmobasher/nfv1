@@ -12,6 +12,14 @@ import { sameCandidateSet, sameVersionSet, selectCandidateSetV1, type CandidateQ
 import { leadTransactionParticipant } from "../../persistence/repositories/lead.repository";
 import { LeadIntakeError } from "../../contracts/lead-inquiry-intake.contract";
 
+function contactIdentityLockKeys(identity: Pick<CandidateQueryV1, "emailNormalized" | "phoneNormalized" |
+  "personNameNormalized" | "companyNameNormalized">): string[] {
+  const comparable = [identity.emailNormalized ? `email:${identity.emailNormalized}` : null,
+    identity.phoneNormalized ? `phone:${identity.phoneNormalized}` : null].filter((key): key is string => key !== null);
+  return (comparable.length > 0 ? comparable :
+    [`name-company:${identity.personNameNormalized}:${identity.companyNameNormalized ?? ""}`]).sort();
+}
+
 export type LeadIdentityReviewDecisionResultV1 = {
   contractVersion: "lead-identity-review-decision-result.v1";
   outcome: "hold" | "resolve";
@@ -103,7 +111,7 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
 
       const companyKey = `${candidateQuery.companyNameNormalized ?? ""}:${candidateQuery.companyDomainNormalized ?? ""}`;
       if (input.command.outcome === "resolve" && input.command.company.action === "create" && companyKey !== ":")
-        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:company:${String(lead.normalization_version)}:${companyKey}`);
+        await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:company:${companyKey}`);
       const companyQuery = { workspaceId: trusted.workspaceId, nameNormalized: candidateQuery.companyNameNormalized,
         domainNormalized: candidateQuery.companyDomainNormalized };
       const probableQuery = { workspaceId: trusted.workspaceId, personNameNormalized: candidateQuery.personNameNormalized,
@@ -126,9 +134,8 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
             !sameVersionSet(probableCompanyRows, probableCompanyRerun))
           throw new LeadIntakeError("stale_version", 409);
         if (input.command.contact.action === "create") {
-          const key = candidateQuery.emailNormalized ?? candidateQuery.phoneNormalized ??
-            `${candidateQuery.personNameNormalized}:${candidateQuery.companyNameNormalized ?? ""}`;
-          await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:contact:${String(lead.normalization_version)}:${key}`);
+          for (const key of contactIdentityLockKeys(candidateQuery))
+            await lockIdentityKeyAuthority(tx, `${trusted.workspaceId}:contact:${key}`);
         }
         const selected = selectCandidateSetV1(await contacts.findCandidates(contactQuery),
           await companyContacts.findProbableContacts(probableQuery), await companies.findCandidates(companyQuery));

@@ -5,11 +5,17 @@ import { leadIntakeFailure, leadIntakeJson, LeadIntakeError } from "../src/backe
 describe("P1A route boundary", () => {
   it("keeps the Lead routes thin and repository-free", () => {
     for (const path of ["src/app/api/workspaces/[workspaceId]/leads/route.ts", "src/app/api/workspaces/[workspaceId]/leads/[leadId]/identity-review/route.ts",
-      "src/app/api/workspaces/[workspaceId]/identity-reviews/route.ts"]) {
+      "src/app/api/workspaces/[workspaceId]/identity-reviews/route.ts", "src/app/api/workspaces/[workspaceId]/pipeline-stages/route.ts"]) {
       const source = readFileSync(path, "utf8");
       expect(source).not.toContain("/persistence/");
       expect(source).not.toMatch(/from ["']@\/server\/db/);
     }
+  });
+  it("gates canonical P1A Leads before the legacy PATCH parser or writer can run",()=>{
+    const source=readFileSync("src/app/api/workspaces/[workspaceId]/leads/[leadId]/route.ts","utf8");
+    const gate=source.lastIndexOf("assertLegacyLeadPatchAllowedV1"),parse=source.indexOf("leadInputSchema.extend"),write=source.indexOf("updateLead(pool");
+    expect(gate).toBeGreaterThan(-1);expect(parse).toBeGreaterThan(gate);expect(write).toBeGreaterThan(parse);
+    expect(source).not.toContain("getLeadDetailV1(pool,await updateLead");
   });
   it("marks success and errors private/no-store and exposes only stable errors", async () => {
     const success = leadIntakeJson({ ok: true }, 201);

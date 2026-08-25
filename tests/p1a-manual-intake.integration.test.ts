@@ -52,6 +52,15 @@ function command(overrides: Record<string, unknown> = {}) {
     ...overrides };
 }
 
+const protectedBusinessTables = ["leads", "lead_intakes", "lead_activities", "lead_identity_reviews",
+  "lead_identity_candidates", "lead_identity_decisions", "lead_identity_decision_heads", "contacts", "companies",
+  "audit_events", "outbox_messages"] as const;
+async function protectedStateDigest() {
+  return Object.fromEntries(await Promise.all(protectedBusinessTables.map(async table => [table, (await pool.query(
+    `select count(*)::int count,md5(coalesce(jsonb_agg(to_jsonb(snapshot) order by to_jsonb(snapshot)::text)::text,'[]')) digest
+       from ${table} snapshot`)).rows[0]])));
+}
+
 async function waitForActivity(predicate: (row: { pid: number; query: string; wait_event_type: string | null }) => boolean) {
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
@@ -517,14 +526,19 @@ suite("P1A manual intake modular transaction", () => {
     expect((await pool.query("select count(*)::int count from contacts where email_normalized=$1", [email])).rows[0].count).toBe(2);
   });
 
-  it("avoids deadlock when intake and resolution contend on the same Company and Contact identities", async () => {
-    const f = await fixture(), email = "intake-resolution-race@example.test", domain = "shared-lock.example";
+  it("uses one cross-version lock namespace when retained-v1 resolution contends with v2 intake", async () => {
+    const f = await fixture(), email = "intake-resolution-race@example.test", secondEmail = "v2-race@example.test";
+    const phone = "+16473894802", domain = "shared-lock.example";
     await pool.query(`insert into companies(workspace_id,display_name,name_normalized,domain_normalized)
       values($1,'North Labs','north labs',$2)`, [f.workspace.id, domain]);
-    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
-      values($1,'Race Seed','race seed',$2,$2)`, [f.workspace.id, email]);
-    const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email } }),
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized,
+      phone_display,phone_normalized,phone_country_code_used,normalization_version)
+      values($1,'Race Seed','race seed',$2,$2,$3,$3,'+1','p1a-identity-v1')`, [f.workspace.id, email, phone]);
+    const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: {
+      displayName: "Race Seed", email, phone, phoneCountryOverride: "CA" } }),
       idempotencyKey: randomUUID() });
+    await pool.query("update leads set normalization_version='p1a-identity-v1' where workspace_id=$1 and id=$2",
+      [f.workspace.id, held.leadId]);
     const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
     const blocker = await pool.connect();
     let resolution: Promise<unknown> | undefined, intake: Promise<unknown> | undefined, barrierError: unknown;
@@ -533,7 +547,7 @@ suite("P1A manual intake modular transaction", () => {
       await blocker.query("begin");
       blockerPid = (await blocker.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0].pid;
       await blocker.query("select pg_advisory_xact_lock(hashtextextended($1,7102))",
-        [`${f.workspace.id}:contact:p1a-identity-v2:${email}`]);
+        [`${f.workspace.id}:contact:phone:${phone}`]);
       resolution = decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {
         contractVersion: "lead-identity-review-decision.v1", outcome: "resolve", expectedLeadVersion: view.leadVersion,
         expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion,
@@ -542,7 +556,8 @@ suite("P1A manual intake modular transaction", () => {
         row.query.includes("pg_advisory_xact_lock") && row.query.includes("7102"))).pid;
       expect((await pool.query<{ blockers: number[] }>("select pg_blocking_pids($1) blockers", [resolutionPid])).rows[0].blockers)
         .toContain(blockerPid);
-      intake = submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: { displayName: "Race Seed", email },
+      intake = submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: {
+        displayName: "Race Seed", email: secondEmail, phone, phoneCountryOverride: "US" },
         organization: { name: "Alternate Labs", domain } }), idempotencyKey: randomUUID() });
       intakePid = (await waitForActivity(row => row.pid !== resolutionPid && row.wait_event_type === "Lock" &&
         row.query.includes("from companies") && row.query.includes("for update"))).pid;
@@ -808,20 +823,61 @@ suite("P1A manual intake modular transaction", () => {
     }
   });
 
-  it("persists authoritative phone display, E.164, calling code and normalization version and replays exactly once", async () => {
+  it.each([
+    ["(647) 389-4802", "+16473894802", "+1"],
+    ["16473894802", "+16473894802", "+1"],
+    ["+44 20 7946 0958", "+442079460958", "+44"],
+  ] as const)("persists authoritative phone presentation %s and replays exactly once", async (display, canonical, callingCode) => {
     const f = await fixture(), key = randomUUID();
-    const input = command({ person: { displayName: "Phone Only", phone: "(647) 389-4802", phoneCountryOverride: "CA" } });
+    const input = command({ person: { displayName: "Phone Only", phone: display, phoneCountryOverride: "CA" } });
     const first = await submitLeadInquiryV1(pool, { actor: f.owner, command: input, idempotencyKey: key });
     const replay = await submitLeadInquiryV1(pool, { actor: f.owner, command: input, idempotencyKey: key });
     expect(replay).toMatchObject({ leadId: first.leadId, replayed: true });
     expect((await pool.query(`select phone,phone_normalized,phone_country_code_used,normalization_version
       from leads where workspace_id=$1 and id=$2`, [f.workspace.id, first.leadId])).rows[0]).toEqual({
-        phone: "(647) 389-4802", phone_normalized: "+16473894802", phone_country_code_used: "+1",
+        phone: display, phone_normalized: canonical, phone_country_code_used: callingCode,
         normalization_version: "p1a-identity-v2",
       });
     expect((await pool.query("select count(*)::int count from lead_intakes")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from audit_events")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from outbox_messages")).rows[0].count).toBe(1);
+  });
+
+  it("conflicts the same key when phone display or effective national country input changes", async () => {
+    const f = await fixture(), displayKey = randomUUID(), countryKey = randomUUID();
+    await submitLeadInquiryV1(pool, { actor: f.owner, idempotencyKey: displayKey,
+      command: command({ person: { displayName: "Phone Hash", phone: "6473894802", phoneCountryOverride: "CA" } }) });
+    await expect(submitLeadInquiryV1(pool, { actor: f.owner, idempotencyKey: displayKey,
+      command: command({ person: { displayName: "Phone Hash", phone: "(647) 389-4802", phoneCountryOverride: "CA" } }) }))
+      .rejects.toMatchObject({ code: "idempotency_conflict" });
+    await submitLeadInquiryV1(pool, { actor: f.owner, idempotencyKey: countryKey,
+      command: command({ person: { displayName: "Country Hash", phone: "6473894802", phoneCountryOverride: "CA" } }) });
+    await expect(submitLeadInquiryV1(pool, { actor: f.owner, idempotencyKey: countryKey,
+      command: command({ person: { displayName: "Country Hash", phone: "6473894802", phoneCountryOverride: "US" } }) }))
+      .rejects.toMatchObject({ code: "idempotency_conflict" });
+  });
+
+  it("gives absent and blank phone presentations the same replay hash when email is authoritative", async () => {
+    const f = await fixture(), key = randomUUID(), email = `blank-${randomUUID()}@example.test`;
+    const absent = command({ person: { displayName: "Email Only", email } });
+    const blank = command({ person: { displayName: "Email Only", email, phone: "   ", phoneCountryOverride: "CA" } });
+    const first = await submitLeadInquiryV1(pool, { actor: f.owner, command: absent, idempotencyKey: key });
+    const replay = await submitLeadInquiryV1(pool, { actor: f.owner, command: blank, idempotencyKey: key });
+    expect(replay).toMatchObject({ leadId: first.leadId, replayed: true });
+    expect((await pool.query("select phone,phone_normalized,phone_country_code_used,normalization_version from leads where id=$1",
+      [first.leadId])).rows[0]).toEqual({ phone: null, phone_normalized: null, phone_country_code_used: null,
+      normalization_version: "p1a-identity-v2" });
+  });
+
+  it("hashes explicit international phone replay by derived country context and normalization version", async () => {
+    const f = await fixture(), key = randomUUID();
+    const ca = command({ person: { displayName: "International", phone: "+44 20 7946 0958", phoneCountryOverride: "CA" } });
+    const us = command({ person: { displayName: "International", phone: "+44 20 7946 0958", phoneCountryOverride: "US" } });
+    const first = await submitLeadInquiryV1(pool, { actor: f.owner, command: ca, idempotencyKey: key });
+    const replay = await submitLeadInquiryV1(pool, { actor: f.owner, command: us, idempotencyKey: key });
+    expect(replay).toMatchObject({ leadId: first.leadId, replayed: true });
+    expect((await pool.query("select phone_country_code_used,normalization_version from leads where id=$1", [first.leadId])).rows[0])
+      .toEqual({ phone_country_code_used: "+44", normalization_version: "p1a-identity-v2" });
   });
 
   it("returns strict nullable-safe canonical list/detail views with deterministic cursor and no read effects", async () => {
@@ -848,17 +904,23 @@ suite("P1A manual intake modular transaction", () => {
       .rejects.toMatchObject({ code: "resource_not_found" });
   });
 
-  it.each(["6473894802 x123", "26473894802", "64738", "++16473894802", "647+3894802"])(
+  it.each(["6473894802 x123", "6473894802 ext 123", "6473894802#123", "6473894802,123",
+    "26473894802", "64738", "++16473894802", "647+3894802", "CALL6473894802", "6473894802\u0000"])(
     "rejects invalid phone %j before any governing transaction mutation", async phone => {
       const f = await fixture();
-      const before = Object.fromEntries(await Promise.all(["leads", "lead_intakes", "lead_identity_reviews", "lead_activities",
-        "audit_events", "outbox_messages"].map(async table => [table,
-          (await pool.query(`select count(*)::int count from ${table}`)).rows[0].count])));
+      const before = await protectedStateDigest();
       const fields = phone === "26473894802" ? ["person.phone", "person.phoneCountryOverride"] : ["person.phone"];
       await expect(submitLeadInquiryV1(pool, { actor: f.owner,
         command: command({ person: { displayName: "Rejected Phone", phone, phoneCountryOverride: "CA" } }),
         idempotencyKey: randomUUID() })).rejects.toMatchObject({ code: "validation_failed", safe: { fields } });
-      for (const [table, count] of Object.entries(before))
-        expect((await pool.query(`select count(*)::int count from ${table}`)).rows[0].count, table).toBe(count);
+      expect(await protectedStateDigest()).toEqual(before);
     });
+
+  it("rejects absent email plus blank phone before creating any durable authority", async () => {
+    const f = await fixture(), before = await protectedStateDigest();
+    await expect(submitLeadInquiryV1(pool, { actor: f.owner, idempotencyKey: randomUUID(), command: command({
+      person: { displayName: "No Identity", phone: "   ", phoneCountryOverride: "CA" },
+    }) })).rejects.toMatchObject({ code: "validation_failed" });
+    expect(await protectedStateDigest()).toEqual(before);
+  });
 });

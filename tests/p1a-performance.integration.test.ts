@@ -2,19 +2,25 @@ import { performance } from "node:perf_hooks";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { getIdentityReviewCandidatesV1, getLeadDetailV1, listIdentityReviewQueueV1, listLeadSummariesV1,
+import { getIdentityReviewCandidatesV1, getLeadDetailV1, listIdentityReviewQueueV1, listLeadPipelineStagesV1, listLeadSummariesV1,
   submitLeadInquiryV1 } from "../src/backend/modules/leads";
 import type { TrustedActor } from "../src/backend/platform/authorization";
+import { LEAD_PIPELINE_STAGES_SQL_V1, LEAD_PRESENTATION_DETAIL_SQL_V1, LEAD_PRESENTATION_LIST_SQL_V1 } from
+  "../src/backend/modules/leads/application/queries/lead-presentation.query";
+import { COMPANY_PRESENTATION_SQL_V1 } from "../src/backend/modules/companies/persistence/repositories/company.repository";
+import { WORKSPACE_MEMBERSHIP_PRESENTATION_SQL_V1, WORKSPACE_TEAM_PRESENTATION_SQL_V1,
+  WORKSPACE_VISIBLE_LEAD_IDS_SQL_V1 } from "../src/backend/platform/authorization/authorization-facts";
 
 const suite = process.env.RUN_P1A_PERFORMANCE === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow" });
-let actor: TrustedActor, workspaceId: string;
+let actor: TrustedActor, sparseActor: TrustedActor, workspaceId: string, stageId: string, sparseTeamId: string, representativeCompanyId: string;
 
-function percentile95(values: number[]) { return [...values].sort((a, b) => a - b)[Math.ceil(values.length * .95) - 1]; }
+function percentile(values: number[], fraction: number) { return [...values].sort((a, b) => a - b)[Math.ceil(values.length * fraction) - 1]; }
+function distribution(values: number[]) { return { p50: percentile(values, .5), p95: percentile(values, .95) }; }
 async function latency(sql: string, parameters: unknown[], samples = 30) {
   const values: number[] = [];
   for (let index = 0; index < samples; index++) { const start = performance.now(); await pool.query(sql, parameters); values.push(performance.now() - start); }
-  return percentile95(values);
+  return percentile(values, .95);
 }
 
 suite("P1A representative PostgreSQL performance", () => {
@@ -33,10 +39,25 @@ suite("P1A representative PostgreSQL performance", () => {
       values($1,$2,now()+interval '1 hour',now()+interval '1 day','password') returning id`, [user.id, randomUUID()])).rows[0];
     const stage = (await pool.query<{ id: string }>(`insert into pipeline_stages(workspace_id,name,position,status)
       values($1,'New',0,'active') returning id`, [workspace.id])).rows[0];
+    stageId = stage.id;
     actor = { userId: user.id, sessionId: session.id, workspaceId: workspace.id, membershipId: membership.id, role: "owner" };
+    const sparseUser=(await pool.query<{id:string}>(`insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at)
+      values($1,$1,'Sparse Performance Member','active',now()) returning id`,[`sparse-${randomUUID()}@test.local`])).rows[0];
+    const memberRole=(await pool.query<{id:string}>(`insert into roles(workspace_id,code,permissions,is_system)
+      values($1,'member','{}',true) returning id`,[workspace.id])).rows[0];
+    const sparseMembership=(await pool.query<{id:string}>(`insert into workspace_memberships(workspace_id,user_id,role_id,status)
+      values($1,$2,$3,'active') returning id`,[workspace.id,sparseUser.id,memberRole.id])).rows[0];
+    const sparseSession=(await pool.query<{id:string}>(`insert into sessions(user_id,session_hash,idle_expires_at,absolute_expires_at,auth_method)
+      values($1,$2,now()+interval '1 hour',now()+interval '1 day','password') returning id`,[sparseUser.id,randomUUID()])).rows[0];
+    const sparseTeam=(await pool.query<{id:string}>(`insert into teams(workspace_id,name,name_normalized,status,created_by_membership_id)
+      values($1,'Sparse Performance','sparse performance','active',$2) returning id`,[workspace.id,membership.id])).rows[0];
+    sparseTeamId=sparseTeam.id;await pool.query(`insert into team_memberships(workspace_id,team_id,workspace_membership_id,created_by_membership_id)
+      values($1,$2,$3,$4)`,[workspace.id,sparseTeam.id,sparseMembership.id,membership.id]);
+    sparseActor={userId:sparseUser.id,sessionId:sparseSession.id,workspaceId:workspace.id,membershipId:sparseMembership.id,role:"member"};
     await pool.query(`insert into companies(workspace_id,display_name,name_normalized)
       select $1,'Company '||g,'company '||g from generate_series(1,25000) g`, [workspace.id]);
     const companyId = (await pool.query<{ id: string }>(`select id from companies where workspace_id=$1 and name_normalized='company 25000'`, [workspace.id])).rows[0].id;
+    representativeCompanyId=companyId;
     await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized,
       phone_display,phone_normalized,phone_country_code_used,company_id)
       select $1,'Person '||g,'person '||g,'person-'||g||'@example.test','person-'||g||'@example.test',
@@ -119,13 +140,19 @@ suite("P1A representative PostgreSQL performance", () => {
       from lead_identity_candidates where workspace_id=$1 and review_id=any($2::uuid[])
     ) select review_id,contact_id,company_id,target_version from ranked where rank<=10
       order by review_id,coalesce(contact_id,company_id),id`;
-    const leadId = (await pool.query<{ id: string }>(`select id from leads where workspace_id=$1 order by updated_at desc,id desc limit 1`, [workspaceId])).rows[0].id;
-    const leadDetailSql = `select id from leads where workspace_id=$1 and id=$2`;
-    const leadListSql = `select id,updated_at from leads where workspace_id=$1 order by updated_at desc,id desc limit 51`;
-    const leadSearchSql = `select id from leads where workspace_id=$1 and email_normalized=$2 order by id limit 51`;
+    const leadBoundary = (await pool.query<{ id: string; updatedAt: string }>(`select id,updated_at::text "updatedAt" from leads
+      where workspace_id=$1 order by updated_at desc,id desc offset 50 limit 1`, [workspaceId])).rows[0];
+    const leadId=leadBoundary.id,defaultListParams=[workspaceId,null,"",null,null,51,actor.role,actor.membershipId];
+    const stageListParams=[workspaceId,stageId,"",null,null,51,actor.role,actor.membershipId],
+      cursorListParams=[workspaceId,null,"",leadBoundary.updatedAt,leadBoundary.id,51,actor.role,actor.membershipId];
+    const searchListParams=[workspaceId,null,"scale lead 999",null,null,51,actor.role,actor.membershipId];
+    const materialLeadIds=(await pool.query<{id:string}>(`select id from leads where workspace_id=$1 order by updated_at desc,id desc limit 50`,
+      [workspaceId])).rows.map(row=>row.id);
     expect((await pool.query("show enable_seqscan")).rows[0].enable_seqscan).toBe("on");
     const planNames = ["contact_email", "contact_phone", "contact_name_company", "company_name", "review_queue",
-      "presentation_queue", "queue_target_freshness", "candidate_detail", "lead_detail", "lead_list", "lead_search"];
+      "presentation_queue", "queue_target_freshness", "candidate_detail", "lead_detail_actual", "lead_list_actual",
+      "lead_stage_actual", "lead_cursor_actual", "lead_substring_search_actual", "visibility_participant", "membership_participant",
+      "team_participant", "company_participant", "pipeline_stages_actual"];
     const plans = await Promise.all([
       pool.query(`explain (analyze,buffers,format text) ${emailSql}`, [workspaceId, "person-100000@example.test"]),
       pool.query(`explain (analyze,buffers,format text) ${phoneSql}`, [workspaceId, "+14160099999"]),
@@ -135,9 +162,18 @@ suite("P1A representative PostgreSQL performance", () => {
       pool.query(`explain (analyze,buffers,format text) ${presentationQueueSql}`, [workspaceId]),
       pool.query(`explain (analyze,buffers,format text) ${queueTargetSql}`, [workspaceId, reviewIds]),
       pool.query(`explain (analyze,buffers,format text) ${candidateDetailSql}`, [workspaceId, reviewId]),
-      pool.query(`explain (analyze,buffers,format text) ${leadDetailSql}`, [workspaceId, leadId]),
-      pool.query(`explain (analyze,buffers,format text) ${leadListSql}`, [workspaceId]),
-      pool.query(`explain (analyze,buffers,format text) ${leadSearchSql}`, [workspaceId, "lead-100000@example.test"]),
+      pool.query(`explain (analyze,buffers,format text) ${LEAD_PRESENTATION_DETAIL_SQL_V1}`, [workspaceId, leadId]),
+      pool.query(`explain (analyze,buffers,format text) ${LEAD_PRESENTATION_LIST_SQL_V1}`, defaultListParams),
+      pool.query(`explain (analyze,buffers,format text) ${LEAD_PRESENTATION_LIST_SQL_V1}`, stageListParams),
+      pool.query(`explain (analyze,buffers,format text) ${LEAD_PRESENTATION_LIST_SQL_V1}`, cursorListParams),
+      pool.query(`explain (analyze,buffers,format text) ${LEAD_PRESENTATION_LIST_SQL_V1}`, searchListParams),
+      pool.query(`explain (analyze,buffers,format text) ${WORKSPACE_VISIBLE_LEAD_IDS_SQL_V1}`,
+        [workspaceId,materialLeadIds,sparseActor.membershipId]),
+      pool.query(`explain (analyze,buffers,format text) ${WORKSPACE_MEMBERSHIP_PRESENTATION_SQL_V1}`,
+        [workspaceId,[sparseActor.membershipId]]),
+      pool.query(`explain (analyze,buffers,format text) ${WORKSPACE_TEAM_PRESENTATION_SQL_V1}`,[workspaceId,[sparseTeamId]]),
+      pool.query(`explain (analyze,buffers,format text) ${COMPANY_PRESENTATION_SQL_V1}`,[workspaceId,[representativeCompanyId]]),
+      pool.query(`explain (analyze,buffers,format text) ${LEAD_PIPELINE_STAGES_SQL_V1}`,[workspaceId]),
     ]);
     const planEvidence: Record<string, string> = {};
     for (const [index, plan] of plans.entries()) {
@@ -146,29 +182,55 @@ suite("P1A representative PostgreSQL performance", () => {
       expect(text).toMatch(/Index (?:Only )?Scan|Bitmap Index Scan/);
       expect(text).not.toMatch(/Seq Scan on (?:contacts|companies|leads|lead_identity_reviews|lead_identity_candidates)/);
     }
+    await pool.query("update leads set visibility='teams' where workspace_id=$1",[workspaceId]);
+    const sparseVisibleIds=(await pool.query<{id:string}>(`select id from leads where workspace_id=$1
+      order by updated_at desc,id desc offset 450 limit 50`,[workspaceId])).rows.map(row=>row.id);
+    await pool.query(`insert into lead_visible_teams(workspace_id,lead_id,team_id)
+      select $1,unnest($2::uuid[]),$3`,[workspaceId,sparseVisibleIds,sparseTeamId]);
+    await pool.query("analyze leads");await pool.query("analyze lead_visible_teams");
+    const sparsePlans:Array<{name:string;sql:string;params:unknown[]}>= [
+      {name:"sparse_lead_list_actual",sql:LEAD_PRESENTATION_LIST_SQL_V1,
+        params:[workspaceId,null,"",null,null,51,sparseActor.role,sparseActor.membershipId]},
+      {name:"sparse_substring_search_actual",sql:LEAD_PRESENTATION_LIST_SQL_V1,
+        params:[workspaceId,null,"scale lead",null,null,51,sparseActor.role,sparseActor.membershipId]},
+    ];
+    for(const query of sparsePlans){
+      const plan=await pool.query(`explain (analyze,buffers,format text) ${query.sql}`,query.params);
+      const text=plan.rows.map(row=>row["QUERY PLAN"]).join("\n");planEvidence[query.name]=text;
+      expect(text).toMatch(/Index (?:Only )?Scan|Bitmap Index Scan/);
+      expect(text).not.toMatch(/Seq Scan on (?:contacts|companies|leads|lead_identity_reviews|lead_identity_candidates)/);
+    }
     console.info("P1A_PLAN_EVIDENCE", JSON.stringify({ planner: { enableSeqscan: "on" }, plans: planEvidence }));
     const metrics = { emailP95Ms: await latency(emailSql, [workspaceId, "person-100000@example.test"]),
       phoneP95Ms: await latency(phoneSql, [workspaceId, "+14160099999"]),
       nameCompanyP95Ms: await latency(nameSql, [workspaceId, "person 100000", "company 25000"]),
       companyP95Ms: await latency(companySql, [workspaceId, "company 25000"]),
-      reviewQueueP95Ms: 0, candidateDetailP95Ms: 0, leadDetailP95Ms: 0, leadListP95Ms: 0, leadSearchP95Ms: 0, manualP95Ms: 0 };
+      reviewQueueP95Ms: 0, candidateDetailP95Ms: 0, manualP95Ms: 0 };
     const reviewQueue: number[] = [];
     for (let index = 0; index < 30; index++) { const start = performance.now();
       const page = await listIdentityReviewQueueV1(pool, actor, { assignment: "all", evidence: "any", limit: 50 });
       reviewQueue.push(performance.now() - start); expect(page.items).toHaveLength(50); }
-    metrics.reviewQueueP95Ms = percentile95(reviewQueue);
+    metrics.reviewQueueP95Ms = percentile(reviewQueue,.95);
     const candidateDetails: number[] = [];
     for (let index = 0; index < 30; index++) { const start = performance.now();
       await getIdentityReviewCandidatesV1(pool, actor, held.leadId); candidateDetails.push(performance.now() - start); }
-    metrics.candidateDetailP95Ms = percentile95(candidateDetails);
-    const leadDetails: number[] = [], leadLists: number[] = [], leadSearches: number[] = [];
+    metrics.candidateDetailP95Ms = percentile(candidateDetails,.95);
+    const ownerFirst=await listLeadSummariesV1(pool,actor,{q:"",limit:50});expect(ownerFirst.nextCursor).not.toBeNull();
+    const leadOperations={ownerDetail:[]as number[],ownerList:[]as number[],ownerStage:[]as number[],ownerCursor:[]as number[],
+      ownerSearch:[]as number[],pipelineStages:[]as number[],sparseDetail:[]as number[],sparseList:[]as number[],sparseSearch:[]as number[]};
     for (let index = 0; index < 30; index++) {
-      let start = performance.now(); await getLeadDetailV1(pool, actor, leadId); leadDetails.push(performance.now() - start);
-      start = performance.now(); await listLeadSummariesV1(pool, actor, { q: "", limit: 50 }); leadLists.push(performance.now() - start);
-      start = performance.now(); await listLeadSummariesV1(pool, actor, { q: "lead-100000@example.test", limit: 50 }); leadSearches.push(performance.now() - start);
+      let start=performance.now();await getLeadDetailV1(pool,actor,leadId);leadOperations.ownerDetail.push(performance.now()-start);
+      start=performance.now();await listLeadSummariesV1(pool,actor,{q:"",limit:50});leadOperations.ownerList.push(performance.now()-start);
+      start=performance.now();await listLeadSummariesV1(pool,actor,{q:"",stageId,limit:50});leadOperations.ownerStage.push(performance.now()-start);
+      start=performance.now();await listLeadSummariesV1(pool,actor,{q:"",limit:50,cursor:ownerFirst.nextCursor!});leadOperations.ownerCursor.push(performance.now()-start);
+      start=performance.now();await listLeadSummariesV1(pool,actor,{q:"scale lead 999",limit:50});leadOperations.ownerSearch.push(performance.now()-start);
+      start=performance.now();await listLeadPipelineStagesV1(pool,actor);leadOperations.pipelineStages.push(performance.now()-start);
+      start=performance.now();await getLeadDetailV1(pool,sparseActor,sparseVisibleIds[0]);leadOperations.sparseDetail.push(performance.now()-start);
+      start=performance.now();const sparse=await listLeadSummariesV1(pool,sparseActor,{q:"",limit:50});leadOperations.sparseList.push(performance.now()-start);
+      expect(sparse.items).toHaveLength(50);
+      start=performance.now();await listLeadSummariesV1(pool,sparseActor,{q:"scale lead",limit:50});leadOperations.sparseSearch.push(performance.now()-start);
     }
-    metrics.leadDetailP95Ms = percentile95(leadDetails); metrics.leadListP95Ms = percentile95(leadLists);
-    metrics.leadSearchP95Ms = percentile95(leadSearches);
+    const publicLeadMetrics=Object.fromEntries(Object.entries(leadOperations).map(([name,values])=>[name,distribution(values)]));
     const manual: number[] = [];
     for (let index = 0; index < 30; index++) {
       const start = performance.now();
@@ -178,19 +240,17 @@ suite("P1A representative PostgreSQL performance", () => {
           sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" } } });
       manual.push(performance.now() - start);
     }
-    metrics.manualP95Ms = percentile95(manual);
+    metrics.manualP95Ms = percentile(manual,.95);
     console.info("P1A_PERFORMANCE_EVIDENCE", JSON.stringify({ samplesPerMeasurement: 30, rowsAtMeasurement: {
       leads: 100001, contacts: 100030, companies: 25010, pendingReviews: 10001, identityCandidates: 10030,
-      fullCandidateReviewSize: 30 }, ...metrics }));
+      fullCandidateReviewSize: 30,sparseInvisiblePrefix:450,sparseVisibleLeads:50 }, ...metrics,publicLeadMetrics }));
     expect(metrics.emailP95Ms).toBeLessThan(100);
     expect(metrics.phoneP95Ms).toBeLessThan(100);
     expect(metrics.nameCompanyP95Ms).toBeLessThan(200);
     expect(metrics.companyP95Ms).toBeLessThan(200);
     expect(metrics.reviewQueueP95Ms).toBeLessThan(200);
     expect(metrics.candidateDetailP95Ms).toBeLessThan(200);
-    expect(metrics.leadDetailP95Ms).toBeLessThan(200);
-    expect(metrics.leadListP95Ms).toBeLessThan(200);
-    expect(metrics.leadSearchP95Ms).toBeLessThan(200);
+    for(const [name,value]of Object.entries(publicLeadMetrics))expect(value.p95,name).toBeLessThan(200);
     expect(metrics.manualP95Ms).toBeLessThan(500);
   }, 120_000);
 });

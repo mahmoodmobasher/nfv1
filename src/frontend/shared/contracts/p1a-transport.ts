@@ -15,7 +15,7 @@ export const leadInquiryIntakeCommandV1Schema = z.object({
   contractVersion: z.literal("lead-inquiry-intake.v1"), intakeChannel: z.literal("manual"),
   person: z.object({ displayName: z.string().trim().min(1).max(200), firstName: z.string().trim().min(1).max(100).optional(),
     lastName: z.string().trim().min(1).max(100).optional(), email: z.string().trim().email().max(320).optional(),
-    phone: z.string().trim().min(3).max(50).optional(), phoneCountryOverride: z.enum(["CA", "US"]).optional() }).strict()
+    phone: z.string().trim().max(50).optional(), phoneCountryOverride: z.enum(["CA", "US"]).optional() }).strict()
     .superRefine((person, issue) => { if (!person.email && !person.phone) issue.addIssue({ code: "custom", message: "email_or_phone_required" }); }),
   organization: z.object({ name: z.string().trim().min(1).max(200), domain: z.string().trim().min(1).max(253).optional() }).strict().optional(),
   inquiry: z.object({ subject: z.string().trim().max(200).optional(), message: z.string().trim().max(4000).optional(), receivedAt: z.string().datetime({ offset: true }) }).strict(),
@@ -100,6 +100,46 @@ export const reviewQueueSchema = z.object({ contractVersion: z.literal("lead-ide
     .superRefine((item, issue) => { validateStale(item, issue); if (item.nextView.leadId !== item.leadId || item.nextView.reviewId !== item.reviewId) issue.addIssue({ code: "custom", message: "navigation_identity_mismatch" }); })).max(50),
   nextCursor: z.string().min(1).max(1024).regex(/^[A-Za-z0-9_-]+$/).nullable() }).strict();
 
+const leadContext = z.partialRecord(z.enum(["page", "account", "campaign", "ad", "form", "post", "operator_context", "platform_context"]),
+  z.string().min(1).max(200));
+const leadReviewNavigation = z.object({ kind: z.literal("identity_review_detail"), leadId: uuid }).strict();
+export const leadSummaryItemSchema = z.object({
+  leadId: uuid, displayName: boundedName,
+  structuredName: z.object({ firstName: z.string().max(100).nullable(), lastName: z.string().max(100).nullable() }).strict(),
+  contact: z.object({ contactId: uuid.nullable(), maskedEmail, maskedPhone }).strict(),
+  company: z.object({ companyId: uuid.nullable(), displayName: z.string().max(200).nullable() }).strict(),
+  assignment: z.object({ responsibleMembershipId: uuid.nullable(), responsibleMembershipLabel: z.string().max(200).nullable(),
+    responsibleTeamId: uuid.nullable(), responsibleTeamLabel: z.string().max(200).nullable(), isUnassigned: z.boolean() }).strict(),
+  lifecycle: z.object({ code: z.string().max(80).nullable(), label: z.string().max(120).nullable(),
+    status: z.enum(["open", "won", "lost"]) }).strict(),
+  stage: z.object({ id: uuid, name: z.string().min(1).max(160), status: z.enum(["active", "archived"]) }).strict(),
+  version: positiveVersion, identityReviewStatus: z.enum(["not_required", "pending", "resolved"]), visibility: z.enum(["workspace", "teams"]),
+  receivedAt: z.string().datetime({ offset: true }), updatedAt: z.string().datetime({ offset: true }),
+  originalAttribution: z.object({ sourceCategory, sourcePlatform: socialPlatform.nullable(), sourceMedium,
+    sourceDetail: leadContext, campaignContext: leadContext, attributionContractVersion: z.string().min(1).max(80),
+    intakeChannel: z.enum(["web_form", "manual", "csv", "spreadsheet", "future_api", "future_integration"]) }).strict(),
+  capabilities: z.object({ canView: z.literal(true), canEdit: z.literal(false), canReview: z.boolean() }).strict(),
+  nextView: z.discriminatedUnion("kind", [leadNavigation, leadReviewNavigation]),
+}).strict().superRefine((lead, issue) => {
+  if (lead.nextView.leadId !== lead.leadId) issue.addIssue({ code: "custom", message: "navigation_identity_mismatch" });
+  if (lead.capabilities.canReview !== (lead.identityReviewStatus === "pending" && lead.nextView.kind === "identity_review_detail"))
+    issue.addIssue({ code: "custom", message: "review_capability_navigation_mismatch" });
+});
+export const leadSummariesViewSchema = z.object({ contractVersion: z.literal("listLeadSummaries.v1"), requestId: uuid,
+  items: z.array(leadSummaryItemSchema).max(50), nextCursor: z.string().max(1024).nullable() }).strict();
+export const leadDetailViewSchema = z.object({ contractVersion: z.literal("getLeadDetail.v1"), requestId: uuid,
+  lead: leadSummaryItemSchema }).strict();
+export const leadPipelineStageSchema = z.object({ stageId: uuid, name: z.string().min(1).max(160),
+  position: z.number().int().min(0), status: z.literal("active") }).strict();
+export const leadPipelineStagesViewSchema = z.object({ contractVersion: z.literal("listLeadPipelineStages.v1"), requestId: uuid,
+  items: z.array(leadPipelineStageSchema).max(100) }).strict().superRefine((view, issue) => {
+  for (let index = 1; index < view.items.length; index++) {
+    const previous = view.items[index - 1], current = view.items[index];
+    if (previous.position > current.position || (previous.position === current.position && previous.stageId >= current.stageId))
+      issue.addIssue({ code: "custom", message: "pipeline_stage_order_invalid", path: ["items", index] });
+  }
+});
+
 const dimensionDecision = z.discriminatedUnion("action", [z.object({ action: z.literal("dismiss") }).strict(), z.object({ action: z.literal("create") }).strict(),
   z.object({ action: z.literal("link"), candidateId: uuid, targetId: uuid, expectedTargetVersion: positiveVersion }).strict()]);
 export const decisionCommandSchema = z.discriminatedUnion("outcome", [
@@ -145,6 +185,9 @@ export const intakeSuccessEnvelopeSchema = z.object({ data: intakeResultSchema }
 export const detailSuccessEnvelopeSchema = z.object({ data: reviewDetailSchema }).strict();
 export const queueSuccessEnvelopeSchema = z.object({ data: reviewQueueSchema }).strict();
 export const decisionSuccessEnvelopeSchema = z.object({ data: decisionResultSchema }).strict();
+export const leadSummariesSuccessEnvelopeSchema = z.object({ data: leadSummariesViewSchema }).strict();
+export const leadDetailSuccessEnvelopeSchema = z.object({ data: leadDetailViewSchema }).strict();
+export const leadPipelineStagesSuccessEnvelopeSchema = z.object({ data: leadPipelineStagesViewSchema }).strict();
 
 export type SourceCategory = z.infer<typeof sourceCategory>;
 export type SocialPlatform = z.infer<typeof socialPlatform>;
@@ -163,3 +206,8 @@ export type DimensionDecision = z.infer<typeof dimensionDecision>;
 export type DecisionCommand = z.infer<typeof decisionCommandSchema>;
 export type DecisionResult = z.infer<typeof decisionResultSchema>;
 export type ReviewErrorEnvelope = ErrorEnvelope;
+export type LeadSummaryItem = z.infer<typeof leadSummaryItemSchema>;
+export type LeadSummariesView = z.infer<typeof leadSummariesViewSchema>;
+export type LeadDetailView = z.infer<typeof leadDetailViewSchema>;
+export type LeadPipelineStage = z.infer<typeof leadPipelineStageSchema>;
+export type LeadPipelineStagesView = z.infer<typeof leadPipelineStagesViewSchema>;

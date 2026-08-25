@@ -1,6 +1,9 @@
 import type { ModuleTransaction } from "@/backend/platform/database";
 import type { CompanyCandidateV1, CreateCompanyIdentityV1 } from "../../contracts/company-identity.contract";
 
+export const COMPANY_PRESENTATION_SQL_V1=`select id,version,display_name "displayName" from companies
+  where workspace_id=$1 and id=any($2::uuid[]) and status='active'`;
+
 export function companyTransactionParticipant(tx: ModuleTransaction) {
   return {
     async findCandidates(input: { workspaceId: string; nameNormalized: string | null; domainNormalized: string | null }): Promise<CompanyCandidateV1[]> {
@@ -41,9 +44,7 @@ export function companyTransactionParticipant(tx: ModuleTransaction) {
     },
     async present(workspaceId: string, ids: string[]) {
       if (!ids.length) return [];
-      return (await tx.query(
-        `select id,version,display_name "displayName" from companies
-          where workspace_id=$1 and id=any($2::uuid[]) and status='active'`, [workspaceId, ids])).rows;
+      return (await tx.query(COMPANY_PRESENTATION_SQL_V1, [workspaceId, ids])).rows;
     },
     async assertFresh(workspaceId: string, id: string, expectedVersion: number) {
       const row = (await tx.query(`select version,status from companies where workspace_id=$1 and id=$2`, [workspaceId, id])).rows[0];

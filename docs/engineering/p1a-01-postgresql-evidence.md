@@ -1,61 +1,80 @@
-# P1A-01 PostgreSQL gate-closure evidence
+# P1A-01 PostgreSQL remediation evidence
 
-Date: 2026-08-25. Runtime: isolated native PostgreSQL using accepted migrations through `0014`; no schema changes.
+Date: 2026-08-25. Runtime: native PostgreSQL with the accepted 15-migration ledger. Planner setting `enable_seqscan=on`; the executable evidence does not alter planner behavior. No schema, migration, index, or data-repair change is part of this candidate.
 
-## Correctness and concurrency
+## Correctness, atomicity, and concurrency
 
-- Focused contract/module/route/security suite: 4 files, 18 tests passed.
-- Focused P1A manual-intake/read transaction suite: 44 tests passed, including five new rejection/zero-mutation fixtures, canonical phone replay, canonical nullable list/detail, and controlled lock overlap.
-- Full serialized repository PostgreSQL suite: 22 files, 213 tests passed; the performance gate is separate and was executed explicitly.
-- Replay coverage binds intake and decision results to the original actor and revalidates current Workspace, User, Session, Membership, Role, assignment, visibility, and disclosure before hash/result disclosure. Same-hash replay, same-actor changed-hash conflict, cross-actor changed-hash pending-Hold denial, authority-loss, assignment-loss, and Workspace-switch attempts are covered with no new effects.
-- Concurrency coverage includes same-key intake, competing Hold/Resolve, same-identity distinct-key creation, and controlled intake-versus-resolution contention. The deadlock regression holds the shared Contact advisory key externally, waits until resolution holds the matching Company row and blocks on that Contact key, then starts intake with a distinct Company key that resolves to the same Company row. `pg_blocking_pids` must prove `barrier -> resolution -> intake` before the barrier is released. Both commands then complete, so the test cannot pass through serial scheduling and would expose the former Contact-before-Company inversion.
-- Candidate fidelity coverage includes exact command target ID/version mismatch for Contact and Company, stale locked targets, normalized Company-domain rerun, mixed probable Contact+Company rerun, exact email/phone/name+Company per-class caps, deterministic UUID ordering, and a protected combined result of 30.
-- Rollback injection covers Lead insert; review, candidate, initial decision and decision-head inserts; receipt outcome completion; governing intake Audit; both intake events; Company and Contact creation; decision append; Lead/review updates; governing Resolve Audit; every Resolve event; Hold Audit; and Hold Outbox. Every failure restores prior counts/state and the same idempotency key succeeds after the injected failure is removed.
-- All nine Contact/Company `create | link | dismiss` action permutations produced one governing success Audit and their exact unique required event set; replay produced no additional Audit/event.
-- Presentation coverage proves Owner capabilities, Member no-link authority, guessed/resolved no-detail behavior, typed navigation only after current disclosure, reassignment loss, team-visibility removal, suspended Membership, revoked Session, cross-tenant denial, concurrent review resolution, archived/version-changed target reconciliation, strict runtime shape and semantic rejection, deterministic cursor continuity, filter/cursor validation, private/no-store route transport for every response class, authentication-before-filter validation, and no raw candidate email in detail or queue JSON.
+- Phone validation completes before transaction entry. Every rejected class snapshots and proves zero delta across `leads`, `lead_intakes` (durable idempotency authority), `lead_activities`, `lead_identity_reviews`, `lead_identity_candidates`, `lead_identity_decisions`, `lead_identity_decision_heads`, `contacts`, `companies`, `audit_events`, and `outbox_messages`.
+- Accepted formatted, leading-1, and international inputs assert persisted display, E.164, actual calling code, and `p1a-identity-v2`. Blank phone plus valid email is equivalent to absent phone for replay; absent email plus blank phone rejects with no durable receipt.
+- Request-hash fixtures prove unchanged replay and changed display, canonical phone, effective national country, and semantic body conflicts. Explicit international input is country-selector independent because its effective country is null.
+- Compatible v1/v2 identity serialization uses the same stable sorted email/phone/Company advisory namespace. The controlled regression retains a v1 pending review and races its resolution against v2 intake for the same email, phone, and Company. Candidate recheck after the final lock produces one canonical Contact/Company outcome, a truthful held/review result for the waiter, no missed candidate, no partial mutation, and no deadlock.
+- Existing injected failures still roll back Lead, intake outcome, review/candidate/head, governing Audit, and every required outbox boundary. Retry with the same key succeeds after the fault is removed. Accepted commands retain exactly one governing Audit and exact unique required event set; replay adds none.
+- Canonical list/detail success and denial snapshot the same protected table set plus Lead versions, timestamps, assignment, visibility, review/decision state, Audit, and outbox. Every GET is zero-write.
+- List visibility runs in tenant-scoped SQL. Tests cover a sparse Member beyond the former 201-row boundary, multi-page stage/search filters, null assignment, Team visibility removal, role/session/assignment loss, identical-timestamp keysets, and concurrent update semantics with no duplicate/skip for the documented traversal.
+- The current-disclosure fixture changes Lead/authority facts between the presentation snapshot and serialization. A separate fresh transaction must reject drift; capabilities use the fresh role. Cross-Workspace and guessed identifiers remain indistinguishable `resource_not_found`.
+- Legacy PATCH rejects canonical intake lineage before body parsing or legacy update invocation. Route and modular gates prove zero mutation and no canonical DTO path to the legacy required-field editor.
 
-## Representative scale
+## Representative scale and exact public-operation latency
 
-Fixture at measurement: 100,001 Leads, 100,030 Contacts, 25,010 Companies, 10,001 pending reviews, and 10,030 identity-candidate rows in one Workspace. The protected measured review contains exactly 30 candidates: 10 email, 10 phone, and 10 name+Company. Statistics were refreshed before EXPLAIN and latency measurement. PostgreSQL reported `enable_seqscan=on`; the test does not alter planner settings. Each p95 measurement used exactly 30 samples.
+Fixture at measurement: 100,001 Leads, 100,030 Contacts, 25,010 Companies, 10,001 pending reviews, and 10,030 identity candidates in one Workspace. The protected full review contains 30 candidates (10 per evidence class). The sparse Member has 450 invisible Leads ahead of 50 visible Team Leads. Each distribution contains exactly 30 observations.
 
-| Query/command | Samples | Observed p95 | Target |
+| Operation | p50 | p95 | Target |
 | --- | ---: | ---: | ---: |
-| Contact normalized email | 30 | 0.580 ms | <100 ms |
-| Contact normalized phone | 30 | 0.209 ms | <100 ms |
-| Contact name + Company | 30 | 0.366 ms | <200 ms |
-| Company normalized name | 30 | 0.184 ms | <200 ms |
-| Protected review-queue operation | 30 | 9.760 ms | <200 ms |
-| Protected candidate-detail operation | 30 | 5.458 ms | <200 ms |
-| Canonical Lead detail operation | 30 | 3.721 ms | <200 ms |
-| Canonical Lead list operation | 30 | 5.262 ms | <200 ms |
-| Canonical Lead exact-email search operation | 30 | 85.465 ms | <200 ms |
-| Canonical manual intake | 30 | 4.505 ms | <500 ms |
+| Owner Lead detail | 2.439 ms | 3.050 ms | <200 ms |
+| Owner default Lead list | 3.604 ms | 4.404 ms | <200 ms |
+| Owner stage-filtered list | 3.682 ms | 4.977 ms | <200 ms |
+| Owner cursor page | 3.561 ms | 5.298 ms | <200 ms |
+| Owner real substring search (`scale lead 999`) | 60.446 ms | 69.538 ms | <200 ms |
+| Pipeline stage registry | 1.357 ms | 1.719 ms | <200 ms |
+| Sparse Member detail | 2.898 ms | 3.787 ms | <200 ms |
+| Sparse Member default list | 81.424 ms | 95.917 ms | <200 ms |
+| Sparse Member real substring search (`scale lead`) | 122.725 ms | 131.213 ms | <200 ms |
+| Protected review queue | — | 10.370 ms | <200 ms |
+| Protected 30-candidate detail | — | 4.852 ms | <200 ms |
+| Contact email candidate | — | 0.255 ms | <100 ms |
+| Contact phone candidate | — | 0.229 ms | <100 ms |
+| Contact name + Company candidate | — | 0.484 ms | <200 ms |
+| Company name candidate | — | 0.171 ms | <200 ms |
+| Canonical manual intake | — | 4.737 ms | <500 ms |
 
-Default-planner EXPLAIN ANALYZE observations:
+Public list output is capped at 50; SQL reads one additional sentinel solely to calculate `hasMore`. Search evidence is the real application `position(... lower(concat_ws(...)))` predicate, not a surrogate exact-email lookup.
 
-| Path | Chosen plan/index | Execution | Buffers |
-| --- | --- | ---: | --- |
-| Contact email | Index Scan, `contacts_workspace_email_idx` | 0.017 ms | 4 shared hits |
-| Contact phone | Index Scan, `contacts_workspace_phone_idx` | 0.191 ms | 4 shared hits |
-| Contact name+Company | Nested Loop using `contacts_workspace_name_company_idx` and `companies_workspace_name_idx` | 0.326 ms | 11 shared hits |
-| Company name | Index Scan, `companies_workspace_name_idx` | 0.206 ms | 2 shared hits, 2 reads |
-| Pending review queue | Index Scan, `lead_identity_reviews_workspace_state_idx`; estimated/actual result population 10,001, bounded to 50 | 0.302 ms | 52 shared hits |
-| Protected presentation queue | Backward `lead_identity_reviews_workspace_state_idx`, then candidate lookups through `lead_identity_candidates_workspace_review_id_uq`; 51 review refs/80 joined rows/36 kB sort | 0.700 ms | 225 shared hits |
-| Queue target freshness/cap | `lead_identity_candidates_workspace_review_id_uq` plus partition window; 51 review IDs/80 rows | 0.518 ms | 122 shared hits |
-| Full capped candidate detail | `lead_identity_candidates_review_idx` plus evidence partition window; actual 30 rows/29 kB sorts | 0.500 ms | 18 shared hits |
-| Canonical Lead detail | Index Only Scan, `leads_workspace_id_id_uq` | 0.131 ms | 4 shared hits |
-| Canonical Lead list | backward Index Only Scan, `leads_workspace_updated_idx`, bounded to 51 | 0.380 ms | 55 shared hits |
-| Canonical Lead exact-email search | Index Scan, `leads_workspace_email_idx` | 0.021 ms | 4 shared hits |
+## Default-planner `EXPLAIN (ANALYZE, BUFFERS)` evidence
 
-The executable test logs the complete plans as `P1A_PLAN_EVIDENCE` and the exact 30-sample measurements as `P1A_PERFORMANCE_EVIDENCE`. It explicitly rejects sequential scans on `leads`, `contacts`, `companies`, `lead_identity_reviews`, and `lead_identity_candidates`. Candidate SQL remains Workspace-leading, exact-only, deterministically ordered, and capped; no fuzzy predicate or unbounded scan was introduced.
+| Exact path | Principal access path | Execution |
+| --- | --- | ---: |
+| Contact email | `contacts_workspace_email_idx` | 0.022 ms |
+| Contact phone | `contacts_workspace_phone_idx` | 0.191 ms |
+| Contact name + Company | `contacts_workspace_name_company_idx` + `companies_workspace_name_idx` | 0.332 ms |
+| Company name | `companies_workspace_name_idx` | 0.177 ms |
+| Pending review queue | `lead_identity_reviews_workspace_state_idx`, 50 rows | 0.310 ms |
+| Presentation review queue | same review index + `lead_identity_candidates_workspace_review_id_uq`, 51 refs | 0.848 ms |
+| Queue target freshness/cap | candidate review index + partition window, 80 rows | 0.580 ms |
+| Full candidate detail | `lead_identity_candidates_review_idx` + per-class window, 30 rows | 0.557 ms |
+| Owner Lead detail | `leads_workspace_id_id_uq` | 0.312 ms |
+| Owner default Lead list | backward `leads_workspace_updated_idx`, 51 sentinel rows | 0.883 ms |
+| Owner stage-filtered list | tenant-leading Lead update index + stage filter | 0.434 ms |
+| Owner exact cursor page | tenant-leading `(workspace_id,updated_at,id)` condition; exact microsecond boundary, 51 rows | 0.249 ms |
+| Owner real substring search | tenant-leading Lead update index + real filter, 51 rows | 45.169 ms |
+| Platform visibility participant | Team membership/visibility indexes | 0.376 ms |
+| Membership presentation | Workspace membership + user indexes | 0.096 ms |
+| Team presentation | Workspace Team index | 0.085 ms |
+| Company presentation | Company primary key + Workspace/status filter | 0.036 ms |
+| Pipeline stage registry | Workspace Pipeline-stage index + bounded order | 0.077 ms |
+| Sparse Member default Lead list | tenant-leading Lead index + Platform disclosure subplan, 50 rows after 450 invisible | 100.652 ms |
+| Sparse Member real substring search | same disclosure plan + real substring filter, 50 rows | 115.134 ms |
 
-## Commands executed
+The executable test logs complete plans as `P1A_PLAN_EVIDENCE` and exact distributions as `P1A_PERFORMANCE_EVIDENCE`. It explicitly rejects sequential scans on `leads`, `contacts`, `companies`, `lead_identity_reviews`, and `lead_identity_candidates`. All plans are Workspace-qualified, and no new index is indicated.
+
+## Validation commands
 
 - `npx tsc --noEmit`: passed.
-- scoped ESLint over backend, Workspace Lead routes, and P1A tests: passed with no findings.
-- Next.js 16.3.1 production build: passed; canonical Lead collection/detail and identity-review handlers compiled as dynamic server routes.
-- focused contract/module/route/security Vitest suite: 18/18 passed.
-- focused P1A presentation/transaction PostgreSQL suites: 41/41 passed.
-- full serialized repository PostgreSQL suite: 213/213 passed across 22 files; performance test intentionally skipped there and executed separately.
-- representative-scale PostgreSQL performance suite: 1/1 passed with the 30-sample results above.
-- ordinary full Vitest suite: 320/320 active tests passed across 35 files; 23 integration files skipped by their explicit environment gates.
+- `npm run lint`: passed with zero errors; one pre-existing unused-variable warning remains in the out-of-scope Dev1 browser test.
+- focused contract/module suite: 31/31 passed.
+- focused manual-intake/presentation PostgreSQL suite: 70/70 passed.
+- ordinary full Vitest suite: 326/326 active tests passed; environment-gated integration tests skipped there by design.
+- full serialized PostgreSQL suite: 235/235 passed across 23 files; the explicit performance file is separately gated.
+- `RUN_P1A_PERFORMANCE=1 npx vitest run tests/p1a-performance.integration.test.ts --no-file-parallelism --maxWorkers=1 --testTimeout=180000`: 1/1 passed.
+- Next.js 16.3.1 production build: passed, including the Lead collection/detail and Pipeline-stage dynamic routes.
+
+Exact pass counts and the immutable candidate SHA are recorded in `/private/tmp/nexaflow-p1a01-uat-defects-dev2-remediation-completion.md` at handoff.

@@ -72,7 +72,8 @@ describe("P1A modular-monolith boundaries", () => {
   });
 
   it("blocks private cross-module, route-repository, and client-server imports", () => {
-    for (const path of files("src/app/api/workspaces/[workspaceId]/leads").filter(item => item.endsWith("route.ts")))
+    for (const path of files("src/app/api/workspaces/[workspaceId]").filter(item => item.endsWith("route.ts") &&
+      /\/(?:leads|pipeline-stages)\//.test(item)))
       expect(routeViolation(readFileSync(path, "utf8")), path).toBe(false);
     for (const path of moduleFiles) {
       const source = readFileSync(path, "utf8"), own = path.split("/")[3];
@@ -125,7 +126,8 @@ describe("P1A modular-monolith boundaries", () => {
 
   it("requires public operations in manifests/registry and forbids wildcard repository exports", () => {
     const leadManifest = readFileSync("src/backend/modules/leads/README.md", "utf8");
-    for (const operation of ["submitLeadInquiryV1", "getIdentityReviewDetailV1", "listIdentityReviewQueueV1", "decideLeadIdentityReviewV1"])
+    for (const operation of ["submitLeadInquiryV1", "listLeadSummariesV1", "getLeadDetailV1", "listLeadPipelineStagesV1",
+      "getIdentityReviewDetailV1", "listIdentityReviewQueueV1", "decideLeadIdentityReviewV1"])
       expect(`${registry}\n${leadManifest}`).toContain(operation);
     for (const moduleName of modules) expect(readFileSync(`src/backend/modules/${moduleName}/index.ts`, "utf8")).not.toMatch(/export \* /);
     expect("manifest without operation".includes("submitLeadInquiryV1")).toBe(false);

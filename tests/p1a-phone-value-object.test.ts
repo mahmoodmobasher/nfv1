@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePersonPhoneV2, PersonPhoneValidationError, PHONE_NORMALIZATION_VERSION } from "../src/backend/modules/leads";
+import { optionalPersonPhoneV2, parsePersonPhoneV2, PersonPhoneValidationError, PHONE_NORMALIZATION_VERSION } from "../src/backend/modules/leads";
 
 describe("P1A authoritative phone value object", () => {
   it.each([
@@ -25,5 +25,10 @@ describe("P1A authoritative phone value object", () => {
     catch (error) { expect(error).toMatchObject({ fields: ["person.phone", "person.phoneCountryOverride"] }); }
     try { parsePersonPhoneV2("6473894802 x123", "CA"); throw new Error("expected failure"); }
     catch (error) { expect(error).toMatchObject({ fields: ["person.phone"] }); }
+  });
+
+  it("treats absent and presentation-only blank phones as no phone", () => {
+    expect(optionalPersonPhoneV2()).toBeNull();
+    expect(optionalPersonPhoneV2("  \u3000 ", "US")).toBeNull();
   });
 });
