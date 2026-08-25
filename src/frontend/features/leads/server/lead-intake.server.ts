@@ -1,2 +1,2 @@
 import "server-only";
-export const manualLeadIntakeBootstrap={intakeChannel:"manual" as const,receivedAt:new Date().toISOString()};
+export{createManualIntakeBootstrap as manualLeadIntakeBootstrap}from"../contracts/lead-intake.contracts";

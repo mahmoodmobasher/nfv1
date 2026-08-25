@@ -1,0 +1,11 @@
+import{describe,expect,it}from"vitest";
+import{createManualIntakeBootstrap}from"@/frontend/features/leads/contracts/lead-intake.contracts";
+import{buildDecisionCommand,linkChoiceAvailable,safeChoiceSummary}from"@/frontend/features/identity-review";
+import{reviewDetailFixture}from"@/frontend/features/identity-review/testing/identity-review.fixtures";
+
+describe("P1A frontend interaction decisions",()=>{
+ it("creates request-scoped deterministic intake timestamps",()=>{const first=createManualIntakeBootstrap(()=>new Date("2026-08-25T10:00:00.000Z")),second=createManualIntakeBootstrap(()=>new Date("2026-08-25T10:01:00.000Z"));expect(first.receivedAt).not.toBe(second.receivedAt);expect(first.receivedAt).toBe("2026-08-25T10:00:00.000Z")});
+ it("emits a Hold-only body even for a stale server view",()=>{const stale={...reviewDetailFixture,candidates:[],candidateSummary:{strong:0,supplementary:0,probable:0},capabilities:{canCreateContact:false,canCreateCompany:false,canLinkContact:false,canLinkCompany:false,canDismiss:false,canHold:true,canResolve:false},reconciliation:{status:"stale"as const,retryable:true as const,action:"refresh_identity_review"as const}};expect(buildDecisionCommand(stale,"hold","create","dismiss")).toEqual({contractVersion:"lead-identity-review-decision.v1",expectedLeadVersion:1,expectedReviewVersion:1,expectedIntakeVersion:1,outcome:"hold"})});
+ it("requires both dimension and candidate link authority",()=>{const candidate=reviewDetailFixture.candidates[0],denied={...candidate,canLink:false};expect(linkChoiceAvailable(reviewDetailFixture,"contact",candidate)).toBe(true);expect(linkChoiceAvailable(reviewDetailFixture,"contact",denied)).toBe(false);expect(buildDecisionCommand({...reviewDetailFixture,candidates:[denied]},"resolve",`link:${denied.candidateId}`,"dismiss")).toBeNull()});
+ it("never uses command encodings in human decision copy",()=>{const candidate=reviewDetailFixture.candidates[0],summary=safeChoiceSummary(`link:${candidate.candidateId}`,reviewDetailFixture.candidates);expect(summary).toContain("Link contact");expect(summary).not.toContain(candidate.candidateId);expect(summary).not.toContain(candidate.targetId);expect(summary).not.toContain("link:")});
+});

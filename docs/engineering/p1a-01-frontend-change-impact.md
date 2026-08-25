@@ -22,4 +22,10 @@ This slice composes the accepted `lead-inquiry-intake.v1` and protected identity
 
 ## Rollback
 
-Rollback is the single frontend candidate commit. The incorporated accepted backend chain must not be reverted as part of a frontend rollback.
+Executed remediation gates are TypeScript, ESLint, strict transport parity/drift tests, frontend dependency gates, interaction tests, the repository Vitest suite, database integration suite, production build and six authenticated Playwright journeys. Browser coverage includes intake validation/focus and retry identity, new-inquiry timestamp/key rotation, masked decision/Hold-only transport, effective 320px at 200% zoom with overflow/keyboard checks, queue filter/reset context, and dark/forced-colour/reduced-motion semantics. Screenshots are emitted by Playwright for the safe decision, narrow intake and forced-colour journeys. Unexecuted combinations are not claimed.
+
+Rollback is the remediation commit on top of `3dee846`. The incorporated accepted backend chain must not be reverted as part of a frontend rollback.
+
+## Future Product record (not implemented)
+
+Pipeline drag/drop with an equal accessible Change-stage alternative, and replacement of the duplicate authenticated Account control with direct Sign out, remain future scope. Both require Product-approved Graphics mockups and Architecture review before implementation.

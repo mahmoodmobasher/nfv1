@@ -1,9 +1,7 @@
-export type SourceCategory="website"|"referral"|"outbound"|"event"|"partner"|"social_media"|"import"|"manual"|"other";
-export type SocialPlatform="tiktok"|"instagram"|"facebook"|"linkedin"|"x"|"youtube"|"other_social";
-export type SourceMedium="organic"|"paid"|"unknown";
-export type LeadInquiryIntakeCommandV1={contractVersion:"lead-inquiry-intake.v1";intakeChannel:"manual";person:{displayName:string;email?:string;phone?:string;phoneCountryOverride?:"CA"|"US"};organization?:{name:string;domain?:string};inquiry:{subject?:string;message?:string;receivedAt:string};source:{sourceCategory:SourceCategory;sourcePlatform?:SocialPlatform;sourceMedium:SourceMedium;sourceDetail:Record<string,string>;campaignContext:Record<string,string>;attributionContractVersion:"p1a-attribution-v1"}};
-export type IntakeResult={contractVersion:"lead-inquiry-intake-result.v1";intakeId:string;leadId:string;disposition:"created"|"held_for_review"|"replayed";contactId:string|null;companyId:string|null;reviewCaseId:string|null;candidateSummary:{strong:number;supplementary:number;probable:number};leadVersion:number;reviewVersion:number|null;replayed:boolean;requestId:string;nextView:{kind:"lead_detail";leadId:string}|{kind:"identity_review_detail";leadId:string;reviewId:string}};
-export type P1AError={code:string;message:string;retryable:boolean;reconciliation:{required:boolean;action:"none"|"refetch_identity_review"|"retry_same_request"};details?:{fields:string[]}};
-export type ErrorEnvelope={error:P1AError;requestId:string;nextView?:{kind:"identity_review_detail";leadId:string}};
+export { errorEnvelopeSchema, intakeResultSchema, intakeSuccessEnvelopeSchema, leadInquiryIntakeCommandV1Schema,
+  type ErrorEnvelope, type IntakeResult, type LeadInquiryIntakeCommandV1, type P1AError, type SocialPlatform,
+  type SourceCategory, type SourceMedium } from "@/frontend/shared/contracts/p1a-transport";
+import type { SocialPlatform, SourceCategory } from "@/frontend/shared/contracts/p1a-transport";
+export function createManualIntakeBootstrap(now:()=>Date=()=>new Date()){return{intakeChannel:"manual"as const,receivedAt:now().toISOString()}}
 export const sourceCategories:[SourceCategory,string][]=[["website","Website"],["referral","Referral"],["outbound","Outbound"],["event","Event"],["partner","Partner"],["social_media","Social media"],["import","Import"],["manual","Manual"],["other","Other"]];
 export const socialPlatforms:[SocialPlatform,string][]=[["tiktok","TikTok"],["instagram","Instagram"],["facebook","Facebook"],["linkedin","LinkedIn"],["x","X"],["youtube","YouTube"],["other_social","Other social"]];
