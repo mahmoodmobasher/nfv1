@@ -199,6 +199,7 @@ describe("design-system document boundary", () => {
       "../src/app/crm/pipeline/page.tsx",
       "../src/frontend/features/leads/components/manual-lead-intake-page.tsx",
       "../src/app/crm/leads/[leadId]/page.tsx",
+      "../src/frontend/features/leads/components/lead-presentation.tsx",
       "../src/app/crm/leads/lead-editor.tsx",
     ]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
@@ -211,7 +212,7 @@ describe("design-system document boundary", () => {
       "../src/app/crm/home/page.tsx",
       "../src/app/crm/pipeline/page.tsx",
       "../src/frontend/features/leads/components/manual-lead-intake-page.tsx",
-      "../src/app/crm/leads/[leadId]/page.tsx",
+      "../src/frontend/features/leads/components/lead-presentation.tsx",
     ]) {
       expect(
         readFileSync(new URL(file, import.meta.url), "utf8"),

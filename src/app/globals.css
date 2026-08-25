@@ -328,6 +328,16 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   :where(a,button,input,select,textarea,summary,[tabindex]):focus-visible { outline: 2px solid Highlight; }
   .primary,.secondary,.danger,.alert,.mobile-menu-panel,dialog,.confirm-dialog,.table-wrap { border: 1px solid ButtonText; }
 }
+
+.p1a-lead-card { min-width: 0; overflow-wrap: anywhere; }
+.p1a-card-meta { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.p1a-card-actions { margin-top: 1rem; }
+.p1a-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.p1a-detail-grid>div { min-width: 0; padding: 1rem; border: 1px solid var(--nx-border-subtle, #d7dde5); border-radius: var(--nf-radius-card, .75rem); overflow-wrap: anywhere; }
+.p1a-detail-grid dt { color: var(--nx-text-muted, #5d6673); font-size: .875rem; font-weight: 600; }
+.p1a-detail-grid dd { margin: .25rem 0 0; }
+@media (max-width: 560px) { .p1a-detail-grid { grid-template-columns: 1fr; } .p1a-card-actions .link-button { width: 100%; } }
+@media (forced-colors: active) { .p1a-detail-grid>div { border-color: CanvasText; } }
 @media (max-width: 600px) {
   .account-section .primary { width: 100%; }
   .crm-search-toolbar label { flex-basis: auto; }

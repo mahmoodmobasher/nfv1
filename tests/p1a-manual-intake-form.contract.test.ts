@@ -17,7 +17,8 @@ describe("manual intake server validation presentation", () => {
     expect(Object.keys(serverFieldControls).sort()).toEqual([...editableCanonicalFields].sort());
     for (const path of editableCanonicalFields) {
       const errors = mapServerFields([path]);
-      expect(errors).toEqual({ [serverFieldControls[path]]: "Check this value." });
+      const control=serverFieldControls[path],message=control==="phone"?"Enter a valid phone number in one of the supported formats.":control==="phoneCountry"?"Choose Canada or United States for a national phone number.":"Check this value.";
+      expect(errors).toEqual({ [control]: message });
       expect(serverFieldControls[path]).not.toBe("_form");
     }
   });

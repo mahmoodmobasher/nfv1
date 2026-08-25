@@ -145,6 +145,79 @@ test("manual intake maps errors and keeps one request identity across a safe ret
   expect(consoleErrors.filter(message => !message.includes("ERR_CONNECTION_RESET"))).toEqual([]);
 });
 
+test("ordinary Canada and US phone entry is guided, preserved, and mapped inline", async ({ page }) => {
+  await browserFixture(page);
+  const submitted: string[] = [];
+  await page.route("**/api/workspaces/*/leads", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    submitted.push(route.request().postDataJSON().person.phone);
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(successfulIntake(submitted.length + 30)) });
+  });
+  await page.goto("/crm/leads/new");
+  await page.locator("#displayName").fill("Phone-only Lead");
+  await page.locator("#phone").fill("(647) 389-4802");
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page.getByRole("heading", { name: "Lead created." })).toBeVisible();
+  expect(submitted).toEqual(["(647) 389-4802"]);
+
+  await page.getByRole("button", { name: "Add another lead" }).click();
+  await page.locator("#displayName").fill("Leading-one Lead");
+  await page.locator("#phone").fill("16473894802");
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page.getByRole("heading", { name: "Lead created." })).toBeVisible();
+  expect(submitted).toEqual(["(647) 389-4802", "16473894802"]);
+
+  await page.getByRole("button", { name: "Add another lead" }).click();
+  await page.locator("#displayName").fill("Invalid Phone");
+  await page.locator("#phone").fill("5551234");
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page.locator("#phone-error")).toHaveText("Enter a valid phone number in one of the supported formats.");
+  await expect(page.locator(".error-summary")).toBeFocused();
+  await page.locator("#phone").fill("6473894802");
+  await expect(page.locator("#phone-error")).toHaveCount(0);
+});
+
+test("a fieldless validation response does not duplicate generic copy", async ({ page }) => {
+  await browserFixture(page);
+  await page.route("**/api/workspaces/*/leads", route => route.request().method() === "POST"
+    ? route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify(p1aError("validation_failed")) })
+    : route.continue());
+  await page.goto("/crm/leads/new");
+  await fillMinimumIntake(page);
+  await page.getByRole("button", { name: "Create lead" }).click();
+  const alert = page.locator(".error-summary");
+  await expect(alert).toBeFocused();
+  await expect(alert.getByText("The request is invalid.", { exact: true })).toHaveCount(1);
+  await expect(alert).toContainText("Review the submitted information and try again.");
+});
+
+test("canonical Lead creation reaches list, Pipeline, and read-only detail", async ({ page }) => {
+  const fixture = await browserFixture(page);
+  const created = await submitLeadInquiryV1(database, { actor: fixture.actor, idempotencyKey: randomUUID(), command: {
+    contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual",
+    person: { displayName: "Phone-only Canonical Lead", phone: "6473894802", phoneCountryOverride: "CA" },
+    inquiry: { receivedAt: "2026-08-25T12:00:00.000Z" },
+    source: { sourceCategory: "social_media", sourcePlatform: "instagram", sourceMedium: "organic", sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" },
+  } });
+  await database.query(`insert into pipeline_stages(workspace_id,name,position,status) values($1,'Working',1,'active')`, [fixture.workspaceId]);
+
+  await page.goto("/crm");
+  await expect(page.getByRole("heading", { name: "Phone-only Canonical Lead" })).toBeVisible();
+  await expect(page.getByText("No company provided")).toBeVisible();
+  await expect(page.getByText(/Unassigned/)).toBeVisible();
+
+  await page.goto("/crm/pipeline");
+  await expect(page.getByRole("heading", { name: /New/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Working/ })).toBeVisible();
+  await expect(page.getByText("No leads in this stage.")).toBeVisible();
+
+  await page.goto(`/crm/leads/${created.leadId}`);
+  await expect(page.getByRole("heading", { name: "Phone-only Canonical Lead" })).toBeVisible();
+  await expect(page.getByText("Instagram")).toBeVisible();
+  await expect(page.getByText("Manual", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /save/i })).toHaveCount(0);
+});
+
 test("a new inquiry receives a new timestamp and idempotency key", async ({ page }) => {
   await browserFixture(page);
   const requests: Request[] = [];

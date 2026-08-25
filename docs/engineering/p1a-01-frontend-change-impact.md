@@ -9,6 +9,9 @@ This slice composes the accepted `lead-inquiry-intake.v1` and protected identity
 | User route | Read/write trace | Result states |
 | --- | --- | --- |
 | `/crm/leads/new` | server bootstrap -> `POST /api/workspaces/:workspaceId/leads` | committed, replayed, held, validation, denied and retry-safe failure |
+| `/crm` | server feature loader -> `listLeadSummariesV1` | loading, empty, nullable presentation, filtered, paged and retry-safe unavailable |
+| `/crm/pipeline` | server feature loader -> `listLeadPipelineStagesV1` then stage-scoped `listLeadSummariesV1` | ordered and empty stages, nullable presentation and retry-safe unavailable |
+| `/crm/leads/:leadId` | server feature loader -> `getLeadDetailV1` | read-only canonical detail, not-found/no-detail and retry-safe unavailable |
 | `/crm/identity-reviews` | protected queue loader -> `GET /api/workspaces/:workspaceId/identity-reviews` | loading, empty, populated, stale marker, denied/retry failure and cursor paging |
 | `/crm/identity-reviews/:leadId` | protected detail loader -> `GET/POST /api/workspaces/:workspaceId/leads/:leadId/identity-review` | safe no-detail, masked candidates, Hold, atomic Resolve, replay, stale refetch, denied and retry-safe failure |
 
@@ -52,6 +55,19 @@ Clean built-app screenshots (no development overlay):
 The transport definitions remain physically separate because importing backend executable schemas into client-reachable code violates the modular boundary. Exact backend/frontend result-type parity plus backend-produced error matrices and executable runtime refinement parity are therefore required fast gates whenever either transport changes. Visual assertions are deterministic browser interactions plus captured evidence, not pixel-diff snapshots. The database performance tier remains deliberately skipped by its existing gate.
 
 Rollback is the pass-3 remediation commit on top of `514e2f54311ec30ddde3056026674114824bcb87`. The incorporated accepted backend chain and accepted pass-2 frontend commit must not be reverted as part of a narrower rollback.
+
+## UAT defect integration evidence
+
+- Incorporated accepted backend candidates `eefb718` then `5f42c4e` as local commits `dfd6f3c` and `2333a96` on accepted frontend base `e957dc7`.
+- `npm test`: 332 passed; 236 database-gated tests skipped across 37 passed and 24 skipped files.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed with zero errors and one pre-existing unused-variable warning in the P1A browser suite.
+- `npm run build`: passed with Next.js 16.3.1; 42 static pages generated and all dynamic routes traced.
+- Focused Playwright intake regression set: 6/6 passed (retry identity, replay, held navigation, changed-body rotation, canonical field mapping, social attribution).
+- New focused Playwright journey set: 3/3 passed (ordinary 10/11-digit phone entry and clearing, fieldless validation de-duplication, and canonical create-to-list/Pipeline/detail journey).
+- Focused responsive/theme set: 2/2 passed (effective 320px at 200% zoom; dark, forced-colour, and reduced-motion semantics).
+
+Known UAT-only risk: this candidate has not been deployed or exercised against UAT provider configuration. The browser journey used the disposable local PostgreSQL fixture and built/development application servers. Roll back the final Dev1 integration commit to restore `e957dc7` frontend behavior while retaining the accepted backend chain only if Product explicitly chooses that split.
 
 ## Future Product record (not implemented)
 
