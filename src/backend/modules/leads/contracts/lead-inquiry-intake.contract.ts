@@ -91,6 +91,7 @@ export type LegacyLeadCreateV1 = {
 export type LeadIntakeErrorCode =
   | "authentication_required" | "permission_required" | "resource_not_found" | "validation_failed"
   | "unsupported_contract_version" | "source_platform_required" | "source_platform_not_allowed"
+  | "invalid_source_category" | "invalid_source_platform" | "invalid_source_medium" | "source_detail_too_large"
   | "idempotency_conflict" | "stale_version" | "invalid_match_decision"
   | "assignment_unavailable" | "rate_limited" | "intake_unavailable" | "unexpected_error";
 

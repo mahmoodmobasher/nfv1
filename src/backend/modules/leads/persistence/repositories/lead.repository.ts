@@ -48,19 +48,6 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
          values($1,$2,'note',$3,$4)`, [workspaceId, leadId, note.trim().slice(0, 4000), actorMembershipId],
       );
     },
-    async lockAssignment(input: { workspaceId: string; membershipId: string | null; teamId: string | null }) {
-      if (input.membershipId) {
-        const membership = (await tx.query(
-          `select id from workspace_memberships where workspace_id=$1 and id=$2 and status='active' for update`,
-          [input.workspaceId, input.membershipId],
-        )).rows[0];
-        if (!membership) throw Object.assign(new Error("assignment_unavailable"), { code: "assignment_unavailable", status: 409 });
-      }
-      if (input.teamId) {
-        const team = (await tx.query(`select id from teams where workspace_id=$1 and id=$2 and status='active' for update`, [input.workspaceId, input.teamId])).rows[0];
-        if (!team) throw Object.assign(new Error("assignment_unavailable"), { code: "assignment_unavailable", status: 409 });
-      }
-    },
     async lockForResolution(workspaceId: string, leadId: string) {
       const row = (await tx.query(`select * from leads where workspace_id=$1 and id=$2 for update`, [workspaceId, leadId])).rows[0];
       if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });

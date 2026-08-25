@@ -8,18 +8,30 @@ const dimension = z.discriminatedUnion("action", [
   z.object({ action: z.literal("link"), candidateId: z.string().uuid(), targetId: z.string().uuid(), expectedTargetVersion: z.number().int().positive() }),
 ]);
 
-export const resolveIdentityReviewCommandV1Schema = z.object({
-  contractVersion: z.literal(IDENTITY_REVIEW_DECISION_OPERATION),
+const expectedVersions = {
   expectedLeadVersion: z.number().int().positive(),
   expectedReviewVersion: z.number().int().positive(),
   expectedIntakeVersion: z.number().int().positive(),
+};
+
+export const identityReviewDecisionCommandV1Schema = z.discriminatedUnion("outcome", [z.object({
+  contractVersion: z.literal(IDENTITY_REVIEW_DECISION_OPERATION),
+  ...expectedVersions,
   outcome: z.literal("resolve"),
   contact: dimension,
   company: dimension,
   reasonCode: z.string().trim().min(1).max(80).optional(),
-});
+}).strict(), z.object({
+  contractVersion: z.literal(IDENTITY_REVIEW_DECISION_OPERATION),
+  ...expectedVersions,
+  outcome: z.literal("hold"),
+  reasonCode: z.string().trim().min(1).max(80).optional(),
+}).strict()]);
 
-export type ResolveIdentityReviewCommandV1 = z.infer<typeof resolveIdentityReviewCommandV1Schema>;
+export const resolveIdentityReviewCommandV1Schema = identityReviewDecisionCommandV1Schema;
+export type IdentityReviewDecisionCommandV1 = z.infer<typeof identityReviewDecisionCommandV1Schema>;
+export type ResolveIdentityReviewCommandV1 = Extract<IdentityReviewDecisionCommandV1, { outcome: "resolve" }>;
+export type HoldIdentityReviewCommandV1 = Extract<IdentityReviewDecisionCommandV1, { outcome: "hold" }>;
 
 export type IdentityReviewCandidateViewV1 = {
   contractVersion: "lead-identity-review-candidates.v1";

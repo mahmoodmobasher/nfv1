@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { runModuleTransaction } from "@/backend/platform/database";
-import { revalidateActiveActor, type TrustedActor } from "@/backend/platform/authorization";
-import { canonicalRequestHash, lockIdempotencyAuthority } from "@/backend/platform/idempotency";
+import { lookupActiveActor, revalidateActiveActor, workspaceAuthorityParticipant, type TrustedActor } from "@/backend/platform/authorization";
+import { canonicalRequestHash, lockIdempotencyAuthority, lockIdentityKeyAuthority } from "@/backend/platform/idempotency";
 import { writeGoverningAudit } from "@/backend/platform/audit";
-import { writeDomainEventSet } from "@/backend/platform/outbox";
+import { writeDomainEventSet, type DomainEventV1 } from "@/backend/platform/outbox";
 import { contactTransactionParticipant } from "@/backend/modules/contacts";
 import { companyTransactionParticipant } from "@/backend/modules/companies";
 import { identityReviewTransactionParticipant } from "@/backend/modules/identity-review";
@@ -25,6 +25,11 @@ function asKnownError(error: unknown): never {
     throw new LeadIntakeError(value.code as never, value.status, value.safe);
   }
   throw error;
+}
+
+function sameCandidates(left: Array<{ id: string; version: number; evidenceKind: string }>, right: Array<{ id: string; version: number; evidenceKind: string }>) {
+  const key = (item: { id: string; version: number; evidenceKind: string }) => `${item.evidenceKind}:${item.id}:${item.version}`;
+  return left.length === right.length && left.map(key).sort().every((value, index) => value === right.map(key).sort()[index]);
 }
 
 export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
@@ -48,26 +53,46 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
       await lockIdempotencyAuthority(tx, `${input.actor.workspaceId}:lead-inquiry-intake.v1:manual:${input.idempotencyKey}`);
       const receipts = manualIntakeRepository(tx);
       const existing = await receipts.findForReplay(input.actor.workspaceId, input.idempotencyKey);
-      const actor = await revalidateActiveActor(tx, input.actor);
       if (existing) {
         if (existing.request_hash !== requestHash) throw new LeadIntakeError("idempotency_conflict", 409);
         if (existing.state !== "committed" || !existing.outcome) throw new LeadIntakeError("intake_unavailable", 503);
+        const lead = await leadTransactionParticipant(tx).lockForResolution(input.actor.workspaceId, existing.lead_id);
+        const authority = workspaceAuthorityParticipant(tx);
+        await authority.lockReferences({ workspaceId: input.actor.workspaceId, leadId: lead.id,
+          membershipIds: [input.actor.membershipId, lead.owner_membership_id], teamIds: [lead.responsible_team_id] });
+        const actor = await revalidateActiveActor(tx, input.actor);
+        if (actor.membershipId !== existing.actor_membership_id || !(await authority.canDiscloseLead(actor, lead)))
+          throw new LeadIntakeError("resource_not_found", 404);
         return { ...(existing.outcome as LeadInquiryIntakeResultV1), disposition: "replayed", replayed: true };
       }
 
-      const intake = await receipts.createPending({ workspaceId: actor.workspaceId, idempotencyKey: input.idempotencyKey,
-        actorMembershipId: actor.membershipId, requestHash, ...normalized });
+      const actorLookup = await lookupActiveActor(tx, input.actor);
+      const intake = await receipts.createPending({ workspaceId: actorLookup.workspaceId, idempotencyKey: input.idempotencyKey,
+        actorMembershipId: actorLookup.membershipId, requestHash, ...normalized });
       const leads = leadTransactionParticipant(tx);
-      const stageId = await leads.activeStage(actor.workspaceId, input.compatibility?.stageId);
-      const lead = await leads.create({ workspaceId: actor.workspaceId, stageId, visibility: input.compatibility?.visibility ?? "workspace", ...normalized });
+      const stageId = await leads.activeStage(actorLookup.workspaceId, input.compatibility?.stageId);
+      const lead = await leads.create({ workspaceId: actorLookup.workspaceId, stageId, visibility: input.compatibility?.visibility ?? "workspace", ...normalized });
 
       const contacts = contactTransactionParticipant(tx);
       const companies = companyTransactionParticipant(tx);
-      const contactCandidates = await contacts.findCandidates({ workspaceId: actor.workspaceId,
+      if (normalized.organizationNameNormalized) await lockIdentityKeyAuthority(tx,
+        `${actorLookup.workspaceId}:company:p1a-identity-v1:${normalized.organizationNameNormalized}`);
+      const contactKey = normalized.emailNormalized ?? normalized.phoneNormalized ??
+        `${normalized.personNameNormalized}:${normalized.organizationNameNormalized ?? ""}`;
+      await lockIdentityKeyAuthority(tx, `${actorLookup.workspaceId}:contact:p1a-identity-v1:${contactKey}`);
+      const contactQuery = { workspaceId: actorLookup.workspaceId,
         emailNormalized: normalized.emailNormalized, phoneNormalized: normalized.phoneNormalized,
-        personNameNormalized: normalized.personNameNormalized, companyNameNormalized: normalized.organizationNameNormalized });
-      const allCompanyCandidates = await companies.findCandidates({ workspaceId: actor.workspaceId,
-        nameNormalized: normalized.organizationNameNormalized, domainNormalized: normalized.organizationDomainNormalized });
+        personNameNormalized: normalized.personNameNormalized, companyNameNormalized: normalized.organizationNameNormalized };
+      const companyQuery = { workspaceId: actorLookup.workspaceId, nameNormalized: normalized.organizationNameNormalized,
+        domainNormalized: normalized.organizationDomainNormalized };
+      const initialCompanies = await companies.findCandidates(companyQuery);
+      await companies.lockCandidateSet(actorLookup.workspaceId, initialCompanies);
+      const initialContacts = await contacts.findCandidates(contactQuery);
+      await contacts.lockCandidateSet(actorLookup.workspaceId, initialContacts);
+      const allCompanyCandidates = await companies.findCandidates(companyQuery);
+      const contactCandidates = await contacts.findCandidates(contactQuery);
+      if (!sameCandidates(initialCompanies, allCompanyCandidates) || !sameCandidates(initialContacts, contactCandidates))
+        throw new LeadIntakeError("stale_version", 409);
       const probableContacts = contactCandidates.filter(candidate => candidate.evidenceStrength === "probable");
       const companyCandidates = allCompanyCandidates.slice(0, Math.max(0, 10 - probableContacts.length));
       const summary = {
@@ -79,13 +104,19 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
       const requestedMembership = input.command.requestedAssignment?.membershipId ??
         (input.compatibility ? input.actor.membershipId : null);
       const requestedTeam = input.command.requestedAssignment?.teamId ?? null;
+      const authority = workspaceAuthorityParticipant(tx);
+      await authority.lockReferences({ workspaceId: actorLookup.workspaceId, membershipIds: [actorLookup.membershipId, requestedMembership],
+        teamIds: [requestedTeam, ...(input.compatibility?.teamIds ?? [])] });
+      const actor = await revalidateActiveActor(tx, input.actor);
       if (actor.role === "member" && ((requestedMembership && requestedMembership !== actor.membershipId) || requestedTeam)) {
         throw new LeadIntakeError("permission_required", 403);
       }
-      await leads.lockAssignment({ workspaceId: actor.workspaceId, membershipId: requestedMembership, teamId: requestedTeam });
+      await authority.validateAssignment(actor.workspaceId, requestedMembership, requestedTeam);
+      for (const teamId of input.compatibility?.teamIds ?? []) await authority.validateAssignment(actor.workspaceId, null, teamId);
+      if (!sameCandidates(allCompanyCandidates, await companies.findCandidates(companyQuery)) ||
+          !sameCandidates(contactCandidates, await contacts.findCandidates(contactQuery))) throw new LeadIntakeError("stale_version", 409);
       await leads.setInitialResponsibility({ workspaceId: actor.workspaceId, leadId: lead.id, membershipId: requestedMembership, teamId: requestedTeam });
       if (input.compatibility?.visibility === "teams") {
-        for (const teamId of [...input.compatibility.teamIds].sort()) await leads.lockAssignment({ workspaceId: actor.workspaceId, membershipId: null, teamId });
         await leads.addVisibleTeams(actor.workspaceId, lead.id, input.compatibility.teamIds);
       }
       await leads.addCreatedActivity(actor.workspaceId, lead.id, actor.membershipId, input.compatibility?.note);
@@ -110,16 +141,20 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         await reviews.setDecisionHead(actor.workspaceId, intake.id, decision.id);
       }
       const auditAction = review ? "crm.inquiry_held_for_review" : "crm.inquiry_created";
-      await writeGoverningAudit(tx, { actor, action: auditAction, targetType: "lead", targetId: lead.id,
-        requestId, correlationId: requestId, resultVersion: lead.version });
+      await writeGoverningAudit(tx, { actor, operation: "lead-inquiry-intake.v1", action: auditAction, targetType: "lead", targetId: lead.id,
+        requestId, correlationId: requestId, resultVersion: lead.version, metadata: {
+          contract_version: "lead-inquiry-intake.v1", intake_channel: "manual", source_category: normalized.sourceCategory,
+          source_platform: normalized.sourcePlatform, source_medium: normalized.sourceMedium, disposition: baseResult.disposition,
+          candidate_strong_count: summary.strong, candidate_supplementary_count: summary.supplementary,
+          candidate_probable_count: summary.probable, normalization_version: "p1a-identity-v1" } });
       const payload = { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: lead.id, leadVersion: lead.version,
         lifecycle: "new", disposition: baseResult.disposition, intakeChannel: "manual", sourceCategory: normalized.sourceCategory,
         sourcePlatform: normalized.sourcePlatform, sourceMedium: normalized.sourceMedium, candidateSummary: summary, requestId };
-      await writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: intake.id, events: [
-        { topic: "crm.inquiry.created.v1", aggregateType: "lead", aggregateId: lead.id, resultVersion: lead.version, payload },
-        ...(review ? [{ topic: "crm.inquiry.review_required.v1", aggregateType: "lead", aggregateId: lead.id,
-          resultVersion: review.version, payload: { ...payload, reviewId: review.id, reviewVersion: review.version } }] : []),
-      ] });
+      const events: DomainEventV1[] = [{ topic: "crm.inquiry.created.v1", aggregateType: "lead",
+        aggregateId: lead.id, resultVersion: lead.version, payload }];
+      if (review) events.push({ topic: "crm.inquiry.review_required.v1", aggregateType: "lead", aggregateId: lead.id,
+        resultVersion: review.version, payload: { ...payload, reviewId: review.id, reviewVersion: review.version } });
+      await writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: intake.id, events });
       return baseResult;
     });
   } catch (error) { return asKnownError(error); }

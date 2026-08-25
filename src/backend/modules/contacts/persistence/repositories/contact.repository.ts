@@ -48,6 +48,22 @@ export function contactTransactionParticipant(tx: ModuleTransaction) {
       if (row.version !== expectedVersion) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return row;
     },
+    async lockCandidateSet(workspaceId: string, candidates: ContactCandidateV1[]) {
+      const expected = new Map(candidates.map(candidate => [candidate.id, candidate.version]));
+      const ids = [...expected.keys()].sort();
+      if (!ids.length) return;
+      const rows = (await tx.query(
+        `select id,version,status from contacts where workspace_id=$1 and id=any($2::uuid[]) order by id for update`,
+        [workspaceId, ids])).rows;
+      if (rows.length !== ids.length || rows.some(row => row.status !== "active" || expected.get(row.id) !== row.version))
+        throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
+    },
+    async present(workspaceId: string, ids: string[]) {
+      if (!ids.length) return [];
+      return (await tx.query(
+        `select id,version,display_name "displayName",email_display email,phone_display phone
+           from contacts where workspace_id=$1 and id=any($2::uuid[]) and status='active'`, [workspaceId, ids])).rows;
+    },
     async create(input: CreateContactIdentityV1) {
       return (await tx.query(
         `insert into contacts(workspace_id,display_name,person_name_normalized,first_name,last_name,email_display,email_normalized,

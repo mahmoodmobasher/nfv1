@@ -1,1 +1,1 @@
-export { canonicalRequestHash, lockIdempotencyAuthority } from "./idempotency-authority";
+export { canonicalRequestHash, lockIdempotencyAuthority, lockIdentityKeyAuthority } from "./idempotency-authority";

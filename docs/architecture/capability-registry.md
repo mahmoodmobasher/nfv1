@@ -2,9 +2,46 @@
 
 | Capability | Frontend | Backend/public entry | Routes | Operations | Owned tables | Consumes | Events | Primary tests | Authority | Owner |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1A Lead Intake | Deferred | `src/backend/modules/leads/index.ts` | `POST /api/workspaces/:workspaceId/leads` | `submitLeadInquiryV1`; `resolveLeadIdentityReviewV1` | `leads`; `lead_lifecycle_definitions`; manual `lead_intakes` | Contacts, Companies, Identity Review public participants; Platform authorization/idempotency/Audit/Outbox/database | `crm.inquiry.created.v1`; `crm.inquiry.review_required.v1`; `crm.inquiry.review_resolved.v1`; `crm.inquiry.linked.v1`; identity-created events | `tests/p1a-manual-intake.*`; `tests/p1a-modular-boundaries.test.ts` | Frozen P1A Product/data authority and modular-monolith contract | Dev2 backend; Dev3 schema |
+| P1A Lead Intake | Deferred | `src/backend/modules/leads/index.ts` | `POST /api/workspaces/:workspaceId/leads` | `submitLeadInquiryV1`; `decideLeadIdentityReviewV1` | See ownership inventory | Contacts, Companies, Identity Review public participants; Platform authorization/idempotency/Audit/Outbox/database | See stable identity inventory | `tests/p1a-manual-intake.*`; `tests/p1a-modular-boundaries.test.ts` | Frozen P1A Product/data authority and modular-monolith contract | Dev2 backend; Dev3 schema |
 | P1A Contact Identity | Deferred | `src/backend/modules/contacts/index.ts` | None directly | exact candidate query; create/lock participant | `contacts` | Platform database | `crm.contact.created.v1` selected by Leads orchestrator | P1A manual-intake integration suite | Frozen P1A Product/data authority | Dev2 backend; Dev3 schema |
 | P1A Company Identity | Deferred | `src/backend/modules/companies/index.ts` | None directly | exact candidate query; create/lock participant | `companies` | Platform database | `crm.company.created.v1` selected by Leads orchestrator | P1A manual-intake integration suite | Frozen P1A Product/data authority | Dev2 backend; Dev3 schema |
 | P1A Identity Review | Deferred | `src/backend/modules/identity-review/index.ts` | `GET/POST /api/workspaces/:workspaceId/leads/:leadId/identity-review` | authorized candidate query; Hold/Resolve lineage participant | `lead_identity_reviews`; `lead_identity_candidates`; `lead_identity_decisions`; `lead_identity_decision_heads` | Contacts/Companies public types; Platform authorization/database | Review events selected by Leads orchestrator | P1A manual-intake integration and route suites | Frozen P1A Product/data authority | Dev2 backend; Dev3 schema |
 
 Physical schema definitions remain centralized in `src/server/db/schema.ts`; this registry defines logical write ownership. Legacy `src/server/crm` remains a compatibility/read boundary and is not a second P1A write owner.
+
+## Table ownership inventory
+
+| Table | Single write owner | P1A access |
+| --- | --- | --- |
+| `leads` | Leads | read/write |
+| `lead_lifecycle_definitions` | Leads | read |
+| `lead_intakes` | Leads | read/write receipt |
+| `lead_activities` | Leads | write compatibility activity |
+| `lead_visible_teams` | Leads | write; Platform Workspace Authority reviewed lock/read model |
+| `pipeline_stages` | Leads | read compatibility stage |
+| `contacts` | Contacts | read/lock/write through public participant |
+| `companies` | Companies | read/lock/write through public participant |
+| `lead_identity_reviews` | Identity Review | read/write |
+| `lead_identity_candidates` | Identity Review | read/write append-only evidence |
+| `lead_identity_decisions` | Identity Review | read/write append-only decisions |
+| `lead_identity_decision_heads` | Identity Review | read/write effective head |
+| `audit_events` | Platform Audit | one governing write |
+| `outbox_messages` | Platform Outbox | exact event-set writes |
+
+Workspace Administration remains the write owner for `workspaces`, `users`, `sessions`, `roles`, `workspace_memberships`, `teams`, and `team_memberships`. P1A consumes these only through the Platform Workspace Authority participant, whose reviewed read/lock model also covers Lead-owned visibility references. Platform Database owns transaction mechanics; Platform Idempotency owns advisory authorities but no table; Platform Authorization owns trusted-current authority facts but no administration table.
+
+## Stable identity inventory
+
+| Kind | Identity | Owner |
+| --- | --- | --- |
+| operation | `lead-inquiry-intake.v1` | Leads |
+| operation | `lead-identity-review-decision.v1` | Leads orchestrator / Identity Review lineage |
+| Audit | `crm.inquiry_created` | P1A governing Audit writer |
+| Audit | `crm.inquiry_held_for_review` | P1A governing Audit writer |
+| Audit | `crm.inquiry_review_resolved` | P1A governing Audit writer |
+| event | `crm.inquiry.created.v1` | Leads |
+| event | `crm.inquiry.review_required.v1` | Identity Review |
+| event | `crm.inquiry.review_resolved.v1` | Identity Review |
+| event | `crm.inquiry.linked.v1` | Leads |
+| event | `crm.contact.created.v1` | Contacts |
+| event | `crm.company.created.v1` | Companies |

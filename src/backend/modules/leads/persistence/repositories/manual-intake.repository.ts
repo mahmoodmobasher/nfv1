@@ -4,7 +4,7 @@ export function manualIntakeRepository(tx: ModuleTransaction) {
   return {
     async findForReplay(workspaceId: string, key: string) {
       return (await tx.query(
-        `select id,request_hash,state,outcome from lead_intakes
+        `select id,request_hash,state,outcome,actor_membership_id,lead_id from lead_intakes
           where workspace_id=$1 and operation='lead-inquiry-intake.v1' and intake_channel='manual' and idempotency_key=$2 for update`,
         [workspaceId, key],
       )).rows[0] ?? null;

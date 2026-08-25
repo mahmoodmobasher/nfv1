@@ -20,3 +20,7 @@ export function canonicalRequestHash(value: unknown): string {
 export async function lockIdempotencyAuthority(tx: ModuleTransaction, scope: string): Promise<void> {
   await tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [scope]);
 }
+
+export async function lockIdentityKeyAuthority(tx: ModuleTransaction, scope: string): Promise<void> {
+  await tx.query("select pg_advisory_xact_lock(hashtextextended($1,7102))", [scope]);
+}

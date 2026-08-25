@@ -22,18 +22,64 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
         [workspaceId, reviewId, candidate.id, candidate.version],
       );
     },
+    async evidence(workspaceId: string, reviewId: string) {
+      return (await tx.query(
+        `select id "candidateId",contact_id "contactId",company_id "companyId",target_version "targetVersion",
+          evidence_kind "evidenceKind",evidence_strength "evidenceStrength"
+         from lead_identity_candidates where workspace_id=$1 and review_id=$2
+         order by case evidence_strength when 'strong' then 1 when 'supplementary' then 2 else 3 end,
+          coalesce(contact_id,company_id),id limit 30`,
+        [workspaceId, reviewId])).rows as Array<Record<string, unknown>>;
+    },
     async lockPending(workspaceId: string, leadId: string) {
       const refs = (await tx.query(
-        `select id,intake_id,lead_id from lead_identity_reviews where workspace_id=$1 and lead_id=$2 and state='pending'`,
+        `select id,intake_id,lead_id from lead_identity_reviews where workspace_id=$1 and lead_id=$2`,
         [workspaceId, leadId],
       )).rows[0];
       if (!refs) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
       const intake = (await tx.query(`select version from lead_intakes where workspace_id=$1 and id=$2 for update`, [workspaceId, refs.intake_id])).rows[0];
       const lead = (await tx.query(`select version,owner_membership_id,visibility from leads where workspace_id=$1 and id=$2 for update`, [workspaceId, refs.lead_id])).rows[0];
-      const review = (await tx.query(`select * from lead_identity_reviews where workspace_id=$1 and id=$2 and state='pending' for update`, [workspaceId, refs.id])).rows[0];
+      const review = (await tx.query(`select * from lead_identity_reviews where workspace_id=$1 and id=$2 for update`, [workspaceId, refs.id])).rows[0];
       if (!intake || !lead || !review) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      if (review.state !== "pending") throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return { ...review, intake_version: intake.version, lead_version: lead.version,
         owner_membership_id: lead.owner_membership_id, visibility: lead.visibility };
+    },
+    async lockDisclosure(workspaceId: string, reviewId: string) {
+      const refs = (await tx.query(
+        `select intake_id,lead_id from lead_identity_reviews where workspace_id=$1 and id=$2`, [workspaceId, reviewId])).rows[0];
+      if (!refs) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      const intake = (await tx.query(`select version from lead_intakes where workspace_id=$1 and id=$2 for update`,
+        [workspaceId, refs.intake_id])).rows[0];
+      const lead = (await tx.query(
+        `select id,version,owner_membership_id,responsible_team_id,visibility from leads where workspace_id=$1 and id=$2 for update`,
+        [workspaceId, refs.lead_id])).rows[0];
+      const review = (await tx.query(`select id,version,state from lead_identity_reviews where workspace_id=$1 and id=$2 for update`,
+        [workspaceId, reviewId])).rows[0];
+      await tx.query(`select decision_id from lead_identity_decision_heads where workspace_id=$1 and intake_id=$2 for update`,
+        [workspaceId, refs.intake_id]);
+      if (!intake || !lead || !review) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return { ...lead, review_id: review.id, review_version: review.version, review_state: review.state,
+        intake_id: refs.intake_id, intake_version: intake.version };
+    },
+    async assertPendingVersions(input: { workspaceId: string; reviewId: string; leadId: string; intakeId: string;
+      expectedReviewVersion: number; expectedLeadVersion: number; expectedIntakeVersion: number; expectedHead?: string }) {
+      const row = (await tx.query(
+        `select 1 from lead_identity_reviews r join leads l on l.workspace_id=r.workspace_id and l.id=r.lead_id
+          join lead_intakes i on i.workspace_id=r.workspace_id and i.id=r.intake_id
+          join lead_identity_decision_heads h on h.workspace_id=r.workspace_id and h.intake_id=r.intake_id
+          where r.workspace_id=$1 and r.id=$2 and r.lead_id=$3 and r.intake_id=$4 and r.state='pending'
+            and r.version=$5 and l.version=$6 and i.version=$7 and ($8::uuid is null or h.decision_id=$8)`,
+        [input.workspaceId, input.reviewId, input.leadId, input.intakeId, input.expectedReviewVersion,
+          input.expectedLeadVersion, input.expectedIntakeVersion, input.expectedHead ?? null])).rows[0];
+      if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
+    },
+    async targetSnapshot(workspaceId: string, reviewId: string, type: "contact" | "company") {
+      const column = type === "contact" ? "contact_id" : "company_id";
+      return (await tx.query(
+        `select ${column} id,target_version version from lead_identity_candidates
+          where workspace_id=$1 and review_id=$2 and ${column} is not null order by ${column}`,
+        [workspaceId, reviewId])).rows as Array<{ id: string; version: number }>;
     },
     async candidate(workspaceId: string, reviewId: string, candidateId: string, target: "contact" | "company") {
       const column = target === "contact" ? "contact_id" : "company_id";
@@ -48,7 +94,7 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
     async findDecisionReceipt(workspaceId: string, key: string) {
       return (await tx.query(
         `select d.request_hash,d.request_id,d.id,d.governing_outcome,d.contact_id,d.company_id,d.result_lead_version,d.result_review_version,
-                r.lead_id,r.id review_id
+                d.actor_membership_id,r.lead_id,r.id review_id,r.intake_id
            from lead_identity_decisions d join lead_identity_reviews r on r.workspace_id=d.workspace_id and r.id=d.review_id
           where d.workspace_id=$1 and d.operation='lead-identity-review-decision.v1' and d.idempotency_key=$2`,
         [workspaceId, key],
@@ -84,6 +130,14 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
     },
     async currentHead(workspaceId: string, intakeId: string) {
       return (await tx.query(`select decision_id from lead_identity_decision_heads where workspace_id=$1 and intake_id=$2 for update`, [workspaceId, intakeId])).rows[0]?.decision_id as string | undefined;
+    },
+    async touchPending(workspaceId: string, reviewId: string, expectedVersion: number) {
+      const row = (await tx.query(
+        `update lead_identity_reviews set version=version+1,updated_at=now()
+          where workspace_id=$1 and id=$2 and state='pending' and version=$3 returning version`,
+        [workspaceId, reviewId, expectedVersion])).rows[0];
+      if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
+      return row as { version: number };
     },
     async resolve(workspaceId: string, reviewId: string, expectedVersion: number, actorMembershipId: string) {
       const row = (await tx.query(

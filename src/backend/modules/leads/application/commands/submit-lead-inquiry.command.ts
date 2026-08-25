@@ -4,8 +4,20 @@ import { leadInquiryIntakeCommandV1Schema, LeadIntakeError, type LeadInquiryInta
 import { orchestrateManualLeadInquiryV1 } from "../orchestrators/submit-lead-inquiry.orchestrator";
 
 export async function submitLeadInquiryV1(pool: Pool, input: { actor: TrustedActor; command: LeadInquiryIntakeCommandV1; idempotencyKey: string; requestId?: string }) {
+  const raw = input.command as unknown as Record<string, unknown>;
+  if (raw.contractVersion !== "lead-inquiry-intake.v1") throw new LeadIntakeError("unsupported_contract_version", 400);
   const parsed = leadInquiryIntakeCommandV1Schema.safeParse(input.command);
-  if (!parsed.success) throw new LeadIntakeError("validation_failed", 400, { fields: parsed.error.issues.map(issue => issue.path.join(".")) });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0], path = issue?.path.join(".") ?? "";
+    const custom = issue?.message;
+    const code = custom === "source_platform_required" || custom === "source_platform_not_allowed" ? custom
+      : path === "source.sourceCategory" ? "invalid_source_category"
+      : path === "source.sourcePlatform" ? "invalid_source_platform"
+      : path === "source.sourceMedium" ? "invalid_source_medium"
+      : custom !== "source_detail_required" && (path.startsWith("source.sourceDetail") || path.startsWith("source.campaignContext")) ? "source_detail_too_large"
+      : "validation_failed";
+    throw new LeadIntakeError(code, 400, { fields: parsed.error.issues.map(item => item.path.join(".")) });
+  }
   return orchestrateManualLeadInquiryV1(pool, { ...input, command: parsed.data });
 }
 
