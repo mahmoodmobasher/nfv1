@@ -1,0 +1,25 @@
+import { localDatabase, mutationGuard } from "@/server/http";
+import { tenant } from "@/server/tenant-admin/http";
+import { getIdentityReviewCandidatesV1, resolveIdentityReviewCommandV1Schema } from "@/backend/modules/identity-review";
+import { leadIntakeFailure, leadIntakeJson, resolveLeadIdentityReviewV1 } from "@/backend/modules/leads";
+import { enforceManualIntakeRate } from "@/backend/platform/authorization";
+
+type Context={params:Promise<{workspaceId:string;leadId:string}>};
+
+export async function GET(request:Request,{params}:Context){
+  const{workspaceId,leadId}=await params,{pool}=localDatabase(),requestId=crypto.randomUUID();
+  try{return leadIntakeJson(await getIdentityReviewCandidatesV1(pool,await tenant(pool,request,workspaceId),leadId))}
+  catch(error){return leadIntakeFailure(error,requestId)}finally{await pool.end()}
+}
+
+export async function POST(request:Request,{params}:Context){
+  const blocked=mutationGuard(request);if(blocked)return blocked;
+  const{workspaceId,leadId}=await params,{pool}=localDatabase(),requestId=crypto.randomUUID();
+  try{
+    const context=await tenant(pool,request,workspaceId);await enforceManualIntakeRate(pool,request,context);
+    const key=request.headers.get("idempotency-key");if(!key||key.length<16||key.length>128||!/^\x20-\x7e+$/.test(key))throw Object.assign(new Error("validation_failed"),{code:"validation_failed",status:400});
+    const parsed=resolveIdentityReviewCommandV1Schema.safeParse(await request.json().catch(()=>null));
+    if(!parsed.success)throw Object.assign(new Error("validation_failed"),{code:"validation_failed",status:400});
+    return leadIntakeJson(await resolveLeadIdentityReviewV1(pool,{actor:context,leadId,command:parsed.data,idempotencyKey:key,requestId}));
+  }catch(error){return leadIntakeFailure(error,requestId)}finally{await pool.end()}
+}
