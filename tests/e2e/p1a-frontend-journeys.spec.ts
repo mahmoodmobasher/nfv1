@@ -89,7 +89,8 @@ async function fillMinimumIntake(page: Page, name = "Taylor Browser") {
   await page.locator("#email").fill("taylor@example.test");
 }
 
-function p1aError(code: "authentication_required" | "permission_required" | "resource_not_found" | "validation_failed" | "intake_unavailable"|"stale_version", fields?: string[]) {
+function p1aError(code: "authentication_required" | "permission_required" | "resource_not_found" | "validation_failed" | "intake_unavailable" | "stale_version" |
+  "invalid_match_decision" | "assignment_unavailable" | "rate_limited" | "unexpected_error" | "idempotency_conflict", fields?: string[]) {
   const presentation = {
     authentication_required: ["Authentication is required.", "none", false],
     permission_required: ["This action is not available.", "none", false],
@@ -97,6 +98,11 @@ function p1aError(code: "authentication_required" | "permission_required" | "res
     validation_failed: ["The request is invalid.", "none", false],
     intake_unavailable: ["Lead intake is temporarily unavailable.", "retry_same_request", true],
     stale_version: ["The identity review has changed.", "refetch_identity_review", false],
+    invalid_match_decision: ["The selected identity is no longer available.", "refetch_identity_review", false],
+    assignment_unavailable: ["The selected responsibility is unavailable.", "refetch_identity_review", false],
+    rate_limited: ["Too many requests. Try again later.", "retry_same_request", true],
+    unexpected_error: ["The request could not be completed.", "retry_same_request", true],
+    idempotency_conflict: ["The idempotency key conflicts with a prior request.", "none", false],
   } as const;
   const [message, action, retryable] = presentation[code];
   return { error: { code, message, retryable, reconciliation: { required: action !== "none", action },
@@ -200,6 +206,30 @@ test("editing a held intake body rotates its request identity before commit", as
   expect(requests[1].headers()["idempotency-key"]).not.toBe(requests[0].headers()["idempotency-key"]);
   expect(requests[0].postDataJSON().person.displayName).toBe("Original Body");
   expect(requests[1].postDataJSON().person.displayName).toBe("Edited Body");
+});
+
+test("intake preserves retry keys for rate and unexpected errors and rotates after conflict", async ({ page }) => {
+  await browserFixture(page);
+  const requests: Request[] = [], errors = [p1aError("rate_limited"), p1aError("unexpected_error"), p1aError("idempotency_conflict")];
+  await page.route("**/api/workspaces/*/leads", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    requests.push(route.request());
+    const error = errors.shift();
+    return error ? route.fulfill({ status: error.error.code === "rate_limited" ? 429 : error.error.code === "unexpected_error" ? 500 : 409,
+      contentType: "application/json", body: JSON.stringify(error) }) :
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(successfulIntake(9)) });
+  });
+  await page.goto("/crm/leads/new");
+  await fillMinimumIntake(page, "Reconciliation Key");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await page.getByRole("button", { name: "Create lead" }).click();
+    if (attempt < 3) await expect(page.locator(".error-summary")).toBeFocused();
+  }
+  await expect(page.getByRole("heading", { name: "Lead created." })).toBeVisible();
+  const keys = requests.map(request => request.headers()["idempotency-key"]);
+  expect(keys[1]).toBe(keys[0]);
+  expect(keys[2]).toBe(keys[1]);
+  expect(keys[3]).not.toBe(keys[2]);
 });
 
 test("backend canonical field errors focus, announce, describe, and clear every real control", async ({ page }, testInfo) => {
@@ -319,12 +349,12 @@ test("identity review keeps identifiers out of decision copy and separates Hold 
   expect(decisions[1]).not.toHaveProperty("company");
 });
 
-test("authority loss clears protected detail, selections, and draft and focuses the generic state", async ({ page }, testInfo) => {
+for (const authorityCode of ["authentication_required", "permission_required", "resource_not_found"] as const) test(`decision ${authorityCode} clears protected detail, selections, and draft and focuses the generic state`, async ({ page }, testInfo) => {
   const fixture = await browserFixture(page);
   const email = `authority-${randomUUID()}@example.test`;
   await database.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Existing Authority','existing authority',$2,$2)`,[fixture.workspaceId,email]);
   const held=await submitLeadInquiryV1(database,{actor:fixture.actor,idempotencyKey:randomUUID(),command:{contractVersion:"lead-inquiry-intake.v1",intakeChannel:"manual",person:{displayName:"Existing Authority",email},inquiry:{receivedAt:"2026-08-25T12:00:00.000Z"},source:{sourceCategory:"manual",sourceMedium:"unknown",sourceDetail:{},campaignContext:{},attributionContractVersion:"p1a-attribution-v1"}}});
-  await page.route("**/api/workspaces/*/leads/*/identity-review",async route=>{if(route.request().method()!=="POST")return route.continue();return route.fulfill({status:403,contentType:"application/json",body:JSON.stringify(p1aError("permission_required"))})});
+  await page.route("**/api/workspaces/*/leads/*/identity-review",async route=>{if(route.request().method()!=="POST")return route.continue();const status=authorityCode==="authentication_required"?401:authorityCode==="permission_required"?403:404;return route.fulfill({status,contentType:"application/json",body:JSON.stringify(p1aError(authorityCode))})});
   await page.goto(`/crm/identity-reviews/${held.leadId}`);
   await page.getByRole("radio",{name:/Existing Authority/}).check();
   await page.getByRole("radio",{name:/Dismiss company candidates/}).check();
@@ -334,7 +364,7 @@ test("authority loss clears protected detail, selections, and draft and focuses 
   await expect(page.getByText("Existing Authority",{exact:true})).toHaveCount(0);
   await expect(page.getByText(/matches exactly after normalization/)).toHaveCount(0);
   await expect(page.getByRole("radio")).toHaveCount(0);
-  await page.screenshot({path:testInfo.outputPath("identity-review-authority-loss.png"),fullPage:true});
+  await page.screenshot({path:testInfo.outputPath(`identity-review-${authorityCode}.png`),fullPage:true});
 });
 
 test("stale reconciliation preserves a safe proposal, removes lost candidates, and requires reselection", async ({ page }) => {
@@ -355,6 +385,28 @@ test("stale reconciliation preserves a safe proposal, removes lost candidates, a
   await expect(page.getByRole("radio",{name:/Create new contact/})).toBeVisible();
   await expect(page.getByRole("button",{name:"Apply identity decision"})).toBeDisabled();
 });
+
+test("invalid match and assignment conflicts refetch, preserve safe comparison, and clear selections", async ({ page }) => {
+  const fixture=await browserFixture(page),email=`refetch-${randomUUID()}@example.test`;
+  await database.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Existing Refetch','existing refetch',$2,$2)`,[fixture.workspaceId,email]);
+  const held=await submitLeadInquiryV1(database,{actor:fixture.actor,idempotencyKey:randomUUID(),command:{contractVersion:"lead-inquiry-intake.v1",intakeChannel:"manual",person:{displayName:"Existing Refetch",email},inquiry:{receivedAt:"2026-08-25T12:00:00.000Z"},source:{sourceCategory:"manual",sourceMedium:"unknown",sourceDetail:{},campaignContext:{},attributionContractVersion:"p1a-attribution-v1"}}});
+  await page.goto(`/crm/identity-reviews/${held.leadId}`);
+  const current=await page.evaluate(async({workspaceId,leadId})=>await(await fetch(`/api/workspaces/${workspaceId}/leads/${leadId}/identity-review`,{cache:"no-store"})).json(),{workspaceId:fixture.workspaceId,leadId:held.leadId});
+  const errors=[p1aError("invalid_match_decision"),p1aError("assignment_unavailable")];let posts=0,gets=0;
+  await page.route("**/api/workspaces/*/leads/*/identity-review",async route=>{if(route.request().method()==="POST"){const error=errors[posts++];return route.fulfill({status:409,contentType:"application/json",body:JSON.stringify(error)})}gets++;return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(current)})});
+  for(const code of ["invalid_match_decision","assignment_unavailable"]){await page.getByRole("radio",{name:/Existing Refetch/}).check();await page.getByRole("radio",{name:/Dismiss company candidates/}).check();await page.getByRole("button",{name:"Apply identity decision"}).click();await expect(page.getByRole("status").filter({hasText:"Latest information loaded"})).toBeFocused();await expect(page.getByRole("heading",{name:"Previous proposal — not applied"})).toBeVisible();await expect(page.getByRole("button",{name:"Apply identity decision"})).toBeDisabled();expect(code).toBeTruthy()}
+  expect(posts).toBe(2);expect(gets).toBe(2);
+});
+
+test("decision retry errors preserve one key and idempotency conflict rotates it",async({page})=>{
+ const fixture=await browserFixture(page),email=`decision-key-${randomUUID()}@example.test`;await database.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Decision Key','decision key',$2,$2)`,[fixture.workspaceId,email]);const held=await submitLeadInquiryV1(database,{actor:fixture.actor,idempotencyKey:randomUUID(),command:{contractVersion:"lead-inquiry-intake.v1",intakeChannel:"manual",person:{displayName:"Decision Key",email},inquiry:{receivedAt:"2026-08-25T12:00:00.000Z"},source:{sourceCategory:"manual",sourceMedium:"unknown",sourceDetail:{},campaignContext:{},attributionContractVersion:"p1a-attribution-v1"}}});const requests:Request[]=[],errors=[p1aError("rate_limited"),p1aError("unexpected_error"),p1aError("idempotency_conflict")];
+ await page.route("**/api/workspaces/*/leads/*/identity-review",async route=>{if(route.request().method()!=="POST")return route.continue();requests.push(route.request());const error=errors.shift();if(error)return route.fulfill({status:error.error.code==="rate_limited"?429:error.error.code==="unexpected_error"?500:409,contentType:"application/json",body:JSON.stringify(error)});const command=route.request().postDataJSON();return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({data:{contractVersion:"lead-identity-review-decision-result.v1",outcome:"hold",disposition:"held_for_review",reviewId:held.reviewCaseId,leadId:held.leadId,contactId:null,companyId:null,leadVersion:1,reviewVersion:2,replayed:false,requestId:randomUUID(),nextView:{kind:"identity_review_detail",leadId:held.leadId,reviewId:held.reviewCaseId}}})})});
+ await page.goto(`/crm/identity-reviews/${held.leadId}`);for(let attempt=0;attempt<4;attempt++){await page.getByRole("button",{name:"Hold for review"}).click();if(attempt<3)await expect(page.getByRole("status")).toBeFocused()}await expect(page.getByRole("heading",{name:/Review remains Pending/})).toBeVisible();const keys=requests.map(request=>request.headers()["idempotency-key"]);expect(keys[1]).toBe(keys[0]);expect(keys[2]).toBe(keys[1]);expect(keys[3]).not.toBe(keys[2]);
+});
+
+for(const authorityCode of ["authentication_required","resource_not_found"]as const)test(`GET refresh ${authorityCode} removes protected detail and focuses generic state`,async({page})=>{const fixture=await browserFixture(page),email=`refresh-authority-${randomUUID()}@example.test`;await database.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Refresh Authority','refresh authority',$2,$2)`,[fixture.workspaceId,email]);const held=await submitLeadInquiryV1(database,{actor:fixture.actor,idempotencyKey:randomUUID(),command:{contractVersion:"lead-inquiry-intake.v1",intakeChannel:"manual",person:{displayName:"Refresh Authority",email},inquiry:{receivedAt:"2026-08-25T12:00:00.000Z"},source:{sourceCategory:"manual",sourceMedium:"unknown",sourceDetail:{},campaignContext:{},attributionContractVersion:"p1a-attribution-v1"}}});await page.goto(`/crm/identity-reviews/${held.leadId}`);await page.route("**/api/workspaces/*/leads/*/identity-review",route=>route.request().method()==="POST"?route.fulfill({status:409,contentType:"application/json",body:JSON.stringify(p1aError("stale_version"))}):route.fulfill({status:authorityCode==="authentication_required"?401:404,contentType:"application/json",body:JSON.stringify(p1aError(authorityCode))}));await page.getByRole("radio",{name:/Refresh Authority/}).check();await page.getByRole("radio",{name:/Dismiss company candidates/}).check();await page.getByRole("button",{name:"Apply identity decision"}).click();const state=page.getByRole("alert").filter({hasText:"Review no longer available"});await expect(state).toBeFocused();await expect(page.getByText("Refresh Authority",{exact:true})).toHaveCount(0);await expect(page.getByRole("radio")).toHaveCount(0)});
+
+test("initial unavailable review discloses no protected detail",async({page})=>{await browserFixture(page);await page.goto("/crm/identity-reviews/30000000-0000-4000-8000-000000000099");await expect(page.getByText(/This page could not be found|not found/i)).toBeVisible();await expect(page.getByText(/candidate|matches exactly after normalization/i)).toHaveCount(0)});
 
 test("P1A pages remain operable at an effective 320px and 200% zoom without horizontal overflow", async ({ page }, testInfo) => {
   await browserFixture(page);
