@@ -51,10 +51,17 @@ export const leadInquiryIntakeCommandV1Schema = z.object({
     }
   }),
   requestedAssignment: z.object({
+    responsibleMembershipId: z.string().uuid().optional(),
+    responsibleTeamId: z.string().uuid().optional(),
     membershipId: z.string().uuid().optional(),
     teamId: z.string().uuid().optional(),
+  }).superRefine((assignment, context) => {
+    if (assignment.responsibleMembershipId && assignment.membershipId && assignment.responsibleMembershipId !== assignment.membershipId)
+      context.addIssue({ code: "custom", message: "conflicting_assignment", path: ["responsibleMembershipId"] });
+    if (assignment.responsibleTeamId && assignment.teamId && assignment.responsibleTeamId !== assignment.teamId)
+      context.addIssue({ code: "custom", message: "conflicting_assignment", path: ["responsibleTeamId"] });
   }).optional(),
-});
+}).strict();
 
 export type LeadInquiryIntakeCommandV1 = z.infer<typeof leadInquiryIntakeCommandV1Schema>;
 
@@ -64,14 +71,15 @@ export type LeadInquiryIntakeResultV1 = {
   intakeId: string;
   leadId: string;
   disposition: "created" | "held_for_review" | "replayed";
-  contactId?: string;
-  companyId?: string;
-  reviewCaseId?: string;
+  contactId: string | null;
+  companyId: string | null;
+  reviewCaseId: string | null;
   candidateSummary: CandidateSummaryV1;
   leadVersion: number;
-  reviewVersion?: number;
+  reviewVersion: number | null;
   replayed: boolean;
   requestId: string;
+  nextView: { kind: "lead_detail"; leadId: string } | { kind: "identity_review_detail"; leadId: string; reviewId: string };
 };
 
 export type LegacyLeadCreateV1 = {

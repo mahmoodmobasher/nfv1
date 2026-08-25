@@ -17,6 +17,17 @@ function context(row: Record<string, unknown>): LeadIntakeContext {
 
 export function leadTransactionParticipant(tx: ModuleTransaction) {
   return {
+    async readReviewPresentationContexts(workspaceId: string, refs: Array<{ leadId: string; intakeId: string }>) {
+      if (!refs.length) return [];
+      const leadIds = refs.map(ref => ref.leadId), intakeIds = refs.map(ref => ref.intakeId);
+      return (await tx.query(
+        `select l.*,i.id intake_id,i.version intake_version,d.code lifecycle_code
+           from leads l join lead_intakes i on i.workspace_id=l.workspace_id and i.lead_id=l.id
+           join lead_lifecycle_definitions d on d.id=l.lifecycle_definition_id
+          where l.workspace_id=$1 and l.id=any($2::uuid[]) and i.id=any($3::uuid[])`,
+        [workspaceId, leadIds, intakeIds],
+      )).rows.map(context);
+    },
     async activeStage(workspaceId: string, requestedId?: string) {
       const row = (await tx.query(
         `select id from pipeline_stages where workspace_id=$1 and status='active' and ($2::uuid is null or id=$2)
@@ -70,8 +81,9 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
     },
     async readIntakeLeadContext(workspaceId: string, intakeId: string, leadId: string) {
       const row = (await tx.query(
-        `select l.*,i.version intake_version,i.outcome from lead_intakes i join leads l
+        `select l.*,i.version intake_version,i.outcome,d.code lifecycle_code from lead_intakes i join leads l
           on l.workspace_id=i.workspace_id and l.id=i.lead_id
+          join lead_lifecycle_definitions d on d.id=l.lifecycle_definition_id
           where i.workspace_id=$1 and i.id=$2 and l.id=$3`, [workspaceId, intakeId, leadId])).rows[0];
       if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
       return context(row);

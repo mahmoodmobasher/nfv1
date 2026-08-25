@@ -32,7 +32,12 @@ function asKnownError(error: unknown): never {
 function publicResult(outcome: Record<string, unknown>): LeadInquiryIntakeResultV1 {
   const { _candidateQuery: _private, ...result } = outcome;
   void _private;
-  return result as LeadInquiryIntakeResultV1;
+  const leadId = String(result.leadId), reviewCaseId = result.reviewCaseId ? String(result.reviewCaseId) : null;
+  return { ...result, contactId: result.contactId ? String(result.contactId) : null,
+    companyId: result.companyId ? String(result.companyId) : null, reviewCaseId,
+    reviewVersion: result.reviewVersion ? Number(result.reviewVersion) : null,
+    nextView: reviewCaseId ? { kind: "identity_review_detail", leadId, reviewId: reviewCaseId }
+      : { kind: "lead_detail", leadId } } as LeadInquiryIntakeResultV1;
 }
 
 export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
@@ -118,9 +123,10 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
         throw new LeadIntakeError("stale_version", 409);
       const contactCandidates = selected.contacts, companyCandidates = selected.companies, summary = selected.summary;
 
-      const requestedMembership = input.command.requestedAssignment?.membershipId ??
+      const requestedMembership = input.command.requestedAssignment?.responsibleMembershipId ??
+        input.command.requestedAssignment?.membershipId ??
         (input.compatibility ? input.actor.membershipId : null);
-      const requestedTeam = input.command.requestedAssignment?.teamId ?? null;
+      const requestedTeam = input.command.requestedAssignment?.responsibleTeamId ?? input.command.requestedAssignment?.teamId ?? null;
       const authority = workspaceAuthorityParticipant(tx);
       await authority.lockReferences({ workspaceId: actorLookup.workspaceId, membershipIds: [actorLookup.membershipId, requestedMembership],
         teamIds: [requestedTeam, ...(input.compatibility?.teamIds ?? [])] });
@@ -145,7 +151,9 @@ export async function orchestrateManualLeadInquiryV1(pool: Pool, input: {
       const baseResult: LeadInquiryIntakeResultV1 = {
         contractVersion: LEAD_INQUIRY_INTAKE_RESULT, intakeId: intake.id, leadId: lead.id,
         disposition: reviewId ? "held_for_review" : "created", candidateSummary: summary, leadVersion: lead.version,
-        ...(reviewId ? { reviewCaseId: reviewId, reviewVersion: 1 } : {}), replayed: false, requestId,
+        contactId: null, companyId: null, reviewCaseId: reviewId ?? null, reviewVersion: reviewId ? 1 : null,
+        replayed: false, requestId, nextView: reviewId ? { kind: "identity_review_detail", leadId: lead.id, reviewId }
+          : { kind: "lead_detail", leadId: lead.id },
       };
       const committed = await receipts.commit(actor.workspaceId, intake.id, lead.id, { ...baseResult, _candidateQuery: candidateQuery });
       let review: { id: string; version: number } | undefined;

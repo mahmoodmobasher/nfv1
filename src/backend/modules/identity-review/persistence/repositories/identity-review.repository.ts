@@ -4,6 +4,38 @@ import type { CompanyCandidateV1 } from "@/backend/modules/companies";
 
 export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
   return {
+    async listPendingPage(input: { workspaceId: string; beforeUpdatedAt: string | null; beforeId: string | null;
+      limit: number; evidence: "any" | "email" | "phone" | "name_company" }) {
+      return (await tx.query(
+        `with selected as materialized (
+          select r.id,r.workspace_id,r.intake_id,r.lead_id,r.version,r.updated_at
+            from lead_identity_reviews r
+           where r.workspace_id=$1 and r.state='pending'
+             and ($2::timestamptz is null or (r.updated_at,r.id)<($2::timestamptz,$3::uuid))
+             and ($4='any' or exists(select 1 from lead_identity_candidates f
+               where f.workspace_id=r.workspace_id and f.review_id=r.id and f.evidence_kind=$4))
+           order by r.updated_at desc,r.id desc limit $5
+        ) select r.id "reviewId",r.intake_id "intakeId",r.lead_id "leadId",r.version "reviewVersion",r.updated_at "updatedAt",
+            least(count(c.id) filter(where c.evidence_strength='strong'),10)::int "strongCount",
+            least(count(c.id) filter(where c.evidence_strength='supplementary'),10)::int "supplementaryCount",
+            least(count(c.id) filter(where c.evidence_strength='probable'),10)::int "probableCount"
+           from selected r
+           left join lead_identity_candidates c on c.workspace_id=r.workspace_id and c.review_id=r.id
+          group by r.id,r.intake_id,r.lead_id,r.version,r.updated_at order by r.updated_at desc,r.id desc limit $5`,
+        [input.workspaceId, input.beforeUpdatedAt, input.beforeId, input.evidence, input.limit],
+      )).rows as Array<{ reviewId: string; intakeId: string; leadId: string; reviewVersion: number; updatedAt: Date;
+        strongCount: number; supplementaryCount: number; probableCount: number }>;
+    },
+    async queueTargetSnapshots(workspaceId: string, reviewIds: string[]) {
+      if (!reviewIds.length) return [];
+      return (await tx.query(
+        `with ranked as (
+          select *,row_number() over(partition by review_id,evidence_kind order by coalesce(contact_id,company_id),id) rank
+            from lead_identity_candidates where workspace_id=$1 and review_id=any($2::uuid[])
+        ) select review_id "reviewId",contact_id "contactId",company_id "companyId",target_version "targetVersion"
+            from ranked where rank<=10 order by review_id,coalesce(contact_id,company_id),id`, [workspaceId, reviewIds],
+      )).rows as Array<{ reviewId: string; contactId: string | null; companyId: string | null; targetVersion: number }>;
+    },
     async open(workspaceId: string, intakeId: string, leadId: string, reviewId: string) {
       return (await tx.query(
         `insert into lead_identity_reviews(id,workspace_id,intake_id,lead_id) values($4,$1,$2,$3) returning id,version`,
@@ -24,9 +56,11 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
     },
     async evidence(workspaceId: string, reviewId: string) {
       return (await tx.query(
-        `select id "candidateId",contact_id "contactId",company_id "companyId",target_version "targetVersion",
-          evidence_kind "evidenceKind",evidence_strength "evidenceStrength"
-         from lead_identity_candidates where workspace_id=$1 and review_id=$2
+        `with ranked as (
+          select *,row_number() over(partition by evidence_kind order by coalesce(contact_id,company_id),id) rank
+            from lead_identity_candidates where workspace_id=$1 and review_id=$2
+        ) select id "candidateId",contact_id "contactId",company_id "companyId",target_version "targetVersion",
+          evidence_kind "evidenceKind",evidence_strength "evidenceStrength" from ranked where rank<=10
          order by case evidence_strength when 'strong' then 1 when 'supplementary' then 2 else 3 end,
           coalesce(contact_id,company_id),id limit 30`,
         [workspaceId, reviewId])).rows as Array<Record<string, unknown>>;

@@ -16,8 +16,9 @@ export type LeadIdentityReviewDecisionResultV1 = {
   contractVersion: "lead-identity-review-decision-result.v1";
   outcome: "hold" | "resolve";
   disposition: "held_for_review" | "resolved" | "replayed";
-  reviewId: string; leadId: string; contactId?: string; companyId?: string;
+  reviewId: string; leadId: string; contactId: string | null; companyId: string | null;
   leadVersion: number; reviewVersion: number; replayed: boolean; requestId: string;
+  nextView: { kind: "identity_review_detail"; leadId: string; reviewId: string } | { kind: "identity_review_queue" };
 };
 export type ResolveLeadIdentityReviewResultV1 = LeadIdentityReviewDecisionResultV1;
 
@@ -49,8 +50,10 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         await authorizeDisclosure(tx, input.actor, disclosure, receipt.actor_membership_id);
         return { contractVersion: "lead-identity-review-decision-result.v1", outcome: receipt.governing_outcome,
           disposition: "replayed", reviewId: receipt.review_id, leadId: receipt.lead_id,
-          ...(receipt.contact_id ? { contactId: receipt.contact_id } : {}), ...(receipt.company_id ? { companyId: receipt.company_id } : {}),
-          leadVersion: receipt.result_lead_version, reviewVersion: receipt.result_review_version, replayed: true, requestId: receipt.request_id };
+          contactId: receipt.contact_id ?? null, companyId: receipt.company_id ?? null,
+          leadVersion: receipt.result_lead_version, reviewVersion: receipt.result_review_version, replayed: true, requestId: receipt.request_id,
+          nextView: receipt.governing_outcome === "hold" ? { kind: "identity_review_detail", leadId: receipt.lead_id, reviewId: receipt.review_id }
+            : { kind: "identity_review_queue" } };
       }
 
       const trusted = await lookupActiveActor(tx, input.actor);
@@ -177,8 +180,9 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
           payload: { schemaVersion: 1, workspaceId: actor.workspaceId, leadId: lead.id, leadVersion: lead.version,
             reviewId: reviewsLocked.id, reviewVersion: held.version, disposition: "held_for_review", requestId } }] });
         return { contractVersion: "lead-identity-review-decision-result.v1", outcome: "hold", disposition: "held_for_review",
-          reviewId: reviewsLocked.id, leadId: lead.id, leadVersion: lead.version, reviewVersion: held.version,
-          replayed: false, requestId };
+          reviewId: reviewsLocked.id, leadId: lead.id, contactId: null, companyId: null,
+          leadVersion: lead.version, reviewVersion: held.version, replayed: false, requestId,
+          nextView: { kind: "identity_review_detail", leadId: lead.id, reviewId: reviewsLocked.id } };
       }
 
       let companyId: string | null = null, companyVersion: number | null = null, companyCreated = false;
@@ -229,9 +233,9 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
         aggregateId: reviewsLocked.lead_id, resultVersion: updatedLead.version, payload: basePayload });
       await writeDomainEventSet(tx, { workspaceId: actor.workspaceId, operationId: decision.id, events });
       return { contractVersion: "lead-identity-review-decision-result.v1", outcome: "resolve", disposition: "resolved",
-        reviewId: reviewsLocked.id, leadId: reviewsLocked.lead_id, ...(contactId ? { contactId } : {}),
-        ...(companyId ? { companyId } : {}), leadVersion: updatedLead.version, reviewVersion: updatedReview.version,
-        replayed: false, requestId };
+        reviewId: reviewsLocked.id, leadId: reviewsLocked.lead_id, contactId, companyId,
+        leadVersion: updatedLead.version, reviewVersion: updatedReview.version,
+        replayed: false, requestId, nextView: { kind: "identity_review_queue" } };
     });
   } catch (error) {
     if (error instanceof LeadIntakeError) throw error;

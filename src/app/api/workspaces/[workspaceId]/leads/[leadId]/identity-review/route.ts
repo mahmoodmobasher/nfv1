@@ -1,14 +1,14 @@
 import { localDatabase, mutationGuard } from "@/server/http";
 import { tenant } from "@/server/tenant-admin/http";
 import { identityReviewDecisionCommandV1Schema } from "@/backend/modules/identity-review";
-import { decideLeadIdentityReviewV1, getIdentityReviewCandidatesV1, leadIntakeFailure, leadIntakeJson } from "@/backend/modules/leads";
+import { decideLeadIdentityReviewV1, getIdentityReviewDetailV1, leadIntakeFailure, leadIntakeJson } from "@/backend/modules/leads";
 import { enforceManualIntakeRate } from "@/backend/platform/authorization";
 
 type Context={params:Promise<{workspaceId:string;leadId:string}>};
 
 export async function GET(request:Request,{params}:Context){
   const{workspaceId,leadId}=await params,{pool}=localDatabase(),requestId=crypto.randomUUID();
-  try{return leadIntakeJson(await getIdentityReviewCandidatesV1(pool,await tenant(pool,request,workspaceId),leadId))}
+  try{return leadIntakeJson(await getIdentityReviewDetailV1(pool,await tenant(pool,request,workspaceId),leadId,requestId))}
   catch(error){return leadIntakeFailure(error,requestId)}finally{await pool.end()}
 }
 
@@ -24,5 +24,5 @@ export async function POST(request:Request,{params}:Context){
     const parsed=identityReviewDecisionCommandV1Schema.safeParse(body);
     if(!parsed.success)throw Object.assign(new Error("validation_failed"),{code:"validation_failed",status:400});
     return leadIntakeJson(await decideLeadIdentityReviewV1(pool,{actor:context,leadId,command:parsed.data,idempotencyKey:key,requestId}));
-  }catch(error){return leadIntakeFailure(error,requestId)}finally{await pool.end()}
+  }catch(error){return leadIntakeFailure(error,requestId,{kind:"identity_review_detail",leadId})}finally{await pool.end()}
 }

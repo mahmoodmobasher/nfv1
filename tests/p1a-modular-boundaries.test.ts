@@ -32,8 +32,10 @@ const ownedByModule: Record<string, Set<string>> = {
   "identity-review": new Set(["lead_identity_reviews", "lead_identity_candidates", "lead_identity_decisions", "lead_identity_decision_heads"]),
 };
 function sqlTables(source: string) {
+  const ctes = new Set([...source.matchAll(/\b(?:with|,)\s*([a-z][a-z0-9_]*)\s+as\s+(?:materialized\s+)?\(/gi)]
+    .map(match => match[1].toLowerCase()));
   return [...source.matchAll(/\b(?:from|join|insert\s+into|update\s+(?!of\b)|delete\s+from)\s*([a-z][a-z0-9_]*)/gi)]
-    .map(match => match[1].toLowerCase());
+    .map(match => match[1].toLowerCase()).filter(table => !ctes.has(table));
 }
 function sqlOwnershipViolations(path: string, source: string) {
   const moduleName = path.split("/")[3];
@@ -96,6 +98,8 @@ describe("P1A modular-monolith boundaries", () => {
       .toEqual(["mystery_table"]);
     expect(sqlOwnershipViolations("src/backend/modules/companies/application/read-models/contact-company-candidate.read-model.ts",
       "select * from contacts join companies on true")).toEqual([]);
+    expect(sqlOwnershipViolations("src/backend/modules/identity-review/persistence/x.ts",
+      "with selected as materialized (select * from lead_identity_reviews) select * from selected")).toEqual([]);
     expect(platformSqlViolations("src/backend/platform/audit/x.ts", "insert into leads(id) values(1)")).toEqual(["leads"]);
   });
 
@@ -112,16 +116,16 @@ describe("P1A modular-monolith boundaries", () => {
   it("keeps stable operations/events unique, registered, and fixture-locked", () => {
     const fixture = JSON.parse(readFileSync("tests/fixtures/p1a-contract-v1.json", "utf8")) as Record<string, string[]>;
     const stableSection = registry.split("## Stable identity inventory")[1] ?? "";
-    const identities = [...stableSection.matchAll(/^\| (?:operation|Audit|event) \| `([^`]+)` \|/gm)].map(match => match[1]);
+    const identities = [...stableSection.matchAll(/^\| (?:operation|query|Audit|event) \| `([^`]+)` \|/gm)].map(match => match[1]);
     expect(duplicate(identities)).toBeUndefined();
-    for (const identity of [...fixture.operations, ...fixture.auditActions, ...fixture.events]) expect(identities).toContain(identity);
+    for (const identity of [...fixture.operations, ...fixture.queries, ...fixture.auditActions, ...fixture.events]) expect(identities).toContain(identity);
     expect(duplicate(["one", "one"])).toBe("one");
     expect(stableSection.includes("missing-operation.v1")).toBe(false);
   });
 
   it("requires public operations in manifests/registry and forbids wildcard repository exports", () => {
     const leadManifest = readFileSync("src/backend/modules/leads/README.md", "utf8");
-    for (const operation of ["submitLeadInquiryV1", "decideLeadIdentityReviewV1"])
+    for (const operation of ["submitLeadInquiryV1", "getIdentityReviewDetailV1", "listIdentityReviewQueueV1", "decideLeadIdentityReviewV1"])
       expect(`${registry}\n${leadManifest}`).toContain(operation);
     for (const moduleName of modules) expect(readFileSync(`src/backend/modules/${moduleName}/index.ts`, "utf8")).not.toMatch(/export \* /);
     expect("manifest without operation".includes("submitLeadInquiryV1")).toBe(false);

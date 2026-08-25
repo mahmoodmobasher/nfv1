@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { decideLeadIdentityReviewV1, getIdentityReviewCandidatesV1, submitLeadInquiryV1,
+import { decideLeadIdentityReviewV1, getIdentityReviewCandidatesV1, listIdentityReviewQueueV1, submitLeadInquiryV1,
   resolveLeadIdentityReviewV1 } from "../src/backend/modules/leads";
 import type { TrustedActor } from "../src/backend/platform/authorization";
 
@@ -74,8 +74,12 @@ suite("P1A manual intake modular transaction", () => {
     const f = await fixture(), key = randomUUID(), input = command();
     const first = await submitLeadInquiryV1(pool, { actor: f.owner, command: input, idempotencyKey: key });
     const replay = await submitLeadInquiryV1(pool, { actor: f.owner, command: input, idempotencyKey: key });
-    expect(first).toMatchObject({ disposition: "created", replayed: false, candidateSummary: { strong: 0, supplementary: 0, probable: 0 } });
-    expect(replay).toMatchObject({ leadId: first.leadId, intakeId: first.intakeId, disposition: "replayed", replayed: true, requestId: first.requestId });
+    expect(first).toMatchObject({ disposition: "created", contactId: null, companyId: null, reviewCaseId: null,
+      reviewVersion: null, replayed: false, candidateSummary: { strong: 0, supplementary: 0, probable: 0 },
+      nextView: { kind: "lead_detail", leadId: first.leadId } });
+    expect(replay).toMatchObject({ leadId: first.leadId, intakeId: first.intakeId, disposition: "replayed", replayed: true,
+      contactId: null, companyId: null, reviewCaseId: null, reviewVersion: null, requestId: first.requestId,
+      nextView: { kind: "lead_detail", leadId: first.leadId } });
     expect((await pool.query("select count(*)::int count from leads")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from audit_events where action='crm.inquiry_created'")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from outbox_messages where topic='crm.inquiry.created.v1'")).rows[0].count).toBe(1);
@@ -118,10 +122,84 @@ suite("P1A manual intake modular transaction", () => {
     expect(held).toMatchObject({ disposition: "held_for_review", candidateSummary: { strong: 1 }, reviewVersion: 1 });
     const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
     expect(view.candidates).toHaveLength(1);
-    expect(view.candidates[0]).toMatchObject({ targetType: "contact", email, evidenceStrength: "strong" });
+    expect(view).toMatchObject({ contractVersion: "lead-identity-review-detail.v1", lead: { maskedEmail: "c***@example.test" },
+      originalAttribution: { sourceCategory: "manual" }, capabilities: { canLinkContact: true, canHold: true, canResolve: true },
+      reconciliation: { status: "current" } });
+    expect(view.candidates[0]).toMatchObject({ targetType: "contact", maskedEmail: "c***@example.test", evidenceStrength: "strong" });
+    expect(JSON.stringify(view)).not.toContain(email);
     await expect(getIdentityReviewCandidatesV1(pool, f.member, held.leadId)).rejects.toMatchObject({ code: "resource_not_found" });
     expect((await pool.query("select count(*)::int count from audit_events where action='crm.inquiry_held_for_review'")).rows[0].count).toBe(1);
     expect((await pool.query("select count(*)::int count from outbox_messages where topic like 'crm.inquiry.%'")).rows[0].count).toBe(2);
+  });
+
+  it("returns an authorized deterministic queue with bounded cursors and current per-row capabilities", async () => {
+    const f = await fixture();
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      values($1,'Queue Candidate','queue candidate','queue@example.test','queue@example.test')`, [f.workspace.id]);
+    await pool.query(`insert into companies(workspace_id,display_name,name_normalized)
+      values($1,'North Labs','north labs')`, [f.workspace.id]);
+    const memberLead = await submitLeadInquiryV1(pool, { actor: f.member, command: command({ person: {
+      displayName: "Member Queue", email: "queue@example.test" }, requestedAssignment: {
+      responsibleMembershipId: f.member.membershipId } }), idempotencyKey: randomUUID() });
+    const ownerLead = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: {
+      displayName: "Owner Queue", email: "queue@example.test" } }), idempotencyKey: randomUUID() });
+    const page1 = await listIdentityReviewQueueV1(pool, f.owner, { assignment: "all", evidence: "any", limit: 1 });
+    expect(page1).toMatchObject({ contractVersion: "lead-identity-review-queue.v1" });
+    expect(page1.items).toHaveLength(1); expect(page1.nextCursor).toBeTruthy();
+    expect(page1.items[0]).toMatchObject({ capabilities: { canLinkContact: true, canLinkCompany: true, canResolve: true },
+      reconciliation: { status: "current" } });
+    const page2 = await listIdentityReviewQueueV1(pool, f.owner, { assignment: "all", evidence: "any", limit: 1,
+      cursor: page1.nextCursor! });
+    expect(page2.items).toHaveLength(1);
+    expect(new Set([...page1.items, ...page2.items].map(item => item.leadId)))
+      .toEqual(new Set([memberLead.leadId, ownerLead.leadId]));
+    const memberQueue = await listIdentityReviewQueueV1(pool, f.member, { assignment: "all", evidence: "email", limit: 50 });
+    expect(memberQueue.items.map(item => item.leadId)).toEqual([memberLead.leadId]);
+    expect(memberQueue.items[0]).toMatchObject({ assignment: { responsibleMembershipId: f.member.membershipId },
+      capabilities: { canCreateContact: true, canLinkContact: false, canDismiss: true, canHold: true, canResolve: true } });
+    expect(JSON.stringify(memberQueue)).not.toContain("queue@example.test");
+    expect((await listIdentityReviewQueueV1(pool, f.member, { assignment: "unassigned", evidence: "any", limit: 50 })).items).toEqual([]);
+    await pool.query("update leads set owner_membership_id=null where workspace_id=$1 and id=$2", [f.workspace.id, memberLead.leadId]);
+    expect((await listIdentityReviewQueueV1(pool, f.member, { assignment: "all", evidence: "any", limit: 50 })).items).toEqual([]);
+    await pool.query("update workspace_memberships set status='suspended' where workspace_id=$1 and id=$2", [f.workspace.id, f.member.membershipId]);
+    await expect(listIdentityReviewQueueV1(pool, f.member, { assignment: "all", evidence: "any", limit: 50 }))
+      .rejects.toMatchObject({ code: "resource_not_found" });
+  });
+
+  it("withholds all candidate details when an evidence target becomes inaccessible", async () => {
+    const f = await fixture(), email = "archived-candidate@example.test";
+    const target = (await pool.query<{ id: string }>(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      values($1,'Archived Candidate','archived candidate',$2,$2) returning id`, [f.workspace.id, email])).rows[0];
+    const held = await submitLeadInquiryV1(pool, { actor: f.owner, command: command({ person: {
+      displayName: "Archived Candidate", email } }), idempotencyKey: randomUUID() });
+    await pool.query("update contacts set status='archived',version=version+1 where id=$1", [target.id]);
+    const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
+    expect(view.candidates).toEqual([]);
+    expect(view).toMatchObject({ reconciliation: { status: "stale", retryable: true, action: "refresh_identity_review" },
+      capabilities: { canCreateContact: false, canLinkContact: false, canDismiss: false, canHold: true, canResolve: false } });
+    expect(JSON.stringify(view)).not.toContain(target.id);
+    expect(JSON.stringify(view)).not.toContain(email);
+    const queue = await listIdentityReviewQueueV1(pool, f.owner, { assignment: "all", evidence: "any", limit: 50 });
+    expect(queue.items[0]).toMatchObject({ candidateSummary: { strong: 0, supplementary: 0, probable: 0 },
+      capabilities: { canCreateContact: false, canLinkContact: false, canDismiss: false, canHold: true, canResolve: false },
+      reconciliation: { status: "stale", retryable: true, action: "refresh_identity_review" } });
+  });
+
+  it("advances a sparse Member cursor across invisible scans without repeating the same range", async () => {
+    const f = await fixture(), email = "sparse-queue@example.test";
+    await pool.query(`insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+      values($1,'Sparse Candidate','sparse candidate',$2,$2)`, [f.workspace.id, email]);
+    const visible = await submitLeadInquiryV1(pool, { actor: f.member, command: command({ person: {
+      displayName: "Visible Oldest", email }, requestedAssignment: { responsibleMembershipId: f.member.membershipId } }),
+      idempotencyKey: randomUUID() });
+    for (let index = 0; index < 25; index++) await submitLeadInquiryV1(pool, { actor: f.owner,
+      command: command({ person: { displayName: `Hidden ${index}`, email } }), idempotencyKey: randomUUID() });
+    let cursor: string | undefined, found: string[] = [];
+    for (let attempt = 0; attempt < 3 && !found.length; attempt++) {
+      const page = await listIdentityReviewQueueV1(pool, f.member, { assignment: "all", evidence: "any", limit: 1, ...(cursor ? { cursor } : {}) });
+      found = page.items.map(item => item.leadId); cursor = page.nextCursor ?? undefined;
+    }
+    expect(found).toEqual([visible.leadId]);
   });
 
   it("lets an Owner atomically link candidates and replays the resolution", async () => {
@@ -155,8 +233,10 @@ suite("P1A manual intake modular transaction", () => {
       .rejects.toMatchObject({ code: "stale_version" });
     const result = await resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: decision, idempotencyKey: key });
     const replay = await resolveLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: decision, idempotencyKey: key });
-    expect(result).toMatchObject({ contactId: contact.id, companyId: company.id, leadVersion: 2, reviewVersion: 2, replayed: false });
-    expect(replay).toMatchObject({ contactId: contact.id, companyId: company.id, replayed: true, requestId: result.requestId });
+    expect(result).toMatchObject({ contactId: contact.id, companyId: company.id, leadVersion: 2, reviewVersion: 2,
+      replayed: false, nextView: { kind: "identity_review_queue" } });
+    expect(replay).toMatchObject({ contactId: contact.id, companyId: company.id, replayed: true, requestId: result.requestId,
+      nextView: { kind: "identity_review_queue" } });
     expect((await pool.query("select state from lead_identity_reviews where id=$1", [view.reviewId])).rows[0].state).toBe("resolved");
     expect((await pool.query("select count(*)::int count from audit_events where action='crm.inquiry_review_resolved'")).rows[0].count).toBe(1);
   });
@@ -172,8 +252,10 @@ suite("P1A manual intake modular transaction", () => {
       expectedLeadVersion: view.leadVersion, expectedReviewVersion: view.reviewVersion, expectedIntakeVersion: view.intakeVersion };
     const result = await decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: decision, idempotencyKey: key });
     const replay = await decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, command: decision, idempotencyKey: key });
-    expect(result).toMatchObject({ outcome: "hold", disposition: "held_for_review", leadVersion: 1, reviewVersion: 2, replayed: false });
-    expect(replay).toMatchObject({ outcome: "hold", disposition: "replayed", reviewVersion: 2, replayed: true });
+    expect(result).toMatchObject({ outcome: "hold", disposition: "held_for_review", contactId: null, companyId: null,
+      leadVersion: 1, reviewVersion: 2, replayed: false, nextView: { kind: "identity_review_detail", leadId: held.leadId } });
+    expect(replay).toMatchObject({ outcome: "hold", disposition: "replayed", contactId: null, companyId: null,
+      reviewVersion: 2, replayed: true, nextView: { kind: "identity_review_detail", leadId: held.leadId } });
     await expect(decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId,
       command: { ...decision, reasonCode: "changed" }, idempotencyKey: key })).rejects.toMatchObject({ code: "idempotency_conflict" });
     expect((await pool.query("select state,version from lead_identity_reviews where id=$1", [view.reviewId])).rows[0]).toMatchObject({ state: "pending", version: 2 });
@@ -389,6 +471,15 @@ suite("P1A manual intake modular transaction", () => {
     const view = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
     expect(view.candidates).toHaveLength(10);
     expect(view.candidates.map(item => item.targetId)).toEqual([...view.candidates.map(item => item.targetId)].sort());
+    for (const targetId of ids.filter(id => !view.candidates.some(item => item.targetId === id))) await pool.query(
+      `insert into lead_identity_candidates(workspace_id,review_id,contact_id,evidence_kind,evidence_strength,
+        normalization_version,target_version,evidence_metadata)
+       values($1,$2,$3,'email','strong','p1a-identity-v1',1,'{"match_key_version":"p1a-identity-v1"}')`,
+      [f.workspace.id, view.reviewId, targetId]);
+    const legacyCapped = await getIdentityReviewCandidatesV1(pool, f.owner, held.leadId);
+    expect(legacyCapped.candidates).toHaveLength(10);
+    expect((await listIdentityReviewQueueV1(pool, f.owner, { assignment: "all", evidence: "email", limit: 50 }))
+      .items[0].candidateSummary.strong).toBe(10);
     const candidate = view.candidates[0];
     await pool.query("update contacts set version=version+1 where workspace_id=$1 and id=$2", [f.workspace.id, candidate.targetId]);
     await expect(decideLeadIdentityReviewV1(pool, { actor: f.owner, leadId: held.leadId, idempotencyKey: randomUUID(), command: {

@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { submitLeadInquiryV1 } from "../src/backend/modules/leads";
 import { writeGoverningAudit } from "../src/backend/platform/audit";
 import { writeDomainEventSet } from "../src/backend/platform/outbox";
+import { assertIdentityReviewPresentationSafe } from "../src/backend/modules/identity-review";
 
 const actor = { userId: crypto.randomUUID(), sessionId: crypto.randomUUID(), workspaceId: crypto.randomUUID(),
   membershipId: crypto.randomUUID(), role: "owner" as const };
@@ -71,5 +72,12 @@ describe("P1A stable errors and privacy allowlists", () => {
       topic: "crm.contact.created.v1", aggregateType: "contact", aggregateId: contactId, resultVersion: 1,
       payload: { schemaVersion: 1, workspaceId: actor.workspaceId, contactId, version: 1, requestId: crypto.randomUUID() } }] }))
       .rejects.toThrow("invalid_p1a_event_set");
+  });
+
+  it("rejects raw identity fields and unbounded protected presentation at runtime", () => {
+    expect(() => assertIdentityReviewPresentationSafe({ contractVersion: "lead-identity-review-detail.v1",
+      candidates: [{ email: "raw@example.test" }] } as never)).toThrow("identity_review_presentation_privacy_violation");
+    expect(() => assertIdentityReviewPresentationSafe({ contractVersion: "lead-identity-review-queue.v1",
+      items: Array.from({ length: 51 }, () => ({})) } as never)).toThrow("identity_review_presentation_unbounded");
   });
 });

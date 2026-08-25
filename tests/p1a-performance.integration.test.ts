@@ -2,7 +2,7 @@ import { performance } from "node:perf_hooks";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { getIdentityReviewCandidatesV1, submitLeadInquiryV1 } from "../src/backend/modules/leads";
+import { getIdentityReviewCandidatesV1, listIdentityReviewQueueV1, submitLeadInquiryV1 } from "../src/backend/modules/leads";
 import type { TrustedActor } from "../src/backend/platform/authorization";
 
 const suite = process.env.RUN_P1A_PERFORMANCE === "1" ? describe : describe.skip;
@@ -97,18 +97,38 @@ suite("P1A representative PostgreSQL performance", () => {
     await pool.query("analyze lead_identity_reviews"); await pool.query("analyze lead_identity_candidates");
     const reviewQueueSql = `select id,lead_id,version from lead_identity_reviews
       where workspace_id=$1 and state='pending' order by updated_at,id limit 50`;
-    const candidateDetailSql = `select id,contact_id,company_id,target_version,evidence_kind,evidence_strength
+    const presentationQueueSql = `with selected as materialized (
+      select r.id,r.workspace_id,r.intake_id,r.lead_id,r.version,r.updated_at from lead_identity_reviews r
+      where r.workspace_id=$1 and r.state='pending' order by r.updated_at desc,r.id desc limit 51
+    ) select r.id,r.intake_id,r.lead_id,r.version,r.updated_at,
+        count(c.id) filter(where c.evidence_strength='strong')::int strong_count
+      from selected r left join lead_identity_candidates c
+        on c.workspace_id=r.workspace_id and c.review_id=r.id
+      group by r.id,r.intake_id,r.lead_id,r.version,r.updated_at order by r.updated_at desc,r.id desc limit 51`;
+    const candidateDetailSql = `with ranked as (
+      select *,row_number() over(partition by evidence_kind order by coalesce(contact_id,company_id),id) rank
       from lead_identity_candidates where workspace_id=$1 and review_id=$2
+    ) select id,contact_id,company_id,target_version,evidence_kind,evidence_strength from ranked where rank<=10
       order by case evidence_strength when 'strong' then 1 when 'supplementary' then 2 else 3 end,
         coalesce(contact_id,company_id),id limit 30`;
+    const reviewIds = (await pool.query<{ id: string }>(`select id from lead_identity_reviews
+      where workspace_id=$1 and state='pending' order by updated_at desc,id desc limit 51`, [workspaceId])).rows.map(row => row.id);
+    const queueTargetSql = `with ranked as (
+      select *,row_number() over(partition by review_id,evidence_kind order by coalesce(contact_id,company_id),id) rank
+      from lead_identity_candidates where workspace_id=$1 and review_id=any($2::uuid[])
+    ) select review_id,contact_id,company_id,target_version from ranked where rank<=10
+      order by review_id,coalesce(contact_id,company_id),id`;
     expect((await pool.query("show enable_seqscan")).rows[0].enable_seqscan).toBe("on");
-    const planNames = ["contact_email", "contact_phone", "contact_name_company", "company_name", "review_queue", "candidate_detail"];
+    const planNames = ["contact_email", "contact_phone", "contact_name_company", "company_name", "review_queue",
+      "presentation_queue", "queue_target_freshness", "candidate_detail"];
     const plans = await Promise.all([
       pool.query(`explain (analyze,buffers,format text) ${emailSql}`, [workspaceId, "person-100000@example.test"]),
       pool.query(`explain (analyze,buffers,format text) ${phoneSql}`, [workspaceId, "+14160099999"]),
       pool.query(`explain (analyze,buffers,format text) ${nameSql}`, [workspaceId, "person 100000", "company 25000"]),
       pool.query(`explain (analyze,buffers,format text) ${companySql}`, [workspaceId, "company 25000"]),
       pool.query(`explain (analyze,buffers,format text) ${reviewQueueSql}`, [workspaceId]),
+      pool.query(`explain (analyze,buffers,format text) ${presentationQueueSql}`, [workspaceId]),
+      pool.query(`explain (analyze,buffers,format text) ${queueTargetSql}`, [workspaceId, reviewIds]),
       pool.query(`explain (analyze,buffers,format text) ${candidateDetailSql}`, [workspaceId, reviewId]),
     ]);
     const planEvidence: Record<string, string> = {};
@@ -123,7 +143,12 @@ suite("P1A representative PostgreSQL performance", () => {
       phoneP95Ms: await latency(phoneSql, [workspaceId, "+14160099999"]),
       nameCompanyP95Ms: await latency(nameSql, [workspaceId, "person 100000", "company 25000"]),
       companyP95Ms: await latency(companySql, [workspaceId, "company 25000"]),
-      reviewQueueP95Ms: await latency(reviewQueueSql, [workspaceId]), candidateDetailP95Ms: 0, manualP95Ms: 0 };
+      reviewQueueP95Ms: 0, candidateDetailP95Ms: 0, manualP95Ms: 0 };
+    const reviewQueue: number[] = [];
+    for (let index = 0; index < 30; index++) { const start = performance.now();
+      const page = await listIdentityReviewQueueV1(pool, actor, { assignment: "all", evidence: "any", limit: 50 });
+      reviewQueue.push(performance.now() - start); expect(page.items).toHaveLength(50); }
+    metrics.reviewQueueP95Ms = percentile95(reviewQueue);
     const candidateDetails: number[] = [];
     for (let index = 0; index < 30; index++) { const start = performance.now();
       await getIdentityReviewCandidatesV1(pool, actor, held.leadId); candidateDetails.push(performance.now() - start); }
