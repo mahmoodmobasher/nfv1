@@ -108,6 +108,13 @@ suite("P1A lead intake schema", () => {
       values($1,'manual',$2,$3,$4,'lead-inquiry-intake.v1','p1a-identity-v1','p1a-attribution-v1','manual','unknown')`;
     await pool.query(statement, [fixture.workspaceId, key, fixture.membershipId, "c".repeat(64)]);
     await expect(pool.query(statement, [fixture.workspaceId, key, fixture.membershipId, "d".repeat(64)])).rejects.toMatchObject({ code: "23505" });
+    const csvStatement = `insert into lead_intakes(
+      workspace_id,intake_channel,idempotency_key,actor_membership_id,request_hash,contract_version,normalization_version,
+      attribution_contract_version,source_category,source_medium)
+      values($1,'csv',$2,$3,$4,'lead-inquiry-intake.v1','p1a-identity-v1','p1a-attribution-v1','import','unknown')`;
+    await pool.query(csvStatement, [fixture.workspaceId, key, fixture.membershipId, "e".repeat(64)]);
+    await expect(pool.query(csvStatement, [fixture.workspaceId, key, fixture.membershipId, "f".repeat(64)]))
+      .rejects.toMatchObject({ code: "23505" });
 
     const result = await createLeadAndIntake(fixture);
     await expect(pool.query(
@@ -124,11 +131,13 @@ suite("P1A lead intake schema", () => {
       [first.workspaceId],
     )).rows[0];
     await pool.query(
-      "insert into contacts(workspace_id,display_name,email_display,email_normalized) values($1,'Shared One','shared@example.test','shared@example.test'),($1,'Shared Two','shared@example.test','shared@example.test')",
+      `insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized,phone_display,phone_normalized,phone_country_code_used)
+       values($1,'Shared One','shared one','shared@example.test','shared@example.test','4165550100','+14165550100','CA'),
+             ($1,'Shared Two','shared two','shared@example.test','shared@example.test','4165550100','+14165550100','CA')`,
       [first.workspaceId],
     );
     await expect(pool.query(
-      "insert into contacts(workspace_id,display_name,company_id) values($1,'Cross Tenant',$2)",
+      "insert into contacts(workspace_id,display_name,person_name_normalized,company_id) values($1,'Cross Tenant','cross tenant',$2)",
       [second.workspaceId, company.id],
     )).rejects.toMatchObject({ code: "23503" });
   });
@@ -165,12 +174,79 @@ suite("P1A lead intake schema", () => {
       [fixture.workspaceId, result.intakeId, decision.id],
     );
     await expect(pool.query(
+      "update lead_identity_reviews set state='resolved',version=2,resolved_at=now(),resolved_by_membership_id=$3 where workspace_id=$1 and id=$2",
+      [fixture.workspaceId, review.id, fixture.membershipId],
+    )).rejects.toMatchObject({ code: "23514" });
+    await expect(pool.query(
       "insert into lead_identity_decision_heads(workspace_id,intake_id,decision_id) values($1,$2,$3)",
       [fixture.workspaceId, result.intakeId, decision.id],
     )).rejects.toMatchObject({ code: "23505" });
     await expect(pool.query(
       "update lead_identity_decisions set reason_code='changed' where id=$1",
       [decision.id],
+    )).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("requires an effective complete resolve decision and accepts every two-dimension action permutation", async () => {
+    const fixture = await workspaceFixture();
+    const actions = ["create", "link", "dismiss"] as const;
+    let resolvedReviewId = "";
+    for (const contactAction of actions) for (const companyAction of actions) {
+      const result = await createLeadAndIntake(fixture);
+      const review = (await pool.query<{ id: string }>(
+        "insert into lead_identity_reviews(workspace_id,intake_id,lead_id) values($1,$2,$3) returning id",
+        [fixture.workspaceId, result.intakeId, result.leadId],
+      )).rows[0];
+      await expect(pool.query(
+        "update lead_identity_reviews set state='resolved',version=2,resolved_at=now(),resolved_by_membership_id=$3 where workspace_id=$1 and id=$2",
+        [fixture.workspaceId, review.id, fixture.membershipId],
+      )).rejects.toMatchObject({ code: "23514" });
+
+      const contact = contactAction === "dismiss" ? null : (await pool.query<{ id: string }>(
+        `insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+         values($1,$2,$3,$4,$4) returning id`,
+        [fixture.workspaceId, `Contact ${randomUUID()}`, `contact ${randomUUID()}`, `${randomUUID()}@example.test`],
+      )).rows[0].id;
+      const company = companyAction === "dismiss" ? null : (await pool.query<{ id: string }>(
+        "insert into companies(workspace_id,display_name,name_normalized) values($1,$2,$3) returning id",
+        [fixture.workspaceId, `Company ${randomUUID()}`, `company ${randomUUID()}`],
+      )).rows[0].id;
+      const contactCandidate = contactAction === "link" ? (await pool.query<{ id: string }>(
+        `insert into lead_identity_candidates(workspace_id,review_id,contact_id,evidence_kind,evidence_strength,normalization_version,target_version)
+         values($1,$2,$3,'email','strong','p1a-identity-v1',1) returning id`,
+        [fixture.workspaceId, review.id, contact],
+      )).rows[0].id : null;
+      const companyCandidate = companyAction === "link" ? (await pool.query<{ id: string }>(
+        `insert into lead_identity_candidates(workspace_id,review_id,company_id,evidence_kind,evidence_strength,normalization_version,target_version)
+         values($1,$2,$3,'name_company','probable','p1a-identity-v1',1) returning id`,
+        [fixture.workspaceId, review.id, company],
+      )).rows[0].id : null;
+      const decision = (await pool.query<{ id: string }>(
+        `insert into lead_identity_decisions(workspace_id,intake_id,review_id,idempotency_key,request_hash,request_id,correlation_id,
+         governing_outcome,contact_action,company_action,contact_id,company_id,contact_candidate_id,company_candidate_id,
+         contact_target_version,company_target_version,actor_membership_id,expected_lead_version,expected_review_version,
+         expected_intake_version,result_lead_version,result_review_version,contract_version,normalization_version)
+         values($1,$2,$3,$4,$5,$6,$7,'resolve',$8,$9,$10,$11,$12,$13,$14,$15,$16,1,1,2,1,2,'p1a-review.v1','p1a-identity-v1') returning id`,
+        [fixture.workspaceId, result.intakeId, review.id, randomUUID(), "7".repeat(64), randomUUID(), randomUUID(),
+          contactAction, companyAction, contact, company, contactCandidate, companyCandidate,
+          contactAction === "dismiss" ? null : 1, companyAction === "dismiss" ? null : 1, fixture.membershipId],
+      )).rows[0];
+      await pool.query(
+        "insert into lead_identity_decision_heads(workspace_id,intake_id,decision_id) values($1,$2,$3)",
+        [fixture.workspaceId, result.intakeId, decision.id],
+      );
+      await pool.query(
+        "update lead_identity_reviews set state='resolved',version=2,resolved_at=now(),resolved_by_membership_id=$3 where workspace_id=$1 and id=$2",
+        [fixture.workspaceId, review.id, fixture.membershipId],
+      );
+      resolvedReviewId = review.id;
+      if (contactCandidate) await expect(pool.query(
+        "update lead_identity_candidates set target_version=2 where id=$1", [contactCandidate],
+      )).rejects.toMatchObject({ code: "23514" });
+    }
+    await expect(pool.query(
+      "update lead_identity_reviews set state='pending',version=3,resolved_at=null,resolved_by_membership_id=null where id=$1",
+      [resolvedReviewId],
     )).rejects.toMatchObject({ code: "23514" });
   });
 
@@ -184,6 +260,47 @@ suite("P1A lead intake schema", () => {
     await pool.query(insert, [fixture.workspaceId, "crm.inquiry.created.v1", result.leadId, operationId]);
     await pool.query(insert, [fixture.workspaceId, "crm.inquiry.review_required.v1", result.leadId, operationId]);
     await expect(pool.query(insert, [fixture.workspaceId, "crm.inquiry.created.v1", result.leadId, operationId])).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("rejects stale selected target versions and stale resolution versions", async () => {
+    const fixture = await workspaceFixture();
+    const result = await createLeadAndIntake(fixture);
+    const review = (await pool.query<{ id: string }>(
+      "insert into lead_identity_reviews(workspace_id,intake_id,lead_id) values($1,$2,$3) returning id",
+      [fixture.workspaceId, result.intakeId, result.leadId],
+    )).rows[0];
+    const contact = (await pool.query<{ id: string }>(
+      `insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+       values($1,'Candidate','candidate','candidate@example.test','candidate@example.test') returning id`,
+      [fixture.workspaceId],
+    )).rows[0];
+    const candidate = (await pool.query<{ id: string }>(
+      `insert into lead_identity_candidates(workspace_id,review_id,contact_id,evidence_kind,evidence_strength,normalization_version,target_version)
+       values($1,$2,$3,'email','strong','p1a-identity-v1',1) returning id`,
+      [fixture.workspaceId, review.id, contact.id],
+    )).rows[0];
+    await pool.query("update contacts set version=2 where workspace_id=$1 and id=$2", [fixture.workspaceId, contact.id]);
+    await expect(pool.query(
+      `insert into lead_identity_decisions(workspace_id,intake_id,review_id,idempotency_key,request_hash,request_id,correlation_id,
+       governing_outcome,contact_action,company_action,contact_id,contact_candidate_id,contact_target_version,actor_membership_id,
+       expected_lead_version,expected_review_version,expected_intake_version,result_lead_version,result_review_version,contract_version,normalization_version)
+       values($1,$2,$3,$4,$5,$6,$7,'resolve','link','dismiss',$8,$9,1,$10,1,1,2,1,2,'p1a-review.v1','p1a-identity-v1')`,
+      [fixture.workspaceId, result.intakeId, review.id, randomUUID(), "8".repeat(64), randomUUID(), randomUUID(), contact.id, candidate.id, fixture.membershipId],
+    )).rejects.toMatchObject({ code: "23514" });
+
+    const staleDecision = (await pool.query<{ id: string }>(
+      `insert into lead_identity_decisions(workspace_id,intake_id,review_id,idempotency_key,request_hash,request_id,correlation_id,
+       governing_outcome,contact_action,company_action,actor_membership_id,expected_lead_version,expected_review_version,
+       expected_intake_version,result_lead_version,result_review_version,contract_version,normalization_version)
+       values($1,$2,$3,$4,$5,$6,$7,'resolve','dismiss','dismiss',$8,1,1,2,1,3,'p1a-review.v1','p1a-identity-v1') returning id`,
+      [fixture.workspaceId, result.intakeId, review.id, randomUUID(), "9".repeat(64), randomUUID(), randomUUID(), fixture.membershipId],
+    )).rows[0];
+    await pool.query("insert into lead_identity_decision_heads(workspace_id,intake_id,decision_id) values($1,$2,$3)",
+      [fixture.workspaceId, result.intakeId, staleDecision.id]);
+    await expect(pool.query(
+      "update lead_identity_reviews set state='resolved',version=2,resolved_at=now(),resolved_by_membership_id=$3 where workspace_id=$1 and id=$2",
+      [fixture.workspaceId, review.id, fixture.membershipId],
+    )).rejects.toMatchObject({ code: "23514" });
   });
 
   it("accepts display-name-only P1A Leads with either email or complete phone evidence", async () => {
@@ -228,11 +345,19 @@ suite("P1A lead intake schema", () => {
        values($1,'manual',$2,$3,$4,'v1','v1','v1','social_media','other_social','unknown')`,
       [fixture.workspaceId, randomUUID(), fixture.membershipId, "1".repeat(64)],
     )).rejects.toMatchObject({ code: "23514" });
+    for (const channel of ["csv", "spreadsheet"]) {
+      await expect(pool.query(
+        `insert into lead_intakes(workspace_id,intake_channel,idempotency_key,request_hash,contract_version,
+         normalization_version,attribution_contract_version,source_category,source_medium)
+         values($1,$2,$3,$4,'v1','v1','v1','import','unknown')`,
+        [fixture.workspaceId, channel, randomUUID(), "0".repeat(64)],
+      )).rejects.toMatchObject({ code: "23514" });
+    }
     await pool.query(
       `insert into lead_intakes(workspace_id,intake_channel,idempotency_key,actor_membership_id,request_hash,
        contract_version,normalization_version,attribution_contract_version,source_category,source_platform,source_medium,source_detail)
-       values($1,'spreadsheet',$2,null,$3,'v1','v1','v1','social_media','other_social','unknown','{"platform_context":"community forum"}')`,
-      [fixture.workspaceId, randomUUID(), "2".repeat(64)],
+       values($1,'spreadsheet',$2,$3,$4,'v1','v1','v1','social_media','other_social','unknown','{"platform_context":"community forum"}')`,
+      [fixture.workspaceId, randomUUID(), fixture.membershipId, "2".repeat(64)],
     );
     const operations = (await pool.query<{ operation: string }>("select distinct operation from lead_intakes")).rows;
     expect(operations).toEqual([{ operation: "lead-inquiry-intake.v1" }]);
@@ -243,7 +368,7 @@ suite("P1A lead intake schema", () => {
     const second = await workspaceFixture();
     const result = await createLeadAndIntake(first);
     const contact = (await pool.query<{ id: string }>(
-      "insert into contacts(workspace_id,display_name,email_display,email_normalized) values($1,'Other','other@example.test','other@example.test') returning id",
+      "insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized) values($1,'Other','other','other@example.test','other@example.test') returning id",
       [second.workspaceId],
     )).rows[0];
     const company = (await pool.query<{ id: string }>(
@@ -289,5 +414,33 @@ suite("P1A lead intake schema", () => {
        values($1,$2,$3,$4,$5,$6,$7,'hold',$8,1,1,2,1,1,'p1a-review.v1','p1a-identity-v1')`,
       [first.workspaceId, result.intakeId, review.id, randomUUID(), "4".repeat(64), randomUUID(), randomUUID(), second.membershipId],
     )).rejects.toMatchObject({ code: "23503" });
+    await expect(pool.query(
+      `insert into lead_identity_decisions(workspace_id,intake_id,review_id,idempotency_key,request_hash,request_id,
+       correlation_id,governing_outcome,contact_action,company_action,contact_id,company_id,contact_target_version,
+       company_target_version,actor_membership_id,expected_lead_version,expected_review_version,expected_intake_version,
+       result_lead_version,result_review_version,contract_version,normalization_version)
+       values($1,$2,$3,$4,$5,$6,$7,'resolve','create','create',$8,$9,1,1,$10,1,1,2,1,2,'p1a-review.v1','p1a-identity-v1')`,
+      [first.workspaceId, result.intakeId, review.id, randomUUID(), "5".repeat(64), randomUUID(), randomUUID(), contact.id, company.id, first.membershipId],
+    )).rejects.toMatchObject({ code: "23503" });
+
+    const secondResult = await createLeadAndIntake(second);
+    const secondReview = (await pool.query<{ id: string }>(
+      "insert into lead_identity_reviews(workspace_id,intake_id,lead_id) values($1,$2,$3) returning id",
+      [second.workspaceId, secondResult.intakeId, secondResult.leadId],
+    )).rows[0];
+    const secondDecision = (await pool.query<{ id: string }>(
+      `insert into lead_identity_decisions(workspace_id,intake_id,review_id,idempotency_key,request_hash,request_id,
+       correlation_id,governing_outcome,actor_membership_id,expected_lead_version,expected_review_version,
+       expected_intake_version,result_lead_version,result_review_version,contract_version,normalization_version)
+       values($1,$2,$3,$4,$5,$6,$7,'hold',$8,1,1,2,1,1,'p1a-review.v1','p1a-identity-v1') returning id`,
+      [second.workspaceId, secondResult.intakeId, secondReview.id, randomUUID(), "6".repeat(64), randomUUID(), randomUUID(), second.membershipId],
+    )).rows[0];
+    await expect(pool.query(
+      `insert into lead_identity_decisions(workspace_id,intake_id,review_id,idempotency_key,request_hash,request_id,
+       correlation_id,supersedes_decision_id,governing_outcome,actor_membership_id,expected_lead_version,
+       expected_review_version,expected_intake_version,result_lead_version,result_review_version,contract_version,normalization_version)
+       values($1,$2,$3,$4,$5,$6,$7,$8,'hold',$9,1,1,2,1,1,'p1a-review.v1','p1a-identity-v1')`,
+      [first.workspaceId, result.intakeId, review.id, randomUUID(), "a".repeat(64), randomUUID(), randomUUID(), secondDecision.id, first.membershipId],
+    )).rejects.toMatchObject({ code: "23514" });
   });
 });

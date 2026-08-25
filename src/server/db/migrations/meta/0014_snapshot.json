@@ -1,6 +1,6 @@
 {
-  "id": "0d4133be-c3d3-450b-af72-94384314b9c9",
-  "prevId": "43861276-df21-4be8-bb70-47543194645d",
+  "id": "fff6b4eb-da2c-4422-a028-739f35a64e42",
+  "prevId": "0d4133be-c3d3-450b-af72-94384314b9c9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2897,7 +2897,7 @@
           "name": "person_name_normalized",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "first_name": {
           "name": "first_name",
@@ -2964,7 +2964,7 @@
           "name": "original_source_category",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "original_source_platform": {
           "name": "original_source_platform",
@@ -3011,7 +3011,8 @@
           "name": "received_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "now()"
         },
         "status": {
           "name": "status",
@@ -3396,6 +3397,14 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "leads_name_check": {
+          "name": "leads_name_check",
+          "value": "length(btrim(\"leads\".\"display_name\")) between 1 and 200 and (\"leads\".\"first_name\" is null or length(btrim(\"leads\".\"first_name\")) between 1 and 100) and (\"leads\".\"last_name\" is null or length(btrim(\"leads\".\"last_name\")) between 1 and 100)"
+        },
+        "leads_normalized_name_check": {
+          "name": "leads_normalized_name_check",
+          "value": "length(\"leads\".\"person_name_normalized\") between 1 and 200 and \"leads\".\"person_name_normalized\"=btrim(\"leads\".\"person_name_normalized\")"
+        },
         "leads_email_pair_check": {
           "name": "leads_email_pair_check",
           "value": "(\"leads\".\"email_display\" is null) = (\"leads\".\"email_normalized\" is null)"
@@ -3419,6 +3428,14 @@
         "leads_source_check": {
           "name": "leads_source_check",
           "value": "\"leads\".\"source\" in ('website','referral','outbound','event','partner','social_media','import','manual','other')"
+        },
+        "leads_original_source_check": {
+          "name": "leads_original_source_check",
+          "value": "\"leads\".\"original_source_category\" in ('website','referral','outbound','event','partner','social_media','import','manual','other')"
+        },
+        "leads_social_platform_check": {
+          "name": "leads_social_platform_check",
+          "value": "coalesce((\"leads\".\"original_source_category\"='social_media' and \"leads\".\"original_source_platform\" in ('tiktok','instagram','facebook','linkedin','x','youtube','other_social') and (\"leads\".\"original_source_platform\"<>'other_social' or length(btrim(coalesce(\"leads\".\"original_source_detail\"->>'platform_context',''))) between 1 and 200)) or (\"leads\".\"original_source_category\"<>'social_media' and \"leads\".\"original_source_platform\" is null),false)"
         },
         "leads_source_medium_check": {
           "name": "leads_source_medium_check",
