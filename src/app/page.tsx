@@ -88,7 +88,7 @@ export default async function Home() {
             <Link href="#product" className="transition-colors hover:text-[var(--nx-link)]">Product</Link>
             <Link href="#workflow" className="transition-colors hover:text-[var(--nx-link)]">How it works</Link>
             <Link href="#ai" className="transition-colors hover:text-[var(--nx-link)]">Responsible AI</Link>
-            <Link href="#plans" className="transition-colors hover:text-[var(--nx-link)]">Plans</Link>
+            <Link href="/select-plan" className="transition-colors hover:text-[var(--nx-link)]">Plans</Link>
             <Link href="#questions" className="transition-colors hover:text-[var(--nx-link)]">FAQ</Link>
           </nav>
 
@@ -121,7 +121,7 @@ export default async function Home() {
               </p>
               <div className="mt-10 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href="#plans"
+                  href="/select-plan"
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--nx-action-primary)] px-7 py-4 font-black text-[var(--nx-action-primary-text)] shadow-lg transition-transform hover:-translate-y-0.5"
                 >
                   Explore plans <ArrowRight className="h-5 w-5" />

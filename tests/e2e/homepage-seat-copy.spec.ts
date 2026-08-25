@@ -36,6 +36,10 @@ for (const viewport of [["desktop", 1440, 900], ["tablet", 768, 1024], ["mobile"
       await expect(page.getByRole("contentinfo")).toBeVisible();
       await expect(page.getByRole("heading", { level: 1, name: "Keep the whole customer journey in view." })).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(viewport[1] >= 1024 ? 1 : 0);
+      await expect(page.getByRole("link", { name: "Explore plans" })).toHaveAttribute("href", "/select-plan");
+      if (viewport[1] >= 1024) {
+        await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Plans" })).toHaveAttribute("href", "/select-plan");
+      }
       await expect(page.getByText("One Workspace subscription includes 1 active seat, Owner included.")).toBeVisible();
       await expect(page.getByText("One Workspace subscription includes 1 active seats, Owner included.")).toHaveCount(0);
       for (const detail of ["$69.99", "$89.99", "$119.99", "Billing is not connected in this environment.", "Contact Sales"]) await expect(page.getByText(detail, { exact: false })).toBeVisible();
