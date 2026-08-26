@@ -89,6 +89,8 @@ suite("DB-06A dormant Lead vNext persistence", () => {
 
   it("enforces run lifecycle, monotonic counts, immutable source identity and deletion", async () => {
     const actor = await fixture(), runId = await createRun(pool, actor);
+    await expect(pool.query(`update lead_vnext_reconciliation_runs set leads_scanned=1,version=2
+      where id=$1`, [runId])).rejects.toThrow();
     await expect(pool.query(`update lead_vnext_reconciliation_runs set state='running',started_at=now(),
       leads_scanned=1,leads_verified=1,version=2 where id=$1`, [runId])).resolves.toBeDefined();
     await expect(pool.query("update lead_vnext_reconciliation_runs set leads_scanned=0,version=3 where id=$1", [runId])).rejects.toThrow();
@@ -138,14 +140,19 @@ suite("DB-06A dormant Lead vNext persistence", () => {
   });
 
   it("keeps issue evidence typed, privacy-safe, immutable and terminal", async () => {
-    const actor = await fixture(), runId = await createRun(pool, actor), sourceId = randomUUID();
+    const actor = await fixture(), runId = await createRun(pool, actor), sourceId = randomUUID(), relatedId = randomUUID();
     await expect(pool.query(`insert into lead_vnext_reconciliation_issues(workspace_id,run_id,stream,source_record_type,
       source_record_id,issue_code,safe_code) values($1,$2,'lead_root','lead',$3,'source_version_changed',$4)`,
       [actor.workspaceId, runId, sourceId, "raw@email.test"])).rejects.toThrow();
     const issueId = (await pool.query<{ id: string }>(`insert into lead_vnext_reconciliation_issues(workspace_id,run_id,
-      stream,source_record_type,source_record_id,issue_code,expected_version,observed_version,safe_code)
-      values($1,$2,'lead_root','lead',$3,'source_version_changed',1,2,'version_changed') returning id`,
-      [actor.workspaceId, runId, sourceId])).rows[0].id;
+      stream,source_record_type,source_record_id,issue_code,expected_version,observed_version,related_record_id,safe_code)
+      values($1,$2,'lead_root','lead',$3,'source_version_changed',1,2,$4,'version_changed') returning id`,
+      [actor.workspaceId, runId, sourceId, relatedId])).rows[0].id;
+    for (const evidenceMutation of [
+      "expected_version=2", "observed_version=3", `related_record_id='${randomUUID()}'`, "safe_code='rewritten'",
+    ]) await expect(pool.query(`update lead_vnext_reconciliation_issues set ${evidenceMutation},state='resolved',
+      resolution_code='reconciled',resolved_at=now(),resolved_by_membership_id=$2,version=2 where id=$1`,
+    [issueId, actor.membershipId])).rejects.toThrow();
     await pool.query(`update lead_vnext_reconciliation_issues set state='resolved',resolution_code='reconciled',
       resolved_at=now(),resolved_by_membership_id=$2,version=2 where id=$1`, [issueId, actor.membershipId]);
     await expect(pool.query("update lead_vnext_reconciliation_issues set version=3 where id=$1", [issueId])).rejects.toThrow();
@@ -196,10 +203,12 @@ suite("DB-06A dormant Lead vNext persistence", () => {
         await client.query("begin");
         await client.query(`insert into lead_vnext_mappings(workspace_id,lead_id,source_version,reconciliation_run_id,
           governing_operation_id) values($1,$2,1,$3,$4)`, [actor.workspaceId, lead.id, runId, randomUUID()]);
-        await client.query(`insert into lead_vnext_reconciliation_issues(workspace_id,run_id,stream,source_record_type,
-          source_record_id,issue_code,state,resolution_code,resolved_at,resolved_by_membership_id)
-          values($1,$2,'lead_root','lead',$3,'authority_conflict','resolved','reconciled',now(),$4)`,
-        [actor.workspaceId, runId, lead.id, foreign.membershipId]);
+        const issueId = (await client.query<{ id: string }>(`insert into lead_vnext_reconciliation_issues(workspace_id,
+          run_id,stream,source_record_type,source_record_id,issue_code)
+          values($1,$2,'lead_root','lead',$3,'authority_conflict') returning id`,
+        [actor.workspaceId, runId, lead.id])).rows[0].id;
+        await client.query(`update lead_vnext_reconciliation_issues set state='resolved',resolution_code='reconciled',
+          resolved_at=now(),resolved_by_membership_id=$2,version=2 where id=$1`, [issueId, foreign.membershipId]);
         await client.query("commit");
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
     })()).rejects.toThrow();
