@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../frontend/design-system/tokens.css";
+@import "../frontend/design-system/components.css";
 
 /* P1A feature-scoped surfaces */
 .product-shell .p1a-form{display:grid;gap:1.5rem}.product-shell .p1a-form section{display:grid;gap:.85rem}.product-shell .p1a-readonly{display:grid;gap:.2rem;padding:1rem;border:1px solid var(--border);border-radius:.75rem;background:var(--surface-muted)}.product-shell .p1a-result{display:grid;gap:1rem}.product-shell .p1a-form details{border:1px solid var(--border);border-radius:.75rem;padding:1rem}.product-shell .p1a-form summary{cursor:pointer;font-weight:700}
