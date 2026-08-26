@@ -8,7 +8,7 @@ function files(root: string): string[] {
     return statSync(path).isDirectory() ? files(path) : [path];
   });
 }
-const modules = ["leads", "contacts", "companies", "identity-review"];
+const modules = ["leads", "contacts", "companies", "identity-review", "notes"];
 const moduleFiles = files("src/backend/modules").filter((path) =>
   path.endsWith(".ts"),
 );
@@ -95,6 +95,11 @@ const ownedByModule: Record<string, Set<string>> = {
     "teams",
     "team_memberships",
   ]),
+  notes: new Set([
+    "note_records",
+    "note_revisions",
+    "note_record_references",
+  ]),
   "identity-review": new Set([
     "lead_identity_reviews",
     "lead_identity_candidates",
@@ -106,7 +111,7 @@ function sqlTables(source: string) {
   const ctes = new Set(
     [
       ...source.matchAll(
-        /\b(?:with|,)\s*([a-z][a-z0-9_]*)\s+as\s+(?:materialized\s+)?\(/gi,
+        /\b(?:with(?:\s+recursive)?|,)\s*([a-z][a-z0-9_]*)(?:\s*\([^)]*\))?\s+as\s+(?:materialized\s+)?\(/gi,
       ),
     ].map((match) => match[1].toLowerCase()),
   );
@@ -189,6 +194,9 @@ describe("P1A modular-monolith boundaries", () => {
         "lead_identity_decision_heads",
         "audit_events",
         "outbox_messages",
+        "note_records",
+        "note_revisions",
+        "note_record_references",
       ];
     required.push("idempotency_records");
     expect(duplicate(rows.map((row) => row.table))).toBeUndefined();

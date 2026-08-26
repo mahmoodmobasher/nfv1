@@ -9,6 +9,7 @@
 | P1A Identity Review | Deferred | `src/backend/modules/identity-review/index.ts` | No direct application route authority; consumed by Leads route operations | evidence and Hold/Resolve lineage participants | `lead_identity_reviews`; `lead_identity_candidates`; `lead_identity_decisions`; `lead_identity_decision_heads` | Contact/Company public types only; Platform database | Review events selected by Leads orchestrator | P1A manual-intake integration and route suites | Frozen P1A Product/data authority | Dev2 backend; Dev3 schema |
 | CUSTOMER-GRAPH-01 | Backend active; frontend contract available | `src/backend/modules/customer-graph/index.ts` | Workspace-scoped Company/Contact list, detail, create, edit, archive, restore; Contact affiliation replacement | Strict v1 commands/queries; legacy roots read-only | DB-05A Company/Contact roots, identity/domain points, affiliations and visibility rows through the reviewed coordinator | Platform authorization/idempotency/Audit/Outbox/database; current Membership/Team facts | Minimal Company/Contact lifecycle and affiliation events | Contract/privacy, atomic PostgreSQL, concurrency, route, type/lint/build | Product fast-track decision on `c5209634…` | Dev2 backend |
 | DEALS-01 manual Sales | Backend active; strict frontend contract available | `src/backend/modules/sales/index.ts` | Workspace-scoped pipeline bootstrap, Deal list/Board/detail/create/edit/stage transition/archive/restore | `sales-deal-create.v1`; `sales-deal-update.v1`; `sales-deal-stage-transition.v1`; `sales-deal-archive.v1`; `sales-deal-restore.v1` | DB-08A Sales pipeline/stage/Deal/party/visibility/transition tables; conversion lineage remains dormant | Customer Graph typed party participant; Platform authorization/idempotency/Audit/Outbox/database and current Membership/Team facts | Minimal Sales Deal lifecycle events | Strict contract, privacy, atomic PostgreSQL, replay/concurrency/current-authority, type/lint/build | DB-08C / DEALS-01 Product delegation from `87ee428c…` | Dev2 backend |
+| Contact Internal Notes | Backend active; strict add/list contract | `src/backend/modules/notes/index.ts` | Workspace-scoped `GET/POST .../contacts/:contactId/notes` | `addContactInternalNoteV1`; `listContactInternalNotesV1` | Notes roots, append-only revisions, and polymorphic references | Customer Graph public Contact target participant; Platform authorization/idempotency/Audit/Outbox/database | `crm.contact.internal_note_added.v1` | Contract, modular ownership, replay/current-authority/privacy, PostgreSQL atomicity | SCREEN-FORMS-01 Product and Architecture boundary | Dev2 backend |
 
 Physical schema definitions remain centralized in `src/server/db/schema.ts`; this registry defines logical write ownership. Legacy `src/server/crm` remains a compatibility/read boundary and is not a second P1A write owner.
 
@@ -42,6 +43,9 @@ The P1A Lead frontend is active at `src/frontend/features/leads`, `/crm/leads/ne
 | `deal_visible_teams` | Sales | bounded Team visibility slots |
 | `deal_stage_transitions` | Sales | immutable transition evidence |
 | `lead_deal_conversion_lineage` | Sales | dormant; no DEALS-01 runtime access |
+| `note_records` | Notes | read/write root authority |
+| `note_revisions` | Notes | append-only content revisions |
+| `note_record_references` | Notes | stable typed record references |
 
 Workspace Administration remains the write owner for `workspaces`, `users`, `sessions`, `roles`, `workspace_memberships`, `teams`, and `team_memberships`. P1A consumes these only through the Platform Workspace Authority participant. Its reviewed read/lock model globally sorts bounded Membership/Team/Lead visibility references and fences the current Workspace, User, Session, Role, and Membership before protected disclosure; it also covers Lead-owned visibility references. Platform Database owns transaction mechanics; Platform Idempotency owns advisory authorities and the generic `idempotency_records` receipt participant; Platform Authorization owns trusted-current authority facts but no administration table.
 
@@ -58,6 +62,7 @@ Workspace Administration remains the write owner for `workspaces`, `users`, `ses
 | operation | `sales-deal-stage-transition.v1` | Sales |
 | operation | `sales-deal-archive.v1` | Sales |
 | operation | `sales-deal-restore.v1` | Sales |
+| operation | `contact-internal-note-add.v1` | Notes |
 | query | `lead-identity-review-detail.v1` | Leads protected presentation query |
 | query | `lead-identity-review-queue.v1` | Leads protected presentation query |
 | query | `listLeadSummaries.v1` | Leads canonical read presentation query |
@@ -87,3 +92,4 @@ Workspace Administration remains the write owner for `workspaces`, `users`, `ses
 | event | `sales.deal.stage_transitioned.v1` | Sales |
 | event | `sales.deal.archived.v1` | Sales |
 | event | `sales.deal.restored.v1` | Sales |
+| event | `crm.contact.internal_note_added.v1` | Notes |

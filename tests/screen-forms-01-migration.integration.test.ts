@@ -8,7 +8,7 @@ const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const source = new URL(process.env.DATABASE_URL ?? "postgres://nexaflow:nexaflow@127.0.0.1:54329/nexaflow");
 const admin = new Pool({ connectionString: source.toString() });
 const databases: string[] = [];
-const head = "1787779688388";
+const head = "1787782332432";
 
 async function database() {
   const name = `nexaflow_forms_${randomUUID().replaceAll("-", "")}`;
@@ -32,13 +32,13 @@ suite("SCREEN-FORMS-01 migration integrity", () => {
     await admin.end();
   });
 
-  it("migrates fresh through exact 24-entry head and reruns as a no-op", async () => {
+  it("migrates fresh through exact 25-entry head and reruns as a no-op", async () => {
     const url = await database();
     await migrate(url);
     const db = new Pool({ connectionString: url });
     expect(await databaseHealth(db)).toMatchObject({ ok: true });
     const ledger = (await db.query("select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations")).rows[0];
-    expect(ledger).toEqual({ count: 24, head });
+    expect(ledger).toEqual({ count: 25, head });
     await db.end();
     await migrate(url);
     const again = new Pool({ connectionString: url });
