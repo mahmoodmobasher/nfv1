@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  ChevronRight,
   Contact,
   House,
   Kanban,
@@ -12,6 +13,7 @@ import {
   Menu,
   Palette,
   Plus,
+  Search,
   Settings,
   UserRound,
   Users,
@@ -243,6 +245,23 @@ export function ProductShell({
       </Link>
     );
   };
+  const activeNavigation = navigation
+      .flatMap((group) =>
+        group.items.map((entry) => ({ entry, group: group.label })),
+      )
+      .find(({ entry }) =>
+        entry.exact
+          ? pathname === entry.href
+          : pathname === entry.href || pathname.startsWith(`${entry.href}/`),
+      ),
+    leadDetail = pathname.startsWith("/crm/leads/") &&
+      pathname !== "/crm/leads/new",
+    breadcrumbGroup = leadDetail
+      ? "Customers"
+      : activeNavigation?.group ?? (kind === "crm" ? "CRM" : "Workspace"),
+    breadcrumbPage = leadDetail
+      ? "Lead detail"
+      : activeNavigation?.entry.label ?? (kind === "crm" ? "CRM" : "Settings");
   const navigationContent = (drawer = false) => (
     <div
       className={
@@ -286,8 +305,40 @@ export function ProductShell({
         {navigationContent()}
       </aside>
       <header ref={topbar} className="product-topbar">
-        <WorkspaceControl name={workspace} role={role} />
+        <nav className="product-breadcrumbs" aria-label="Breadcrumb">
+          <Link href={kind === "crm" ? "/crm/home" : "/crm"}>
+            {breadcrumbGroup}
+          </Link>
+          <ChevronRight aria-hidden="true" />
+          <span aria-current="page">{breadcrumbPage}</span>
+        </nav>
         <div className="product-topbar-actions">
+          {kind === "crm" && (
+            <Link className="product-create-action" href="/crm/leads/new">
+              <Plus aria-hidden="true" />
+              <span>Add lead</span>
+            </Link>
+          )}
+          {kind === "crm" && (
+            <form
+              className="product-global-search"
+              action="/crm"
+              role="search"
+            >
+              <label className="sr-only" htmlFor="product-lead-search">
+                Search leads
+              </label>
+              <Search aria-hidden="true" />
+              <input
+                id="product-lead-search"
+                name="q"
+                type="search"
+                placeholder="Search leads"
+                maxLength={200}
+              />
+            </form>
+          )}
+          <WorkspaceControl name={workspace} role={role} />
           <Link
             className="product-icon-action"
             href="/settings#preferences"

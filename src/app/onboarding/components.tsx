@@ -8,7 +8,7 @@ import { plans, query, selection } from "./logic";
 export { plans, query, selection } from "./logic";
 
 export function Brand() {
-  return <Link href="/" className="brand" aria-label="NexaFlow home"><span>NF</span><b>NexaFlow<small>Sales to delivery CRM</small></b></Link>;
+  return <Link href="/" className="brand" aria-label="NexaFlowSystem home"><span>N</span><b>NexaFlow<span className="brand-accent">System</span><small>Business CRM</small></b></Link>;
 }
 
 export function DemoNotice() {

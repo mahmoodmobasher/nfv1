@@ -145,14 +145,15 @@ describe("design-system document boundary", () => {
     }
   });
 
-  it("does not expose unsupported shell search, Create, or future destinations", () => {
+  it("limits shell actions to supported Lead routes and omits future destinations", () => {
     const source = readFileSync(
       new URL("../src/app/product-shell.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).not.toMatch(
-      /product-global-search|Search leads|>Create<|Companies|Deals|Automation|Delivery/,
-    );
+    expect(source).toContain('href="/crm/leads/new"');
+    expect(source).toContain('action="/crm"');
+    expect(source).toContain('name="q"');
+    expect(source).not.toMatch(/>Create<|Companies|Deals|Automation|Delivery/);
   });
 
   it("builds supported navigation in server adapters from trusted Role presentation facts", () => {
@@ -255,6 +256,24 @@ describe("design-system document boundary", () => {
     expect(shell).toContain('className="product-signout"');
     expect(shell).toContain("Sign out");
     expect(shell).not.toMatch(/global search|create menu|billing portal/i);
+  });
+  it("renders a persistent truthful CRM top bar from existing Lead authority", () => {
+    const shell = readFileSync(
+      new URL("../src/app/product-shell.tsx", import.meta.url),
+      "utf8",
+    );
+    const css = readFileSync(
+      new URL("../src/app/globals.css", import.meta.url),
+      "utf8",
+    );
+    expect(shell).toContain('aria-label="Breadcrumb"');
+    expect(shell).toContain('className="product-create-action"');
+    expect(shell).toContain('href="/crm/leads/new"');
+    expect(shell).toContain('className="product-global-search"');
+    expect(shell).toContain('action="/crm"');
+    expect(shell).toContain('name="q"');
+    expect(css).toMatch(/\.product-shell>\.product-topbar\s*\{[\s\S]*?position:\s*sticky/);
+    expect(css).toContain("max-width: var(--nf-content-max)");
   });
   it("uses the configured Session cookie and preserves CSP for stale or invalid values", () => {
     const prior = process.env.SESSION_COOKIE_NAME;
