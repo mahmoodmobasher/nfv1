@@ -276,6 +276,9 @@ describe("design-system document boundary", () => {
     expect(css).toMatch(
       /\.product-shell\.crm-preview>\.product-topbar>\.product-breadcrumbs[^{}]*\{[^}]*display:\s*flex[^}]*margin:\s*0/,
     );
+    expect(css).toMatch(
+      /\.product-shell\.crm-preview \.ds-view-row>\.ds-view-tabs[^{}]*\{[^}]*display:\s*inline-flex[^}]*margin:\s*0/,
+    );
     expect(css).toContain("max-width: var(--nf-content-max)");
   });
   it("uses the configured Session cookie and preserves CSP for stale or invalid values", () => {

@@ -292,6 +292,10 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-shell.crm-preview>.product-topbar>.product-breadcrumbs a:hover,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs a:hover { background: transparent; color: var(--nx-link); }
 .product-shell.crm-preview>.product-topbar>.product-breadcrumbs span,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs span { min-width: 0; overflow: hidden; color: var(--nx-text-strong); font-weight: 600; text-overflow: ellipsis; }
 .product-shell.crm-preview>.product-topbar>.product-breadcrumbs svg,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs svg { width: 14px; height: 14px; flex: none; }
+.product-shell.crm-preview .ds-view-row>.ds-view-tabs { display: inline-flex; width: auto; max-width: 100%; gap: var(--nf-space-1); margin: 0; padding: var(--nf-space-1); }
+.product-shell.crm-preview .ds-view-row>.ds-view-tabs a { display: inline-flex; min-height: 40px; align-items: center; margin: 0; padding: var(--nf-space-2) var(--nf-space-3); background: transparent; color: var(--nx-text); font-size: var(--nf-text-caption); font-weight: 500; }
+.product-shell.crm-preview .ds-view-row>.ds-view-tabs a:hover { background: var(--nx-surface-secondary); color: var(--nx-text-strong); }
+.product-shell.crm-preview .ds-view-row>.ds-view-tabs a[aria-current="page"] { background: var(--nx-selected-surface); color: var(--nx-selected-text); font-weight: 600; }
 .product-shell .product-topbar .admin-workspace { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 var(--nf-space-2); max-width: 180px; margin: 0; padding: 4px 8px; border: 0; background: transparent; }
 .product-shell .product-topbar .admin-workspace b { grid-column: 1/-1; overflow: hidden; color: var(--nx-text-strong); font-size: var(--nf-text-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .product-shell .product-topbar .admin-workspace span,.product-shell .product-topbar .admin-workspace small,.product-shell .product-topbar .admin-workspace a { color: var(--nx-text-muted); font-size: var(--nf-text-nano); line-height: 1.2; text-transform: capitalize; }
@@ -499,6 +503,8 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   .product-shell>.product-main { padding-inline: 14px; }
   .product-shell .preview-banner { margin-inline: -14px; }
   .product-page-actions,.product-page-actions>* { width: 100%; }
+  .product-shell.crm-preview .ds-view-row>.ds-view-tabs { display: flex; width: 100%; }
+  .product-shell.crm-preview .ds-view-row>.ds-view-tabs a { flex: 1; justify-content: center; }
 }
 
 @media (forced-colors: active) {
