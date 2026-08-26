@@ -430,7 +430,7 @@ performanceSuite("DB-04 Customization representative performance", () => {
         `insert into custom_field_values(id,workspace_id,definition_id,target_record_type,target_record_id,field_type,
          governing_operation_id,created_by_membership_id,updated_by_membership_id)
          select ('74000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1,$2,'crm.lead',
-          ('75000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'multi_select',
+          ('72000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'multi_select',
           ('76000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$3,$3 from generate_series(1,100001) g`,
         [actor.workspaceId, selectDefinition, actor.membershipId],
       );
@@ -459,17 +459,31 @@ performanceSuite("DB-04 Customization representative performance", () => {
           timestamptz '2026-02-01'+((g%1000)||' seconds')::interval,timestamptz '2026-02-01'+((g%1000)||' seconds')::interval
          from generate_series(1,100001) g`, [actor.workspaceId, actor.membershipId],
       );
+      await performancePool.query(
+        `insert into saved_list_versions(id,workspace_id,list_id,definition_version,filter_ast,filter_ast_hash,
+         sort_source,sort_field_code,governing_operation_id,created_by_membership_id)
+         select ('7f000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1,
+          '78000000-0000-0000-0000-000000000001',g,'{"kind":"all"}',repeat('a',64),
+          'system','updated_at',('79000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$2
+         from generate_series(1,100001) g`, [actor.workspaceId, actor.membershipId],
+      );
       await performancePool.query("commit");
     } catch (error) { await performancePool.query("rollback"); throw error; }
 
     await performancePool.query(
-      "analyze custom_field_values,custom_field_value_options,customization_tags,record_tag_assignments,saved_lists",
+      "analyze custom_field_values,custom_field_value_options,customization_tags,record_tag_assignments,saved_lists,saved_list_versions",
     );
 
     const integerSql = `select target_record_id,integer_value from custom_field_values
       where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
       and integer_value>=500 and ($3::bigint is null or (integer_value,target_record_id)>($3,$4::uuid))
       order by integer_value,target_record_id limit 51`;
+    const targetValuesSql = `select v.id,v.field_type,d.code,link.option_id from custom_field_values v
+      join custom_field_definitions d on d.workspace_id=v.workspace_id and d.id=v.definition_id
+      left join custom_field_value_options link on link.workspace_id=v.workspace_id and link.value_id=v.id
+        and link.definition_id=v.definition_id
+      where v.workspace_id=$1 and v.target_record_type='crm.lead' and v.target_record_id=$2
+      order by d.display_order,v.id`;
     const selectSql = `select v.target_record_id,link.value_id from custom_field_value_options link join custom_field_values v
       on v.workspace_id=link.workspace_id and v.id=link.value_id and v.definition_id=link.definition_id
       where link.workspace_id=$1 and link.definition_id=$2 and link.option_id=$3 and v.lifecycle='active'
@@ -484,6 +498,12 @@ performanceSuite("DB-04 Customization representative performance", () => {
       and v.integer_value between 400 and 700 and exists(select 1 from record_tag_assignments t
         where t.workspace_id=v.workspace_id and t.record_type=v.target_record_type and t.record_id=v.target_record_id and t.tag_id=$3)
       order by v.integer_value,v.target_record_id limit 51`;
+    const currentListSql = `select l.id,l.current_definition_version,v.filter_ast_hash from saved_lists l
+      join saved_list_versions v on v.workspace_id=l.workspace_id and v.list_id=l.id
+        and v.definition_version=l.current_definition_version where l.workspace_id=$1 and l.id=$2`;
+    const listHistorySql = `select definition_version,filter_ast_hash from saved_list_versions
+      where workspace_id=$1 and list_id=$2 and definition_version<$3
+      order by definition_version desc limit 51`;
 
     async function measure(name: string, sql: string, params: unknown[]) {
       const explain = (await performancePool.query(`explain (analyze,buffers,format json) ${sql}`, params)).rows[0]["QUERY PLAN"][0];
@@ -498,7 +518,23 @@ performanceSuite("DB-04 Customization representative performance", () => {
       return { executionMs: Number(explain["Execution Time"]), p95, nodes };
     }
 
+    async function measureBoundedTarget(name: string, sql: string, params: unknown[]) {
+      const explain = (await performancePool.query(`explain (analyze,buffers,format json) ${sql}`, params)).rows[0]["QUERY PLAN"][0];
+      const serialized = JSON.stringify(explain.Plan);
+      expect(serialized, name).not.toMatch(/"Node Type":"Seq Scan"[^}]*"Relation Name":"custom_field_values"/);
+      const samples: number[] = [];
+      for (let index = 0; index < 30; index += 1) {
+        const started = performance.now(); await performancePool.query(sql, params); samples.push(performance.now() - started);
+      }
+      const p95 = percentile(samples, .95);
+      expect(p95, name).toBeLessThan(200);
+      return { executionMs: Number(explain["Execution Time"]), p95, nodes: planNodes(explain.Plan) };
+    }
+
+    const historyListId = "78000000-0000-0000-0000-000000000001";
     const evidence = {
+      targetValues: await measureBoundedTarget("targetValues", targetValuesSql,
+        [actor.workspaceId, "72000000-0000-0000-0000-000000050000"]),
       integer: await measure("integer", integerSql, [actor.workspaceId, integerDefinition, null, null]),
       select: await measure("select", selectSql, [actor.workspaceId, selectDefinition, optionIds[0], null]),
       tag: await measure("tag", reverseTagSql, [actor.workspaceId,
@@ -506,6 +542,8 @@ performanceSuite("DB-04 Customization representative performance", () => {
       lists: await measure("lists", privateListsSql, [actor.workspaceId, actor.membershipId, null, null]),
       ast: await measure("ast", astSql, [actor.workspaceId, integerDefinition,
         (await performancePool.query("select id from customization_tags where workspace_id=$1 and code='perf'", [actor.workspaceId])).rows[0].id]),
+      currentList: await measure("currentList", currentListSql, [actor.workspaceId, historyListId]),
+      listHistory: await measure("listHistory", listHistorySql, [actor.workspaceId, historyListId, 100002]),
     };
     const sizes = (await performancePool.query(
       `select relname,pg_relation_size(oid)::bigint heap_bytes,pg_indexes_size(oid)::bigint index_bytes
