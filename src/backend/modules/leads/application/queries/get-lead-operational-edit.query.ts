@@ -9,33 +9,40 @@ import { leadTransactionParticipant } from "../../persistence/repositories/lead.
 
 const uuid = z.string().uuid();
 
+async function readCurrentOperationalEdit(tx: Parameters<typeof leadTransactionParticipant>[0], actor: TrustedActor,
+  leadId: string, requestId: string): Promise<LeadOperationalEditViewV1> {
+  const current = await lookupActiveActor(tx, actor);
+  const leads = leadTransactionParticipant(tx), authority = workspaceAuthorityParticipant(tx);
+  const lead = await leads.readOperational(current.workspaceId, leadId);
+  const visible = await authority.visibleLeadIds(current, [{ id: lead.id, visibility: lead.visibility,
+    ownerMembershipId: lead.owner_membership_id }]);
+  if (!visible.has(lead.id)) throw new LeadManagementError("resource_not_found", 404);
+  const canEditLead = authority.canEditLead(current);
+  const visibleTeamIds = await leads.visibleTeamIds(current.workspaceId, lead.id);
+  const options = canEditLead ? await authority.operationalEditOptions(current.workspaceId) : { memberships: [], teams: [] };
+  if (options.memberships.length > 500 || options.teams.length > 100)
+    throw new LeadManagementError("lead_mutation_unavailable", 503);
+  return leadOperationalEditViewV1Schema.parse({
+    contractVersion: "getLeadOperationalEdit.v1", requestId, leadId: lead.id, version: lead.version,
+    operational: { responsibleMembershipId: lead.owner_membership_id, responsibleTeamId: lead.responsible_team_id,
+      visibility: lead.visibility, visibleTeamIds },
+    options: { responsibleMemberships: options.memberships, teams: options.teams },
+    capabilities: { canEditLead }, nextView: canEditLead ? { kind: "lead_edit", leadId: lead.id } : { kind: "lead_detail", leadId: lead.id },
+  });
+}
+
 export async function getLeadOperationalEditV1(pool: Pool, actor: TrustedActor, leadId: string,
-  requestId: string = randomUUID()): Promise<LeadOperationalEditViewV1> {
+  requestId: string = randomUUID(), beforeCurrentAuthorityRead?: () => Promise<void>): Promise<LeadOperationalEditViewV1> {
   if (!uuid.safeParse(leadId).success) throw new LeadManagementError("resource_not_found", 404);
   try {
-    return await runModuleTransaction(pool, async tx => {
+    await runModuleTransaction(pool, async tx => {
       await tx.query("set transaction isolation level repeatable read read only");
-      const current = await lookupActiveActor(tx, actor);
-      const leads = leadTransactionParticipant(tx), authority = workspaceAuthorityParticipant(tx);
-      const lead = await leads.readOperational(current.workspaceId, leadId);
-      const visible = await authority.visibleLeadIds(current, [{ id: lead.id, visibility: lead.visibility,
-        ownerMembershipId: lead.owner_membership_id }]);
-      if (!visible.has(lead.id)) throw new LeadManagementError("resource_not_found", 404);
-      const canEditLead = authority.canEditLead(current);
-      const visibleTeamIds = await leads.visibleTeamIds(current.workspaceId, lead.id);
-      const options = canEditLead ? await authority.operationalEditOptions(current.workspaceId) : { memberships: [], teams: [] };
-      if (options.memberships.length > 500 || options.teams.length > 100)
-        throw new LeadManagementError("lead_mutation_unavailable", 503);
-      const finalActor = await lookupActiveActor(tx, actor);
-      if (finalActor.role !== current.role) throw new LeadManagementError("resource_not_found", 404);
-      return leadOperationalEditViewV1Schema.parse({
-        contractVersion: "getLeadOperationalEdit.v1", requestId, leadId: lead.id, version: lead.version,
-        operational: { responsibleMembershipId: lead.owner_membership_id, responsibleTeamId: lead.responsible_team_id,
-          visibility: lead.visibility, visibleTeamIds },
-        options: { responsibleMemberships: options.memberships, teams: options.teams },
-        capabilities: { canEditLead }, nextView: canEditLead ? { kind: "lead_edit", leadId: lead.id } : { kind: "lead_detail", leadId: lead.id },
-      });
+      await readCurrentOperationalEdit(tx, actor, leadId, requestId);
     });
+    await beforeCurrentAuthorityRead?.();
+    // Never serialize the repeatable-read preview. Rebuild every disclosed fact from
+    // a new READ COMMITTED authority snapshot after the preview transaction closes.
+    return await runModuleTransaction(pool, tx => readCurrentOperationalEdit(tx, actor, leadId, requestId));
   } catch (error) {
     if (error instanceof LeadManagementError) throw error;
     if (error && typeof error === "object" && "code" in error && "status" in error) {

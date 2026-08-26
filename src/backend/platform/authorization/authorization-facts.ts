@@ -101,7 +101,9 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
       const membershipIds = [...new Set((input.membershipIds ?? []).filter((id): id is string => Boolean(id)))].sort();
       const teamIds = [...new Set((input.teamIds ?? []).filter((id): id is string => Boolean(id)))].sort();
       if (membershipIds.length) await tx.query(
-        `select id from workspace_memberships where workspace_id=$1 and id=any($2::uuid[]) order by id for no key update`, [input.workspaceId, membershipIds]);
+        `select m.id from workspace_memberships m join users u on u.id=m.user_id
+          where m.workspace_id=$1 and m.id=any($2::uuid[]) order by m.id for no key update of m,u`,
+        [input.workspaceId, membershipIds]);
       if (teamIds.length) await tx.query(
         `select id from teams where workspace_id=$1 and id=any($2::uuid[]) order by id for no key update`, [input.workspaceId, teamIds]);
       const leadIds = [...new Set([...(input.leadIds ?? []), ...(input.leadId ? [input.leadId] : [])])].sort();

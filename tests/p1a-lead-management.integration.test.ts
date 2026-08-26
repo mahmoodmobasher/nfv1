@@ -83,6 +83,17 @@ async function evidence(workspaceId: string, leadId: string) {
   )).rows[0];
 }
 
+async function waitForReferenceLockWait() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = (await pool.query(`select 1 from pg_stat_activity
+      where pid<>pg_backend_pid() and wait_event_type='Lock'
+        and query like 'select m.id from workspace_memberships m join users u%'`)).rows[0];
+    if (waiting) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error("operational edit did not reach the target reference lock");
+}
+
 suite("P1A canonical Lead management", () => {
   beforeAll(async () => { await pool.query("select 1"); });
   beforeEach(async () => { await pool.query("truncate users cascade"); });
@@ -100,6 +111,31 @@ suite("P1A canonical Lead management", () => {
     expect(memberView).toMatchObject({ capabilities: { canEditLead: false }, options: { responsibleMemberships: [], teams: [] },
       nextView: { kind: "lead_detail" } });
     expect(JSON.stringify(ownerView)).not.toMatch(/Frozen Identity|identity-.*@example\.test|Immutable Company/);
+  });
+
+  it("rebuilds bootstrap disclosure after session, membership, role, and Lead authority drift", async () => {
+    for (const authorityLoss of ["session", "membership"] as const) {
+      const f = await fixture();
+      await expect(getLeadOperationalEditV1(pool, f.owner, f.leadId, randomUUID(), async () => {
+        if (authorityLoss === "session") await pool.query("update sessions set revoked_at=now() where id=$1", [f.owner.sessionId]);
+        else await pool.query("update workspace_memberships set status='suspended' where id=$1", [f.owner.membershipId]);
+      })).rejects.toMatchObject({ code: "resource_not_found", status: 404 });
+    }
+    const demoted = await fixture();
+    const memberRoleId = (await pool.query<{ id: string }>(
+      "select id from roles where workspace_id=$1 and code='member'", [demoted.workspace.id])).rows[0].id;
+    const demotedView = await getLeadOperationalEditV1(pool, demoted.owner, demoted.leadId, randomUUID(), async () => {
+      await pool.query("update workspace_memberships set role_id=$2 where workspace_id=$1 and id=$3",
+        [demoted.workspace.id, memberRoleId, demoted.owner.membershipId]);
+    });
+    expect(demotedView).toMatchObject({ capabilities: { canEditLead: false },
+      options: { responsibleMemberships: [], teams: [] }, nextView: { kind: "lead_detail" } });
+
+    const hidden = await fixture();
+    await expect(getLeadOperationalEditV1(pool, hidden.member, hidden.leadId, randomUUID(), async () => {
+      await pool.query("update leads set visibility='teams',owner_membership_id=$3 where workspace_id=$1 and id=$2",
+        [hidden.workspace.id, hidden.leadId, hidden.otherMember.membershipId]);
+    })).rejects.toMatchObject({ code: "resource_not_found", status: 404 });
   });
 
   it("serves strict private route envelopes and authenticates before contract validation", async () => {
@@ -195,6 +231,27 @@ suite("P1A canonical Lead management", () => {
       command: { contractVersion: "lead-stage-transition.v1", expectedVersion: moved.leadVersion, targetStageId: f.stages[0].id } }))
       .rejects.toMatchObject({ code: "stage_unavailable", status: 409 });
     expect((await evidence(f.workspace.id, f.leadId)).receipts).toBe(2);
+  });
+
+  it("holds the target User active through operational-edit commit", async () => {
+    const f = await fixture(), blocker = await pool.connect();
+    try {
+      await blocker.query("begin");
+      await blocker.query("select id from users where id=$1 for no key update", [f.member.userId]);
+      const before = await evidence(f.workspace.id, f.leadId);
+      const edit = editLeadOperationalV1(pool, { actor: f.owner, leadId: f.leadId,
+        idempotencyKey: `inactive-user-${randomUUID()}`, command: { contractVersion: "lead-operational-edit.v1",
+          expectedVersion: f.version, responsibleMembershipId: f.member.membershipId, responsibleTeamId: null,
+          visibility: "workspace", visibleTeamIds: [] } });
+      await waitForReferenceLockWait();
+      await blocker.query("update users set status='suspended' where id=$1", [f.member.userId]);
+      await blocker.query("commit");
+      await expect(edit).rejects.toMatchObject({ code: "assignment_unavailable", status: 409 });
+      expect(await evidence(f.workspace.id, f.leadId)).toEqual(before);
+    } finally {
+      await blocker.query("rollback").catch(() => undefined);
+      blocker.release();
+    }
   });
 
   it("allows only one command at an expected version and leaves the stale loser effect-free", async () => {
