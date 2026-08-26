@@ -674,6 +674,81 @@ export const activityRecordReferences = pgTable(
   ],
 );
 
+export const noteRecords = pgTable(
+  "note_records",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    currentRevisionNumber: integer("current_revision_number").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+    redactedByMembershipId: uuid("redacted_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("note_records_workspace_id_id_uq").on(table.workspaceId, table.id),
+    index("note_records_workspace_lifecycle_updated_idx").on(table.workspaceId, table.lifecycle, table.updatedAt.desc(), table.id.desc()),
+    foreignKey({ name: "note_records_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "note_records_workspace_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "note_records_workspace_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "note_records_workspace_redactor_fk", columns: [table.workspaceId, table.redactedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("note_records_lifecycle_check", sql`${table.lifecycle} in ('active','archived','redacted')`),
+    check("note_records_version_check", sql`${table.version}>0 and ${table.currentRevisionNumber}=${table.version}`),
+    check("note_records_lifecycle_metadata_check", sql`(${table.lifecycle}='active' and num_nonnulls(${table.archivedAt},${table.archivedByMembershipId},${table.redactedAt},${table.redactedByMembershipId})=0) or (${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null and ${table.redactedAt} is null and ${table.redactedByMembershipId} is null) or (${table.lifecycle}='redacted' and ${table.redactedAt} is not null and ${table.redactedByMembershipId} is not null and ((${table.archivedAt} is null and ${table.archivedByMembershipId} is null) or (${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null)))`),
+  ],
+);
+
+export const noteRevisions = pgTable(
+  "note_revisions",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    noteId: uuid("note_id").notNull(),
+    revisionNumber: integer("revision_number").notNull(),
+    subject: text("subject"),
+    body: text("body"),
+    redactionMarker: text("redaction_marker"),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("note_revisions_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("note_revisions_workspace_note_number_uq").on(table.workspaceId, table.noteId, table.revisionNumber),
+    foreignKey({ name: "note_revisions_note_fk", columns: [table.workspaceId, table.noteId], foreignColumns: [noteRecords.workspaceId, noteRecords.id] }),
+    foreignKey({ name: "note_revisions_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("note_revisions_number_check", sql`${table.revisionNumber}>0`),
+    check("note_revisions_content_check", sql`(${table.redactionMarker} is null and (${table.subject} is null or char_length(btrim(${table.subject})) between 1 and 200) and ${table.body} is not null and char_length(btrim(${table.body})) between 1 and 20000) or (${table.redactionMarker}='content_redacted' and ${table.subject} is null and ${table.body} is null)`),
+  ],
+);
+
+export const noteRecordReferences = pgTable(
+  "note_record_references",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    noteId: uuid("note_id").notNull(),
+    recordType: text("record_type").notNull(),
+    recordId: uuid("record_id").notNull(),
+    relationshipRole: text("relationship_role").notNull().default("related"),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "note_record_references_pk", columns: [table.workspaceId, table.noteId, table.recordType, table.recordId] }),
+    index("note_record_references_target_idx").on(table.workspaceId, table.recordType, table.recordId, table.noteId),
+    foreignKey({ name: "note_record_references_note_fk", columns: [table.workspaceId, table.noteId], foreignColumns: [noteRecords.workspaceId, noteRecords.id] }),
+    foreignKey({ name: "note_record_references_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("note_record_references_type_check", sql`${table.recordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
+    check("note_record_references_role_check", sql`${table.relationshipRole}='related'`),
+  ],
+);
+
 export const onboardingProgress = pgTable(
   "onboarding_progress",
   {

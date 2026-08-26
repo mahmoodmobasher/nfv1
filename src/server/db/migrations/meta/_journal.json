@@ -113,6 +113,13 @@
       "when": 1787725072660,
       "tag": "0015_crm_activity_records",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787730062182,
+      "tag": "0016_db_02_notes",
+      "breakpoints": true
     }
   ]
 }
