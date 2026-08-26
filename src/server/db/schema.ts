@@ -628,7 +628,7 @@ export const activityRecords = pgTable(
   "activity_records",
   {
     id: id(),
-    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
     origin: text("origin").notNull().default("manual"),
     kind: text("kind").notNull(),
     direction: text("direction"),

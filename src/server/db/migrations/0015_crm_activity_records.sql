@@ -35,7 +35,7 @@ CREATE TABLE "activity_records" (
 --> statement-breakpoint
 CREATE UNIQUE INDEX "activity_records_workspace_id_id_uq" ON "activity_records" USING btree ("workspace_id","id");--> statement-breakpoint
 ALTER TABLE "activity_record_references" ADD CONSTRAINT "activity_record_references_activity_fk" FOREIGN KEY ("workspace_id","activity_id") REFERENCES "public"."activity_records"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "activity_records" ADD CONSTRAINT "activity_records_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "activity_records" ADD CONSTRAINT "activity_records_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "activity_records" ADD CONSTRAINT "activity_records_workspace_creator_fk" FOREIGN KEY ("workspace_id","created_by_membership_id") REFERENCES "public"."workspace_memberships"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "activity_record_references_record_lookup_idx" ON "activity_record_references" USING btree ("workspace_id","record_type","record_id","activity_id");--> statement-breakpoint
 CREATE INDEX "activity_records_workspace_timeline_idx" ON "activity_records" USING btree ("workspace_id","occurred_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
