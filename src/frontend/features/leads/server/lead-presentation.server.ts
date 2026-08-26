@@ -1,12 +1,14 @@
 import "server-only";
 import type { Pool } from "pg";
 import type { TrustedActor } from "@/backend/platform/authorization/authorization-facts";
-import { getLeadDetailV1, listLeadPipelineStagesV1, listLeadSummariesV1 } from "@/backend/modules/leads";
+import { getLeadDetailV1, getLeadOperationalEditV1, listLeadPipelineStagesV1, listLeadSummariesV1 } from "@/backend/modules/leads";
 import {
   leadDetailViewSchema,
+  leadOperationalEditViewSchema,
   leadPipelineStagesViewSchema,
   leadSummariesViewSchema,
   type LeadDetailView,
+  type LeadOperationalEditView,
   type LeadPipelineStagesView,
   type LeadSummariesView,
 } from "@/frontend/shared/contracts/p1a-transport";
@@ -23,6 +25,10 @@ export async function loadLeadPipelineStages(pool: Pool, actor: TrustedActor): P
 
 export async function loadLeadDetail(pool: Pool, actor: TrustedActor, leadId: string): Promise<LeadDetailView> {
   return leadDetailViewSchema.parse(await getLeadDetailV1(pool, actor, leadId));
+}
+
+export async function loadLeadOperationalEdit(pool: Pool, actor: TrustedActor, leadId: string): Promise<LeadOperationalEditView> {
+  return leadOperationalEditViewSchema.parse(await getLeadOperationalEditV1(pool, actor, leadId));
 }
 
 export function isLeadNotFound(error: unknown): boolean {

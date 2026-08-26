@@ -527,3 +527,63 @@ test("P1A surfaces retain focus and semantic boundaries under dark, forced colou
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).not.toBe("smooth");
   await page.screenshot({ path: testInfo.outputPath("manual-intake-dark-forced-reduced.png"), fullPage: true });
 });
+
+test("canonical Lead operational edit and explicit stage movement preserve authority and accessible state", async ({ page }, testInfo) => {
+  const fixture = await browserFixture(page);
+  const created = await submitLeadInquiryV1(database, { actor: fixture.actor, idempotencyKey: randomUUID(), command: {
+    contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual",
+    person: { displayName: "Managed Canonical Lead", email: `managed-${randomUUID()}@example.test` },
+    inquiry: { receivedAt: "2026-08-26T12:00:00.000Z" },
+    source: { sourceCategory: "manual", sourceMedium: "unknown", sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" },
+  } });
+  const working = (await database.query<{id:string}>(
+    `insert into pipeline_stages(workspace_id,name,position,status) values($1,'Working',1,'active') returning id`, [fixture.workspaceId])).rows[0];
+  const team = (await database.query<{id:string}>(
+    `insert into teams(workspace_id,name,name_normalized,status,created_by_membership_id) values($1,'Sales','sales','active',$2) returning id`,
+    [fixture.workspaceId, fixture.actor.membershipId])).rows[0];
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.emulateMedia({ colorScheme: "dark", forcedColors: "active", reducedMotion: "reduce" });
+  await page.goto(`/crm/leads/${created.leadId}`);
+  await expect(page.getByRole("link", { name: "Edit Lead operations" })).toBeVisible();
+  const moveTrigger = page.getByRole("button", { name: /Move stage for Managed Canonical Lead/ });
+  expect((await moveTrigger.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await moveTrigger.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Pipeline stage")).toBeFocused();
+  expect(await page.evaluate(() => { const outside = document.querySelector<HTMLElement>("a"); outside?.focus(); return Boolean(document.activeElement?.closest("dialog")); })).toBe(true);
+  await dialog.getByLabel("Pipeline stage").selectOption(working.id);
+  await dialog.getByRole("button", { name: "Move to Working" }).click();
+  await expect(dialog.getByRole("heading", { name: "Stage updated to Working." })).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(moveTrigger).toBeFocused();
+  await expect.poll(async () => (await database.query<{stage_id:string}>("select stage_id from leads where id=$1", [created.leadId])).rows[0].stage_id).toBe(working.id);
+
+  await page.goto(`/crm/leads/${created.leadId}/edit`);
+  await expect(page.getByRole("heading", { name: "Edit Lead operations" })).toBeVisible();
+  await expect(page.getByLabel("Responsible person")).toBeVisible();
+  await expect(page.getByLabel("Work email")).toHaveCount(0);
+  await expect(page.getByLabel("Pipeline stage")).toHaveCount(0);
+  await page.getByLabel("Responsible person").selectOption(fixture.actor.membershipId);
+  await page.getByLabel("Responsible Team").selectOption(team.id);
+  await page.getByLabel("Authorized members of selected Teams").check();
+  await expect(page.getByRole("checkbox", { name: /Sales · Responsible Team/ })).toBeChecked();
+  await database.query("update leads set version=version+1,updated_at=now() where id=$1", [created.leadId]);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText(/Your selections are preserved; reload the latest values/)).toBeVisible();
+  await expect(page.getByLabel("Responsible person")).toHaveValue(fixture.actor.membershipId);
+  await expect(page.locator("#responsibleTeamId")).toHaveValue(team.id);
+  await page.getByRole("button", { name: "Reload latest" }).click();
+  await expect(page.getByText(/still-available selections were preserved/)).toBeVisible();
+  await expect(page.getByLabel("Responsible person")).toHaveValue(fixture.actor.membershipId);
+  await expect(page.locator("#responsibleTeamId")).toHaveValue(team.id);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("heading", { name: "Lead operations updated." })).toBeVisible();
+  const saved = (await database.query<{owner_membership_id:string;responsible_team_id:string;visibility:string}>(
+    "select owner_membership_id,responsible_team_id,visibility from leads where id=$1", [created.leadId])).rows[0];
+  expect(saved).toEqual({ owner_membership_id: fixture.actor.membershipId, responsible_team_id: team.id, visibility: "teams" });
+  expect((await database.query("select 1 from lead_visible_teams where lead_id=$1 and team_id=$2", [created.leadId, team.id])).rowCount).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("lead-operational-edit-dark-forced-mobile.png"), fullPage: true });
+});

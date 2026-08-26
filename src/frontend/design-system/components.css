@@ -111,6 +111,19 @@
 .ds-lead-card .ds-lead-actions { margin-top: var(--nf-space-1); }
 .ds-lead-card .ds-action { flex: 1; min-height: 38px; padding: var(--nf-space-1-5) var(--nf-space-2); }
 
+.lead-management-dialog { width: min(520px,calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: var(--nf-space-5); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-overlay); color: var(--nx-text-strong); box-shadow: var(--nx-overlay-shadow); }
+.lead-management-dialog::backdrop { background: var(--nx-blanket); }
+.lead-management-dialog h2 { margin: 0; }
+.lead-management-dialog>p { color: var(--nx-text); }
+.lead-management-dialog .field { display: grid; gap: var(--nf-space-1); margin-top: var(--nf-space-4); }
+.lead-management-dialog .field select { width: 100%; min-height: 44px; padding: 9px var(--nf-space-3); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-text-strong); }
+.lead-operational-edit .ds-feedback { margin-bottom: var(--nf-space-4); }
+.lead-operational-edit fieldset { display: grid; min-width: 0; gap: var(--nf-space-2); padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); }
+.lead-operational-edit legend { padding-inline: var(--nf-space-1); color: var(--nx-text-strong); font-weight: 600; }
+.lead-operational-edit .check { display: flex; min-height: 44px; align-items: center; gap: var(--nf-space-2); }
+.lead-operational-edit .check input { width: 20px; min-width: 20px; height: 20px; }
+.lead-stage-unavailable { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
+
 @media (max-width: 520px) {
   .ds-panel__header { align-items: stretch; flex-direction: column; }
   .ds-panel__actions,.ds-panel__actions>* { width: 100%; }
@@ -127,9 +140,9 @@
   .ds-lead-list .ds-action,.ds-lead-card .ds-action { min-width: 44px; min-height: 44px; }
 }
 @media (forced-colors: active) {
-  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs { border: 1px solid CanvasText; }
+  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.lead-management-dialog,.lead-operational-edit fieldset { border: 1px solid CanvasText; }
   .ds-badge { forced-color-adjust: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ds-action,.ds-view-tabs a { transition: none; }
+  .ds-action,.ds-view-tabs a,.lead-management-dialog { transition: none; }
 }
