@@ -266,6 +266,8 @@ suite("DB-04 Customization persistence", () => {
       const ast = { kind: "group", operator: "and", children: [
         { kind: "predicate", field: { source: "system", code: "status" }, operator: "eq", value: "open" },
         { kind: "predicate", field: { source: "tags" }, operator: "has_any", value: [randomUUID()] },
+        { kind: "predicate", field: { source: "system", code: "name" }, operator: "between", value: ["Alpha", "Zulu"] },
+        { kind: "predicate", field: { source: "system", code: "score" }, operator: "any_of", value: [1, 2, 3] },
       ] };
       const listId = await createList(client, actor, ast);
       await expect(pool.query("update saved_list_versions set sort_direction='desc' where list_id=$1", [listId]))
@@ -321,6 +323,11 @@ suite("DB-04 Customization persistence", () => {
           value: Array.from({ length: 21 }, () => randomUUID()) },
         { kind: "predicate", field: { source: "custom", definitionId: randomUUID().toUpperCase() },
           operator: "eq", value: "x" },
+        { kind: "predicate", field: { source: "system", code: "name" }, operator: "between", value: ["", "Zulu"] },
+        { kind: "predicate", field: { source: "system", code: "name" }, operator: "between", value: ["   ", "Zulu"] },
+        { kind: "predicate", field: { source: "system", code: "name" }, operator: "between", value: ["Bad\u0001", "Zulu"] },
+        { kind: "predicate", field: { source: "system", code: "name" }, operator: "between", value: ["x".repeat(501), "Zulu"] },
+        { kind: "predicate", field: { source: "system", code: "status" }, operator: "any_of", value: ["1", 1, true] },
       ];
       for (const ast of invalid) await expect(createList(client, actor, ast)).rejects.toMatchObject({ code: "P0001" });
       await expect(createList(client, actor,

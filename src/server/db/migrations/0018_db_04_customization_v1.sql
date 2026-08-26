@@ -563,14 +563,21 @@ BEGIN
     IF jsonb_typeof(node_value)<>'array' OR jsonb_array_length(node_value)<>2 THEN RAISE EXCEPTION 'saved_list_filter_between_invalid'; END IF;
     first_type:=jsonb_typeof(node_value->0);
     IF first_type NOT IN ('string','number') OR jsonb_typeof(node_value->1)<>first_type THEN RAISE EXCEPTION 'saved_list_filter_between_types_invalid'; END IF;
+    FOR item IN SELECT value FROM jsonb_array_elements(node_value) LOOP
+      IF jsonb_typeof(item)='string' AND
+         (item#>>'{}'<>btrim(item#>>'{}') OR char_length(item#>>'{}') NOT BETWEEN 1 AND 500 OR item#>>'{}' ~ '[[:cntrl:]]') THEN
+        RAISE EXCEPTION 'saved_list_filter_between_string_invalid';
+      END IF;
+    END LOOP;
   ELSIF node_operator IN ('any_of','none_of','all_of','has_any','has_none','has_all') THEN
     IF jsonb_typeof(node_value)<>'array' OR jsonb_array_length(node_value) NOT BETWEEN 1 AND 20 OR
        (SELECT count(*) FROM jsonb_array_elements(node_value))<>(SELECT count(DISTINCT value) FROM jsonb_array_elements(node_value)) THEN
       RAISE EXCEPTION 'saved_list_filter_set_invalid';
     END IF;
+    first_type:=jsonb_typeof(node_value->0);
     FOR item IN SELECT value FROM jsonb_array_elements(node_value) LOOP
       item_type:=jsonb_typeof(item);
-      IF item_type NOT IN ('string','number','boolean') OR
+      IF item_type NOT IN ('string','number','boolean') OR item_type<>first_type OR
          (item_type='string' AND (item#>>'{}'<>btrim(item#>>'{}') OR char_length(item#>>'{}') NOT BETWEEN 1 AND 500 OR item#>>'{}' ~ '[[:cntrl:]]')) THEN
         RAISE EXCEPTION 'saved_list_filter_set_literal_invalid';
       END IF;
