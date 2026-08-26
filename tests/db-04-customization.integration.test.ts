@@ -401,6 +401,8 @@ performanceSuite("DB-04 Customization representative performance", () => {
   it("keeps typed values, tags, lists and AST compiler shapes bounded at 100,001 rows", async () => {
     await performancePool.query("truncate users cascade");
     const actor = await actorFixture(performancePool), integerDefinition = randomUUID(), selectDefinition = randomUUID();
+    const textDefinition = randomUUID(), decimalDefinition = randomUUID(), booleanDefinition = randomUUID();
+    const dateDefinition = randomUUID(), timestampDefinition = randomUUID();
     const optionIds = Array.from({ length: 3 }, () => randomUUID());
     await performancePool.query("begin");
     try {
@@ -408,9 +410,15 @@ performanceSuite("DB-04 Customization representative performance", () => {
       await performancePool.query(
         `insert into custom_field_definitions(id,workspace_id,target_record_type,code,label,field_type,lifecycle,
          filterable,sortable,display_order,version,governing_operation_id,created_by_membership_id,updated_by_membership_id)
-         values($1,$3,'crm.lead','perf_integer','Perf integer','integer','active',true,true,1,2,$4,$5,$5),
-               ($2,$3,'crm.lead','perf_select','Perf select','multi_select','active',true,false,2,2,$6,$5,$5)`,
-        [integerDefinition, selectDefinition, actor.workspaceId, randomUUID(), actor.membershipId, randomUUID()],
+         values($1,$8,'crm.lead','perf_integer','Perf integer','integer','active',true,true,1,2,gen_random_uuid(),$9,$9),
+               ($2,$8,'crm.lead','perf_select','Perf select','multi_select','active',true,false,2,2,gen_random_uuid(),$9,$9),
+               ($3,$8,'crm.lead','perf_text','Perf text','short_text','active',true,true,3,2,gen_random_uuid(),$9,$9),
+               ($4,$8,'crm.lead','perf_decimal','Perf decimal','decimal','active',true,true,4,2,gen_random_uuid(),$9,$9),
+               ($5,$8,'crm.lead','perf_boolean','Perf boolean','boolean','active',true,true,5,2,gen_random_uuid(),$9,$9),
+               ($6,$8,'crm.lead','perf_date','Perf date','date','active',true,true,6,2,gen_random_uuid(),$9,$9),
+               ($7,$8,'crm.lead','perf_timestamp','Perf timestamp','timestamp','active',true,true,7,2,gen_random_uuid(),$9,$9)`,
+        [integerDefinition, selectDefinition, textDefinition, decimalDefinition, booleanDefinition,
+          dateDefinition, timestampDefinition, actor.workspaceId, actor.membershipId],
       );
       for (let index = 0; index < optionIds.length; index += 1) await performancePool.query(
         `insert into custom_field_options(id,workspace_id,definition_id,code,label,display_order,governing_operation_id,
@@ -425,6 +433,39 @@ performanceSuite("DB-04 Customization representative performance", () => {
           ('73000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$3,$3,
           timestamptz '2026-01-01'+((g%1000)||' seconds')::interval,timestamptz '2026-01-01'+((g%1000)||' seconds')::interval
          from generate_series(1,100001) g`, [actor.workspaceId, integerDefinition, actor.membershipId],
+      );
+      await performancePool.query(
+        `insert into custom_field_values(id,workspace_id,definition_id,target_record_type,target_record_id,field_type,
+         text_value,text_normalized,decimal_value,boolean_value,date_value,timestamp_value,governing_operation_id,
+         created_by_membership_id,updated_by_membership_id)
+         select ('7a000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1::uuid,$2::uuid,'crm.lead',
+          ('72000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'short_text',lpad((g%1000)::text,4,'0'),
+          lpad((g%1000)::text,4,'0'),null::numeric,null::boolean,null::date,null::timestamptz,
+          ('8a000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$7::uuid,$7::uuid
+         from generate_series(1,100001) g
+         union all
+         select ('7b000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1::uuid,$3::uuid,'crm.lead',
+          ('72000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'decimal',null::text,null::text,
+          (g%1000)::numeric,null::boolean,null::date,null::timestamptz,
+          ('8b000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$7::uuid,$7::uuid from generate_series(1,100001) g
+         union all
+         select ('7c000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1::uuid,$4::uuid,'crm.lead',
+          ('72000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'boolean',null::text,null::text,
+          null::numeric,(g%2=0),null::date,null::timestamptz,
+          ('8c000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$7::uuid,$7::uuid from generate_series(1,100001) g
+         union all
+         select ('7d000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1::uuid,$5::uuid,'crm.lead',
+          ('72000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'date',null::text,null::text,
+          null::numeric,null::boolean,date '2026-01-01'+(g%365)::int,null::timestamptz,
+          ('8d000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$7::uuid,$7::uuid from generate_series(1,100001) g
+         union all
+         select ('7e000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$1::uuid,$6::uuid,'crm.lead',
+          ('72000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,'timestamp',null::text,null::text,
+          null::numeric,null::boolean,null::date,
+          timestamptz '2026-01-01'+((g%1000)||' seconds')::interval,
+          ('8e000000-0000-0000-0000-'||lpad(g::text,12,'0'))::uuid,$7::uuid,$7::uuid from generate_series(1,100001) g`,
+        [actor.workspaceId, textDefinition, decimalDefinition, booleanDefinition, dateDefinition,
+          timestampDefinition, actor.membershipId],
       );
       await performancePool.query(
         `insert into custom_field_values(id,workspace_id,definition_id,target_record_type,target_record_id,field_type,
@@ -478,6 +519,27 @@ performanceSuite("DB-04 Customization representative performance", () => {
       where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
       and integer_value>=500 and ($3::bigint is null or (integer_value,target_record_id)>($3,$4::uuid))
       order by integer_value,target_record_id limit 51`;
+    const textSql = `select target_record_id,text_normalized from custom_field_values
+      where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
+      and text_normalized like '05%' and ($3::text is null or (text_normalized,target_record_id)>($3,$4::uuid))
+      order by text_normalized,target_record_id limit 51`;
+    const decimalSql = `select target_record_id,decimal_value from custom_field_values
+      where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
+      and decimal_value>=500 and ($3::numeric is null or (decimal_value,target_record_id)>($3,$4::uuid))
+      order by decimal_value,target_record_id limit 51`;
+    const booleanSql = `select target_record_id,boolean_value from custom_field_values
+      where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
+      and boolean_value=true and ($3::uuid is null or target_record_id>$3)
+      order by boolean_value,target_record_id limit 51`;
+    const dateSql = `select target_record_id,date_value from custom_field_values
+      where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
+      and date_value>=date '2026-06-01' and ($3::date is null or (date_value,target_record_id)>($3,$4::uuid))
+      order by date_value,target_record_id limit 51`;
+    const timestampSql = `select target_record_id,timestamp_value from custom_field_values
+      where workspace_id=$1 and definition_id=$2 and target_record_type='crm.lead' and lifecycle='active'
+      and timestamp_value>=timestamptz '2026-01-01 00:08:20+00'
+      and ($3::timestamptz is null or (timestamp_value,target_record_id)>($3,$4::uuid))
+      order by timestamp_value,target_record_id limit 51`;
     const targetValuesSql = `select v.id,v.field_type,d.code,link.option_id from custom_field_values v
       join custom_field_definitions d on d.workspace_id=v.workspace_id and d.id=v.definition_id
       left join custom_field_value_options link on link.workspace_id=v.workspace_id and link.value_id=v.id
@@ -536,6 +598,11 @@ performanceSuite("DB-04 Customization representative performance", () => {
       targetValues: await measureBoundedTarget("targetValues", targetValuesSql,
         [actor.workspaceId, "72000000-0000-0000-0000-000000050000"]),
       integer: await measure("integer", integerSql, [actor.workspaceId, integerDefinition, null, null]),
+      text: await measure("text", textSql, [actor.workspaceId, textDefinition, null, null]),
+      decimal: await measure("decimal", decimalSql, [actor.workspaceId, decimalDefinition, null, null]),
+      boolean: await measure("boolean", booleanSql, [actor.workspaceId, booleanDefinition, null]),
+      date: await measure("date", dateSql, [actor.workspaceId, dateDefinition, null, null]),
+      timestamp: await measure("timestamp", timestampSql, [actor.workspaceId, timestampDefinition, null, null]),
       select: await measure("select", selectSql, [actor.workspaceId, selectDefinition, optionIds[0], null]),
       tag: await measure("tag", reverseTagSql, [actor.workspaceId,
         (await performancePool.query("select id from customization_tags where workspace_id=$1 and code='perf'", [actor.workspaceId])).rows[0].id, null]),
