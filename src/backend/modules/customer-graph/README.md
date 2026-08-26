@@ -9,3 +9,6 @@ Writes use Workspace-scoped semantic idempotency, root-first stable locks, sorte
 authority, `expectedVersion`, retained identity/domain/affiliation history, one governing Audit, one minimal Outbox event, and
 one receipt atomically. Reads are private/no-store, minimize list identity, mask Contact channels for non-managers, and never
 disclose a hidden affiliation Company's identity.
+
+Collection GET responses expose final-authority `capabilities.canCreate`. `?bootstrap=true` returns the same strict envelope
+with an empty item stream, allowing create pages to obtain authority without customer identity disclosure.
