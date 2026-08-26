@@ -5,7 +5,7 @@ CREATE TABLE "activity_record_references" (
 	"record_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "activity_record_references_pk" PRIMARY KEY("workspace_id","activity_id"),
-	CONSTRAINT "activity_record_references_type_check" CHECK ("activity_record_references"."record_type"='lead')
+	CONSTRAINT "activity_record_references_type_check" CHECK ("activity_record_references"."record_type"='crm.lead')
 );
 --> statement-breakpoint
 CREATE TABLE "activity_records" (

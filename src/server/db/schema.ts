@@ -670,7 +670,7 @@ export const activityRecordReferences = pgTable(
     primaryKey({ name: "activity_record_references_pk", columns: [table.workspaceId, table.activityId] }),
     index("activity_record_references_record_lookup_idx").on(table.workspaceId, table.recordType, table.recordId, table.activityId),
     foreignKey({ name: "activity_record_references_activity_fk", columns: [table.workspaceId, table.activityId], foreignColumns: [activityRecords.workspaceId, activityRecords.id] }),
-    check("activity_record_references_type_check", sql`${table.recordType}='lead'`),
+    check("activity_record_references_type_check", sql`${table.recordType}='crm.lead'`),
   ],
 );
 

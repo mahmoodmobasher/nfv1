@@ -106,7 +106,7 @@
       "checkConstraints": {
         "activity_record_references_type_check": {
           "name": "activity_record_references_type_check",
-          "value": "\"activity_record_references\".\"record_type\"='lead'"
+          "value": "\"activity_record_references\".\"record_type\"='crm.lead'"
         }
       },
       "isRLSEnabled": false
