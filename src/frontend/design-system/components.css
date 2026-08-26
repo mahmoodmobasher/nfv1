@@ -106,6 +106,9 @@
 .ds-pipeline .pipeline-stage>header { display: flex; align-items: center; justify-content: space-between; gap: var(--nf-space-2); }
 .ds-pipeline .pipeline-stage>header h2 { margin: 0; }
 .ds-pipeline__cards { display: grid; gap: var(--nf-space-2); }
+.deal-board { grid-template-columns: repeat(auto-fit,minmax(min(280px,100%),1fr)); align-items: start; }
+.deal-board>p { grid-column: 1/-1; }
+.deal-board__stage { min-width: 0; padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-secondary); }
 .ds-lead-card { display: grid; min-width: 0; gap: var(--nf-space-2); padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-text); overflow-wrap: anywhere; }
 .ds-lead-card__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--nf-space-2); color: var(--nx-text-muted); font-size: var(--nf-text-micro); }
 .ds-lead-card h3,.ds-lead-card p,.ds-lead-card small { margin: 0; }
@@ -137,13 +140,14 @@
   .ds-detail-layout>.ds-panel:last-child { grid-column: auto; }
   .ds-fact-list>div { grid-template-columns: 1fr; gap: var(--nf-space-1); }
   .ds-page-actions,.ds-page-actions>* { width: 100%; }
+  .deal-board { grid-template-columns: 1fr; }
 }
 @media (max-width: 700px) {
   .ds-lead-list .ds-table th[scope="row"] a,.ds-lead-card h3 a { display: flex; min-width: 44px; min-height: 44px; align-items: center; }
   .ds-lead-list .ds-action,.ds-lead-card .ds-action { min-width: 44px; min-height: 44px; }
 }
 @media (forced-colors: active) {
-  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.lead-management-dialog,.lead-operational-edit fieldset { border: 1px solid CanvasText; }
+  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.deal-board__stage,.lead-management-dialog,.lead-operational-edit fieldset { border: 1px solid CanvasText; }
   .ds-badge { forced-color-adjust: none; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -26,6 +26,7 @@ const crmCore: ProductNavGroup[] = [
       { href: "/crm", label: "Leads", icon: "contact", exact: true },
       { href: "/crm/companies", label: "Companies", icon: "users" },
       { href: "/crm/contacts", label: "Contacts", icon: "contact" },
+      { href: "/crm/deals", label: "Deals", icon: "kanban" },
       { href: "/crm/identity-reviews", label: "Identity review", icon: "users" },
       { href: "/crm/pipeline", label: "Pipeline", icon: "kanban", exact: true },
       { href: "/crm/leads/new", label: "Add lead", icon: "plus", exact: true },
