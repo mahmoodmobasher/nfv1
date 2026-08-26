@@ -46,17 +46,18 @@ function keyFor(body: string, previous: { body: string; key: string }) {
   return previous.body === body ? previous : { body, key: crypto.randomUUID() };
 }
 
-function ManagementDialog({ titleId, descriptionId, trigger, onClose, children }: {
-  titleId: string; descriptionId: string; trigger: HTMLElement | null; onClose: () => void; children: ReactNode;
+function ManagementDialog({ titleId, descriptionId, restoreFocus, onClose, children }: {
+  titleId: string; descriptionId: string; restoreFocus: () => void; onClose: () => void; children: ReactNode;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null), restore = useRef(restoreFocus);
+  useEffect(() => { restore.current = restoreFocus; }, [restoreFocus]);
   useEffect(() => {
     const node = dialog.current;
     if (!node) return;
     node.showModal();
     node.querySelector<HTMLElement>("select,button,a[href]")?.focus();
-    return () => { if (node.open) node.close(); trigger?.focus(); };
-  }, [trigger]);
+    return () => { if (node.open) node.close(); restore.current(); };
+  }, []);
   return <dialog ref={dialog} className="lead-management-dialog" aria-labelledby={titleId} aria-describedby={descriptionId}
     onCancel={event => { event.preventDefault(); onClose(); }}>{children}</dialog>;
 }
@@ -148,29 +149,49 @@ export function LeadOperationalEditForm({ workspaceId, initial }: { workspaceId:
     action={<Link className="ds-action ds-action--secondary" href={`/crm/leads/${view.leadId}`}>Return to Lead details</Link>}><p>Your authority changed or this Lead is no longer available. No operational choices are shown.</p></FeedbackState>;
   if (saved) return <FeedbackState tone="success" autoFocus title={notice} action={<Link className="ds-action ds-action--primary" href={`/crm/leads/${view.leadId}`}>Return to Lead details</Link>}>
     <p>Responsibility and visibility now reflect the authoritative saved values.</p></FeedbackState>;
-  return <div className="ds-form-layout lead-operational-edit"><Panel title="Responsibility and visibility" description="Only operational responsibility and visibility can be changed here. Names, contact details, Company identity, attribution, lifecycle and Pipeline stage cannot be changed in this editor. Identity-bearing corrections are not available in this MVP.">
+  return <div className="ds-form-layout lead-operational-edit"><Panel title="Responsibility and visibility" description="Only operational responsibility and visibility can be changed here. Identity-bearing corrections are not available in this editor.">
     {notice && <div ref={noticeRef} className={`ds-feedback ${errors._form || notice.includes("changed") ? "ds-feedback--conflict" : "ds-feedback--info"}`} role={errors._form ? "alert" : "status"} tabIndex={-1}><div><p>{notice}</p></div>{notice.includes("reload") || notice.includes("changed") ? <div className="ds-feedback__actions"><Button type="button" onClick={() => void reloadLatest()} disabled={busy}>Reload latest</Button></div> : null}</div>}
     {errors._form && <div ref={!notice ? noticeRef : undefined} className="ds-feedback ds-feedback--warning" role="alert" tabIndex={-1}><div><p>{errors._form}</p></div></div>}
     <form className="ds-form" onSubmit={submit} noValidate aria-busy={busy}>
-      <section><h2>Responsibility</h2><label className="field" htmlFor="responsibleMembershipId"><span>Responsible person</span><select id="responsibleMembershipId" value={membership} onChange={event => setMembership(event.target.value)}><option value="">Unassigned</option>{view.options.responsibleMemberships.map(option => <option value={option.id} key={option.id}>{option.label}</option>)}</select><FieldMessage id="responsibleMembershipId-help">Only active people in this Workspace are available.</FieldMessage></label>
-      <label className="field" htmlFor="responsibleTeamId"><span>Responsible Team</span><select id="responsibleTeamId" value={team} onChange={event => chooseResponsibleTeam(event.target.value)}><option value="">No responsible Team</option>{view.options.teams.map(option => <option value={option.id} key={option.id}>{option.label}</option>)}</select><FieldMessage id="responsibleTeamId-help">Assignment may be cleared. A responsible Team is included in Team visibility when selected.</FieldMessage></label></section>
+      <section><h2>Responsibility</h2><label className="field" htmlFor="responsibleMembershipId"><span>Responsible person</span><select id="responsibleMembershipId" value={membership} aria-describedby="responsibleMembershipId-help" onChange={event => setMembership(event.target.value)}><option value="">Unassigned</option>{view.options.responsibleMemberships.map(option => <option value={option.id} key={option.id}>{option.label}</option>)}</select><FieldMessage id="responsibleMembershipId-help">Only active people in this Workspace are available.</FieldMessage></label>
+      <label className="field" htmlFor="responsibleTeamId"><span>Responsible Team</span><select id="responsibleTeamId" value={team} aria-describedby="responsibleTeamId-help" onChange={event => chooseResponsibleTeam(event.target.value)}><option value="">No responsible Team</option>{view.options.teams.map(option => <option value={option.id} key={option.id}>{option.label}</option>)}</select><FieldMessage id="responsibleTeamId-help">Assignment may be cleared. A responsible Team is included in Team visibility when selected.</FieldMessage></label></section>
       <section><h2>Visibility</h2><fieldset aria-describedby={`visibility-help${errors.visibleTeamIds ? " visibleTeamIds-error" : ""}`}><legend>Who can view this Lead?</legend><label className="check"><input type="radio" name="visibility" checked={visibility === "workspace"} onChange={() => setVisibility("workspace")}/>Everyone with access to this Workspace</label><label className="check"><input type="radio" name="visibility" checked={visibility === "teams"} onChange={() => { setVisibility("teams"); if (team) setVisibleTeams(values => values.includes(team) ? values : [...values, team]); }}/>Authorized members of selected Teams</label><FieldMessage id="visibility-help">Workspace visibility may broaden access. Team visibility requires at least one active Team.</FieldMessage></fieldset>
       {visibility === "teams" && <fieldset className="lead-visible-teams" aria-describedby={errors.visibleTeamIds ? "visibleTeamIds-error" : "visibleTeamIds-help"} aria-invalid={Boolean(errors.visibleTeamIds)}><legend>Teams that can view this Lead</legend>{view.options.teams.map(option => <label className="check" key={option.id}><input type="checkbox" checked={visibleTeams.includes(option.id)} disabled={option.id === team} onChange={event => setVisibleTeams(values => event.target.checked ? [...values, option.id] : values.filter(id => id !== option.id))}/>{option.label}{option.id === team ? " · Responsible Team" : ""}</label>)}<FieldMessage id="visibleTeamIds-help">Choose one or more active Teams.</FieldMessage>{errors.visibleTeamIds && <FieldMessage id="visibleTeamIds-error" tone="error">{errors.visibleTeamIds}</FieldMessage>}</fieldset>}</section>
       <div className="ds-page-actions"><Button variant="primary" disabled={busy || !dirty}>{busy ? "Saving changes…" : "Save changes"}</Button><Link className="ds-action ds-action--secondary" href={`/crm/leads/${view.leadId}`}>Cancel</Link></div>
     </form></Panel></div>;
 }
 
-export function LeadStageMove({ workspaceId, leadId, leadName, version, currentStageId, stages }: {
-  workspaceId: string; leadId: string; leadName: string; version: number; currentStageId: string; stages: LeadPipelineStage[];
+export function LeadStageMove({ workspaceId, leadId, leadName, version, currentStageId, currentStageName, stages, focusDestinationOnSuccess = false }: {
+  workspaceId: string; leadId: string; leadName: string; version: number; currentStageId: string; currentStageName: string;
+  stages: LeadPipelineStage[]; focusDestinationOnSuccess?: boolean;
 }) {
   const router = useRouter(), targets = stages.filter(stage => stage.stageId !== currentStageId), [open, setOpen] = useState(false),
-    [target, setTarget] = useState(targets[0]?.stageId ?? ""), [busy, setBusy] = useState(false), [error, setError] = useState<ManagementError | null>(null),
+    [target, setTarget] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState<ManagementError | null>(null),
     [result, setResult] = useState<LeadStageTransitionResult | null>(null), [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null), alert = useRef<HTMLDivElement>(null),
-    request = useRef({ body: "", key: crypto.randomUUID() });
+    terminalState = useRef<HTMLDivElement>(null), restoreTrigger = useRef(true), request = useRef({ body: "", key: crypto.randomUUID() });
   const selected = stages.find(stage => stage.stageId === target), authorityLoss = error && leadManagementErrorDisposition(error) === "authority_loss",
     forbidden = error && leadManagementErrorDisposition(error) === "permission";
   useEffect(() => { if (error) alert.current?.focus(); }, [error]);
+  useEffect(() => { if (result || authorityLoss) terminalState.current?.focus(); }, [result, authorityLoss]);
   function close() { setOpen(false); setError(null); setResult(null); setBusy(false); request.current = { body: "", key: crypto.randomUUID() }; }
+  function finish() {
+    if (focusDestinationOnSuccess && result?.changed) {
+      restoreTrigger.current = false;
+      const destinationId = `stage-${result.stage.stageId}`;
+      const focusMovedDestination = () => {
+        const destination = document.getElementById(destinationId), stage = destination?.closest(".pipeline-stage");
+        if (!stage?.querySelector(`[data-lead-id="${leadId}"]`)) return false;
+        destination?.focus(); return true;
+      };
+      const observer = new MutationObserver(() => { if (focusMovedDestination()) observer.disconnect(); });
+      observer.observe(document.body, { childList: true, subtree: true });
+      close();
+      router.refresh();
+      setTimeout(() => { focusMovedDestination(); observer.disconnect(); }, 3000);
+      return;
+    }
+    close(); router.refresh();
+  }
   async function move() {
     if (!selected) return;
     const command: LeadStageTransitionCommand = { contractVersion: "lead-stage-transition.v1", expectedVersion: version, targetStageId: selected.stageId },
@@ -195,7 +216,7 @@ export function LeadStageMove({ workspaceId, leadId, leadName, version, currentS
   }
   if (!targets.length) return <span className="lead-stage-unavailable">No other active stages</span>;
   const titleId = `move-stage-title-${leadId}`, descriptionId = `move-stage-description-${leadId}`;
-  return <><button className="ds-action ds-action--secondary" type="button" onClick={event => { setReturnFocus(event.currentTarget); setTarget(targets[0]?.stageId ?? ""); setOpen(true); }} aria-haspopup="dialog">Move stage<span className="sr-only"> for {leadName}</span></button>{open && <ManagementDialog titleId={titleId} descriptionId={descriptionId} trigger={returnFocus} onClose={close}>
-    {result ? <><h2 id={titleId}>{result.changed ? `Stage updated to ${result.stage.name}.` : `Already in ${result.stage.name}.`}</h2><p id={descriptionId}>{result.changed ? result.replayed ? "This stage movement was already applied. No duplicate activity was created." : "The Lead was moved and its activity history was updated." : result.replayed ? "This no-change result was already recorded. The Lead remains unchanged." : "The Lead was already in this stage. No Lead change or activity was created."}</p><div className="ds-page-actions"><Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Done</Button><Link className="ds-action ds-action--secondary" href={`/crm/leads/${leadId}`}>View Lead</Link></div></> : authorityLoss ? <><h2 id={titleId}>Lead no longer available</h2><p id={descriptionId}>Access changed or this Lead is no longer visible. No stage change was applied.</p><div className="ds-page-actions"><Button variant="primary" type="button" onClick={() => location.reload()}>Reload safely</Button></div></> : <><h2 id={titleId}>Move {leadName} to another stage?</h2><p id={descriptionId}>Choose an active Pipeline stage and confirm the movement. Lifecycle and status will not change.</p>{error && <div ref={alert} className="ds-feedback ds-feedback--danger" role="alert" tabIndex={-1}><div><p>{leadManagementErrorDisposition(error) === "refetch_edit" || leadManagementErrorDisposition(error) === "refetch_stage" ? "This Lead or the available stages changed. No movement was applied; reload the latest Pipeline before trying again." : error.message}</p></div></div>}<label className="field" htmlFor={`move-stage-${leadId}`}><span>Pipeline stage</span><select id={`move-stage-${leadId}`} value={target} disabled={busy || Boolean(forbidden)} onChange={event => { setTarget(event.target.value); setError(null); request.current = { body: "", key: crypto.randomUUID() }; }}>{targets.map(stage => <option key={stage.stageId} value={stage.stageId}>{stage.name}</option>)}</select></label><div className="ds-page-actions">{forbidden ? <Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Close and refresh</Button> : error && (leadManagementErrorDisposition(error) === "refetch_edit" || leadManagementErrorDisposition(error) === "refetch_stage") ? <Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Reload latest</Button> : <Button variant="primary" type="button" disabled={busy || !selected} onClick={() => void move()}>{busy ? "Moving Lead…" : `Move to ${selected?.name ?? "stage"}`}</Button>}<Button type="button" disabled={busy} onClick={close}>Cancel</Button></div></>}
+  return <><button className="ds-action ds-action--secondary" type="button" onClick={event => { restoreTrigger.current = true; setReturnFocus(event.currentTarget); setTarget(""); setOpen(true); }} aria-haspopup="dialog">Move stage<span className="sr-only"> for {leadName}</span></button>{open && <ManagementDialog titleId={titleId} descriptionId={descriptionId} restoreFocus={() => { if (restoreTrigger.current) returnFocus?.focus(); }} onClose={close}>
+    {result ? <div ref={terminalState} role="status" aria-live="polite" aria-atomic="true" tabIndex={-1}><h2 id={titleId}>{result.changed ? `Stage updated to ${result.stage.name}.` : `Already in ${result.stage.name}.`}</h2><p id={descriptionId}>{result.changed ? result.replayed ? "This stage movement was already applied. No duplicate activity was created." : "The Lead was moved and its activity history was updated." : result.replayed ? "This no-change result was already recorded. The Lead remains unchanged." : "The Lead was already in this stage. No Lead change or activity was created."}</p><div className="ds-page-actions"><Button variant="primary" type="button" onClick={finish}>Done</Button><Link className="ds-action ds-action--secondary" href={`/crm/leads/${leadId}`}>View Lead</Link></div></div> : authorityLoss ? <div ref={terminalState} role="alert" aria-atomic="true" tabIndex={-1}><h2 id={titleId}>Lead no longer available</h2><p id={descriptionId}>Access changed or this Lead is no longer visible. No stage change was applied.</p><div className="ds-page-actions"><Button variant="primary" type="button" onClick={() => location.reload()}>Reload safely</Button></div></div> : <><h2 id={titleId}>{selected ? `Move ${leadName} from ${currentStageName} to ${selected.name}?` : `Move ${leadName} to another stage?`}</h2><p id={descriptionId}>Current stage: {currentStageName}. Choose an active Pipeline stage and confirm the movement. Lifecycle and status will not change.</p>{error && <div ref={alert} className="ds-feedback ds-feedback--danger" role="alert" tabIndex={-1}><div><p>{leadManagementErrorDisposition(error) === "refetch_edit" || leadManagementErrorDisposition(error) === "refetch_stage" ? "This Lead or the available stages changed. No movement was applied; reload the latest Pipeline before trying again." : error.message}</p></div></div>}<label className="field" htmlFor={`move-stage-${leadId}`}><span>Pipeline stage</span><select id={`move-stage-${leadId}`} value={target} disabled={busy || Boolean(forbidden)} onChange={event => { setTarget(event.target.value); setError(null); request.current = { body: "", key: crypto.randomUUID() }; }}><option value="">Choose a stage</option>{targets.map(stage => <option key={stage.stageId} value={stage.stageId}>{stage.name}</option>)}</select></label><div className="ds-page-actions">{forbidden ? <Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Close and refresh</Button> : error && (leadManagementErrorDisposition(error) === "refetch_edit" || leadManagementErrorDisposition(error) === "refetch_stage") ? <Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Reload latest</Button> : <Button variant="primary" type="button" disabled={busy || !selected} onClick={() => void move()}>{busy ? "Moving Lead…" : selected ? `Move from ${currentStageName} to ${selected.name}` : "Choose a target stage"}</Button>}<Button type="button" disabled={busy} onClick={close}>Cancel</Button></div></>}
   </ManagementDialog>}</>;
 }

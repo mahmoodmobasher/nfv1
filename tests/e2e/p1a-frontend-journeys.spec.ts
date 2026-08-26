@@ -544,24 +544,35 @@ test("canonical Lead operational edit and explicit stage movement preserve autho
 
   await page.setViewportSize({ width: 320, height: 720 });
   await page.emulateMedia({ colorScheme: "dark", forcedColors: "active", reducedMotion: "reduce" });
-  await page.goto(`/crm/leads/${created.leadId}`);
-  await expect(page.getByRole("link", { name: "Edit Lead operations" })).toBeVisible();
+  await page.goto("/crm/pipeline");
   const moveTrigger = page.getByRole("button", { name: /Move stage for Managed Canonical Lead/ });
   expect((await moveTrigger.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await moveTrigger.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Pipeline stage")).toBeFocused();
+  await expect(dialog.getByLabel("Pipeline stage")).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Choose a target stage" })).toBeDisabled();
+  await expect(dialog.getByText("Current stage: New.")).toBeVisible();
   expect(await page.evaluate(() => { const outside = document.querySelector<HTMLElement>("a"); outside?.focus(); return Boolean(document.activeElement?.closest("dialog")); })).toBe(true);
   await dialog.getByLabel("Pipeline stage").selectOption(working.id);
-  await dialog.getByRole("button", { name: "Move to Working" }).click();
+  await expect(dialog.getByRole("heading", { name: "Move Managed Canonical Lead from New to Working?" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Move from New to Working" }).click();
   await expect(dialog.getByRole("heading", { name: "Stage updated to Working." })).toBeVisible();
+  await expect(dialog.getByRole("status")).toBeFocused();
   await dialog.getByRole("button", { name: "Done" }).click();
-  await expect(moveTrigger).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Working", exact: true })).toBeFocused();
   await expect.poll(async () => (await database.query<{stage_id:string}>("select stage_id from leads where id=$1", [created.leadId])).rows[0].stage_id).toBe(working.id);
 
+  await page.goto(`/crm/leads/${created.leadId}`);
+  await expect(page.getByRole("link", { name: "Edit Lead operations" })).toBeVisible();
+  const detailMove = page.getByRole("button", { name: /Move stage for Managed Canonical Lead/ });
+  await detailMove.click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(detailMove).toBeFocused();
+
   await page.goto(`/crm/leads/${created.leadId}/edit`);
-  await expect(page.getByRole("heading", { name: "Edit Lead operations" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Edit lead" })).toBeVisible();
   await expect(page.getByLabel("Responsible person")).toBeVisible();
   await expect(page.getByLabel("Work email")).toHaveCount(0);
   await expect(page.getByLabel("Pipeline stage")).toHaveCount(0);
@@ -586,4 +597,48 @@ test("canonical Lead operational edit and explicit stage movement preserve autho
   expect((await database.query("select 1 from lead_visible_teams where lead_id=$1 and team_id=$2", [created.leadId, team.id])).rowCount).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("lead-operational-edit-dark-forced-mobile.png"), fullPage: true });
+});
+
+test("Move stage focuses no-change and authority-loss response states while preserving close focus", async ({ page }) => {
+  const fixture = await browserFixture(page);
+  const created = await submitLeadInquiryV1(database, { actor: fixture.actor, idempotencyKey: randomUUID(), command: {
+    contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual",
+    person: { displayName: "Focus State Lead", email: `focus-${randomUUID()}@example.test` },
+    inquiry: { receivedAt: "2026-08-26T12:00:00.000Z" },
+    source: { sourceCategory: "manual", sourceMedium: "unknown", sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" },
+  } });
+  const working = (await database.query<{id:string}>(
+    `insert into pipeline_stages(workspace_id,name,position,status) values($1,'Working',1,'active') returning id`, [fixture.workspaceId])).rows[0];
+  let mode: "no-change" | "authority" = "no-change";
+  await page.route("**/api/workspaces/*/leads/*/stage-transitions", route => {
+    if (route.request().method() !== "POST") return route.continue();
+    if (mode === "authority") return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify(p1aError("resource_not_found")) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {
+      contractVersion: "lead-stage-transition-result.v1", leadId: created.leadId, leadVersion: created.leadVersion,
+      stage: { stageId: working.id, name: "Working", position: 1 }, changed: false, replayed: false, requestId: randomUUID(),
+      nextView: { kind: "lead_detail", leadId: created.leadId },
+    } }) });
+  });
+  await page.goto(`/crm/leads/${created.leadId}`);
+  const trigger = page.getByRole("button", { name: /Move stage for Focus State Lead/ });
+  await trigger.click();
+  let dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Pipeline stage")).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Choose a target stage" })).toBeDisabled();
+  await dialog.getByLabel("Pipeline stage").selectOption(working.id);
+  await expect(dialog.getByRole("heading", { name: "Move Focus State Lead from New to Working?" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Move from New to Working" }).click();
+  await expect(dialog.getByRole("heading", { name: "Already in Working." })).toBeVisible();
+  await expect(dialog.getByRole("status")).toBeFocused();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(trigger).toBeFocused();
+
+  mode = "authority";
+  await trigger.click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Pipeline stage").selectOption(working.id);
+  await dialog.getByRole("button", { name: "Move from New to Working" }).click();
+  const authority = dialog.getByRole("alert");
+  await expect(authority).toContainText("Lead no longer available");
+  await expect(authority).toBeFocused();
 });

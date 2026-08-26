@@ -28,11 +28,15 @@ describe("P1A Lead management frontend", () => {
   it("renders only the frozen operational fields in the dedicated editor", () => {
     const html = renderToStaticMarkup(<LeadOperationalEditForm workspaceId="70000000-0000-4000-8000-000000000071" initial={edit}/>);
     expect(html).toContain('id="responsibleMembershipId"');
+    expect(html).toContain('aria-describedby="responsibleMembershipId-help"');
     expect(html).toContain('id="responsibleTeamId"');
+    expect(html).toContain('aria-describedby="responsibleTeamId-help"');
     expect(html).toContain('name="visibility"');
     expect(html).toContain("Teams that can view this Lead");
     for (const forbidden of ['name="email"', 'name="phone"', 'name="stageId"', 'name="status"', 'name="company"'])
       expect(html).not.toContain(forbidden);
+    expect(html).toContain("Identity-bearing corrections are not available in this editor.");
+    expect(html).not.toContain("MVP");
   });
 
   it("renders Edit and Move actions only from server-provided capabilities", () => {
@@ -48,7 +52,7 @@ describe("P1A Lead management frontend", () => {
   it("offers only server-ordered active stage targets outside the current stage", () => {
     const html = renderToStaticMarkup(<LeadStageMove workspaceId="70000000-0000-4000-8000-000000000071"
       leadId={safeLeadSummaryFixture.leadId} leadName={safeLeadSummaryFixture.displayName} version={safeLeadSummaryFixture.version}
-      currentStageId={safeLeadSummaryFixture.stage.id} stages={stages}/>);
+      currentStageId={safeLeadSummaryFixture.stage.id} currentStageName={safeLeadSummaryFixture.stage.name} stages={stages}/>);
     expect(html).toContain("Move stage");
     expect(html).not.toContain("drag");
   });
