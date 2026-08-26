@@ -1,1 +1,1 @@
-export default function Loading(){return <section className="admin-content" aria-busy="true"><p className="eyebrow">Leads</p><h1>Loading identity reviews…</h1><p role="status">Loading authorized review information.</p></section>}
+import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="admin-content" aria-busy="true"><LoadingState label="Loading authorized identity-review information" rows={4}/></section>}

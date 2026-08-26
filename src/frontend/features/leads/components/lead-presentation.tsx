@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActionLink, DataTable, EmptyState, FeedbackState, Panel, StatusBadge } from "@/frontend/design-system";
 import type { LeadPipelineStage, LeadSummariesView, LeadSummaryItem } from "@/frontend/shared/contracts/p1a-transport";
 
 const sourceLabels: Record<LeadSummaryItem["originalAttribution"]["sourceCategory"], string> = {
@@ -15,7 +16,7 @@ const intakeLabels: Record<LeadSummaryItem["originalAttribution"]["intakeChannel
 };
 
 export function leadContactLabel(lead: LeadSummaryItem) {
-  return lead.contact.maskedEmail ?? lead.contact.maskedPhone ?? "Contact details not provided";
+  return lead.contact.maskedEmail ?? lead.contact.maskedPhone ?? "Not provided";
 }
 export function leadAssignmentLabel(lead: LeadSummaryItem) {
   if (lead.assignment.isUnassigned) return "Unassigned";
@@ -27,33 +28,39 @@ function sourceLabel(lead: LeadSummaryItem) {
   return platform ? `${source} · ${platform}` : source;
 }
 function reviewLabel(status: LeadSummaryItem["identityReviewStatus"]) {
-  return status === "pending" ? "Pending identity review" : status === "resolved" ? "Identity review resolved" : "No identity review required";
+  return status === "pending" ? "Pending review" : status === "resolved" ? "Resolved" : "Not required";
 }
-function LeadActions({ lead }: { lead: LeadSummaryItem }) {
-  return <div className="row-actions p1a-card-actions"><Link className="secondary link-button" href={`/crm/leads/${lead.leadId}`}>View lead</Link>{lead.capabilities.canReview && lead.nextView.kind === "identity_review_detail" && <Link className="primary link-button" href={`/crm/identity-reviews/${lead.leadId}`}>Continue identity review</Link>}</div>;
+function lifecycleTone(status: LeadSummaryItem["lifecycle"]["status"]) {
+  return status === "won" ? "success" : status === "lost" ? "danger" : "accent";
 }
+function LeadActions({ lead, compact = false }: { lead: LeadSummaryItem; compact?: boolean }) {
+  return <div className="ds-lead-actions"><ActionLink variant="secondary" href={`/crm/leads/${lead.leadId}`}>View lead</ActionLink>{lead.capabilities.canReview && lead.nextView.kind === "identity_review_detail" && <ActionLink variant="primary" href={`/crm/identity-reviews/${lead.leadId}`}>{compact ? "Review" : "Continue review"}</ActionLink>}</div>;
+}
+
 export function LeadSummaryCard({ lead }: { lead: LeadSummaryItem }) {
-  return <article className="lead-card p1a-lead-card"><div className="p1a-card-meta"><span className="lead-status">{lead.lifecycle.label ?? lead.lifecycle.status}</span><span>{lead.stage.name}</span></div><h2><Link href={`/crm/leads/${lead.leadId}`}>{lead.displayName}</Link></h2><p>{lead.company.displayName ?? "No company provided"}</p><p className="wrap-email">{leadContactLabel(lead)}</p><small>{leadAssignmentLabel(lead)} · {reviewLabel(lead.identityReviewStatus)}</small><LeadActions lead={lead}/></article>;
+  return <article className="ds-lead-card"><div className="ds-lead-card__meta"><StatusBadge tone={lifecycleTone(lead.lifecycle.status)}>{lead.lifecycle.label ?? lead.lifecycle.status}</StatusBadge><span>{lead.stage.name}</span></div><h3><Link href={`/crm/leads/${lead.leadId}`}>{lead.displayName}</Link></h3><p>{lead.company.displayName ?? "No company"}</p><p>{leadContactLabel(lead)}</p><small>{leadAssignmentLabel(lead)} · {reviewLabel(lead.identityReviewStatus)}</small><LeadActions lead={lead} compact /></article>;
 }
+
 export function LeadList({ view, q, stageId }: { view: LeadSummariesView; q: string; stageId?: string }) {
-  const params = new URLSearchParams(); if (q) params.set("q", q); if (stageId) params.set("stageId", stageId);
-  return <><p role="status">{view.items.length} {view.items.length === 1 ? "lead" : "leads"} shown.</p>{view.items.length === 0 ? <div className="empty"><h2>{q || stageId ? "No matching leads" : "No leads yet"}</h2><p>{q || stageId ? "Clear the filters or try a different search." : "Add a lead to begin tracking customer work."}</p></div> : <div className="lead-grid p1a-lead-grid">{view.items.map(lead => <LeadSummaryCard key={lead.leadId} lead={lead}/>)}</div>}{view.nextCursor && <div className="row-actions"><Link className="secondary link-button" href={`/crm?${new URLSearchParams([...params, ["cursor", view.nextCursor]]).toString()}`}>Next page</Link></div>}</>;
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (stageId) params.set("stageId", stageId);
+  return <section className="ds-lead-list" aria-label="Visible leads"><p role="status" aria-live="polite">{view.items.length} {view.items.length === 1 ? "lead" : "leads"} shown.</p>{view.items.length === 0 ? <EmptyState title={q || stageId ? "No matching leads" : "No leads yet"}><p>{q || stageId ? "Clear the filters or try a different search." : "Add a lead to begin tracking customer work."}</p></EmptyState> : <DataTable caption="Visible leads"><thead><tr><th scope="col">Lead</th><th scope="col">Contact</th><th scope="col">Company</th><th scope="col">Stage</th><th scope="col">Responsibility</th><th scope="col">Review</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{view.items.map(lead => <tr key={lead.leadId}><th scope="row"><Link href={`/crm/leads/${lead.leadId}`}>{lead.displayName}</Link><StatusBadge tone={lifecycleTone(lead.lifecycle.status)}>{lead.lifecycle.label ?? lead.lifecycle.status}</StatusBadge></th><td>{leadContactLabel(lead)}</td><td>{lead.company.displayName ?? "No company"}</td><td>{lead.stage.name}</td><td>{leadAssignmentLabel(lead)}</td><td>{reviewLabel(lead.identityReviewStatus)}</td><td><LeadActions lead={lead} compact /></td></tr>)}</tbody></DataTable>}{view.nextCursor && <div className="ds-pagination"><ActionLink href={`/crm?${new URLSearchParams([...params, ["cursor", view.nextCursor]]).toString()}`}>Next page</ActionLink></div>}</section>;
 }
+
 export function LeadPipeline({ stages }: { stages: Array<{ stage: LeadPipelineStage; view: LeadSummariesView }> }) {
   const total = stages.reduce((count, item) => count + item.view.items.length, 0);
-  return <><p role="status">{total} {total === 1 ? "lead" : "leads"} shown across {stages.length} stages.</p><div className="pipeline-board">{stages.map(({ stage, view }) => <section className="pipeline-stage" key={stage.stageId} aria-labelledby={`stage-${stage.stageId}`}><h2 id={`stage-${stage.stageId}`}>{stage.name} <span className="pipeline-count" aria-label={`${view.items.length} ${view.items.length === 1 ? "lead" : "leads"}`}>{view.items.length}</span></h2>{view.items.length === 0 ? <p className="helper pipeline-empty-stage">No leads in this stage.</p> : view.items.map(lead => <LeadSummaryCard key={lead.leadId} lead={lead}/>)}</section>)}</div></>;
+  return <section className="ds-pipeline" aria-labelledby="pipeline-board-title"><h2 id="pipeline-board-title" className="sr-only">Pipeline board</h2><p role="status">{total} {total === 1 ? "lead" : "leads"} shown across {stages.length} stages.</p><div className="pipeline-board">{stages.map(({ stage, view }) => <section className="pipeline-stage" key={stage.stageId} aria-labelledby={`stage-${stage.stageId}`}><header><h2 id={`stage-${stage.stageId}`}>{stage.name}</h2><StatusBadge>{view.items.length} {view.items.length === 1 ? "lead" : "leads"}</StatusBadge></header>{view.items.length === 0 ? <p className="helper pipeline-empty-stage">No leads in this stage.</p> : <div className="ds-pipeline__cards">{view.items.map(lead => <LeadSummaryCard key={lead.leadId} lead={lead}/>)}</div>}</section>)}</div></section>;
 }
+
 export function LeadReadOnlyDetail({ lead }: { lead: LeadSummaryItem }) {
-  const detail = [
-    ["Contact", leadContactLabel(lead)], ["Company", lead.company.displayName ?? "No company provided"],
-    ["Assignment", leadAssignmentLabel(lead)], ["Lifecycle", lead.lifecycle.label ?? lead.lifecycle.status],
-    ["Pipeline stage", lead.stage.name], ["Identity review", reviewLabel(lead.identityReviewStatus)],
-    ["Source", sourceLabel(lead)], ["Source medium", lead.originalAttribution.sourceMedium],
-    ["Intake channel", intakeLabels[lead.originalAttribution.intakeChannel]],
-    ["Received", new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(lead.receivedAt))],
-  ];
-  return <><header className="product-page-header"><div><p className="eyebrow">Leads / Details</p><h1>{lead.displayName}</h1><p className="lead">Read-only canonical lead information. The Workspace owns this lead.</p></div></header><dl className="p1a-detail-grid">{detail.map(([term, value]) => <div key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl><div className="row-actions"><Link className="secondary link-button" href="/crm">Back to leads</Link><Link className="secondary link-button" href="/crm/pipeline">View Pipeline</Link>{lead.capabilities.canReview && lead.nextView.kind === "identity_review_detail" && <Link className="primary link-button" href={`/crm/identity-reviews/${lead.leadId}`}>Continue identity review</Link>}</div></>;
+  const contact = [["Contact", leadContactLabel(lead)], ["Company", lead.company.displayName ?? "No company provided"], ["Responsibility", leadAssignmentLabel(lead)]];
+  const pipeline = [["Lifecycle", lead.lifecycle.label ?? lead.lifecycle.status], ["Pipeline stage", lead.stage.name], ["Identity review", reviewLabel(lead.identityReviewStatus)]];
+  const attribution = [["Source", sourceLabel(lead)], ["Source medium", lead.originalAttribution.sourceMedium], ["Intake channel", intakeLabels[lead.originalAttribution.intakeChannel]], ["Received", new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(lead.receivedAt))]];
+  const facts = (items: string[][]) => <dl className="ds-fact-list">{items.map(([term, value]) => <div key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl>;
+  return <><header className="product-page-header"><div><p className="eyebrow">Leads / Details</p><h1>{lead.displayName}</h1><p className="lead">Confirmed read-only Lead information. This Workspace remains the permanent owner.</p></div><StatusBadge tone={lifecycleTone(lead.lifecycle.status)}>{lead.lifecycle.label ?? lead.lifecycle.status}</StatusBadge></header><div className="ds-detail-layout"><Panel title="Contact and Company" description="Optional information is shown only when present.">{facts(contact)}</Panel><Panel title="Pipeline and responsibility">{facts(pipeline)}</Panel><Panel title="Original attribution" description="Source and intake channel remain separate and read-only.">{facts(attribution)}</Panel></div><div className="ds-page-actions"><ActionLink href="/crm">Back to leads</ActionLink><ActionLink href="/crm/pipeline">View pipeline</ActionLink>{lead.capabilities.canReview && lead.nextView.kind === "identity_review_detail" && <ActionLink variant="primary" href={`/crm/identity-reviews/${lead.leadId}`}>Continue identity review</ActionLink>}</div></>;
 }
+
 export function LeadPresentationUnavailable({ detail = false }: { detail?: boolean }) {
-  return <div className="alert error" role="alert" tabIndex={-1} autoFocus><h2>{detail ? "Lead unavailable" : "Leads are temporarily unavailable"}</h2><p>No lead details are shown. Try again safely.</p><Link className="secondary link-button" href="/crm">Return to leads</Link></div>;
+  return <FeedbackState tone="danger" autoFocus title={detail ? "Lead unavailable" : "Leads are temporarily unavailable"} action={<ActionLink href="/crm">Return to leads</ActionLink>}><p>No protected Lead information is shown. Try again safely.</p></FeedbackState>;
 }

@@ -1,1 +1,1 @@
-export default function Loading(){return <section className="admin-content" aria-busy="true"><p role="status">Loading Pipeline…</p></section>}
+import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="admin-content" aria-busy="true"><LoadingState label="Loading Pipeline" rows={5}/></section>}

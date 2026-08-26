@@ -1,1 +1,1 @@
-export default function Loading(){return <div className="route-loading" role="status">Loading CRM overview…</div>}
+import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="admin-content" aria-busy="true"><LoadingState label="Loading CRM overview" rows={4}/></section>}

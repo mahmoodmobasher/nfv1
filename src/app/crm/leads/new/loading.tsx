@@ -1,1 +1,1 @@
-export default function Loading(){return <section className="admin-content narrow-admin" aria-busy="true"><p className="eyebrow">Leads</p><h1>Loading manual intake…</h1><p role="status">Preparing the lead form.</p></section>}
+import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="admin-content narrow-admin" aria-busy="true"><h1>Preparing Add lead</h1><LoadingState label="Preparing the Lead form" rows={6}/></section>}
