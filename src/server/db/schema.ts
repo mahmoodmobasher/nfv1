@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
+  char,
   check,
   foreignKey,
   index,
@@ -742,6 +744,238 @@ export const noteRecordReferences = pgTable(
     foreignKey({ name: "note_record_references_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
     check("note_record_references_type_check", sql`${table.recordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
     check("note_record_references_role_check", sql`${table.relationshipRole}='related'`),
+  ],
+);
+
+export const documentRecords = pgTable(
+  "document_records",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    availability: text("availability").notNull().default("awaiting_upload"),
+    version: integer("version").notNull().default(1),
+    currentContentVersion: integer("current_content_version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    redactionRequestedAt: timestamp("redaction_requested_at", { withTimezone: true }),
+    redactionRequestedByMembershipId: uuid("redaction_requested_by_membership_id"),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+    redactedByMembershipId: uuid("redacted_by_membership_id"),
+    purgeRequestedAt: timestamp("purge_requested_at", { withTimezone: true }),
+    purgeRequestedByMembershipId: uuid("purge_requested_by_membership_id"),
+    purgedAt: timestamp("purged_at", { withTimezone: true }),
+    purgedByMembershipId: uuid("purged_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("document_records_workspace_id_id_uq").on(table.workspaceId, table.id),
+    index("document_records_workspace_lifecycle_updated_idx").on(table.workspaceId, table.lifecycle, table.updatedAt.desc(), table.id.desc()),
+    index("document_records_workspace_creator_lifecycle_updated_idx").on(table.workspaceId, table.createdByMembershipId, table.lifecycle, table.updatedAt.desc(), table.id.desc()),
+    foreignKey({ name: "document_records_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "document_records_workspace_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "document_records_workspace_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "document_records_workspace_redaction_requester_fk", columns: [table.workspaceId, table.redactionRequestedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "document_records_workspace_redactor_fk", columns: [table.workspaceId, table.redactedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "document_records_workspace_purge_requester_fk", columns: [table.workspaceId, table.purgeRequestedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "document_records_workspace_purger_fk", columns: [table.workspaceId, table.purgedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("document_records_lifecycle_check", sql`${table.lifecycle} in ('active','archived','redaction_pending','redacted','purge_pending','purged')`),
+    check("document_records_availability_check", sql`${table.availability} in ('awaiting_upload','quarantined','available','blocked','failed','unavailable')`),
+    check("document_records_version_check", sql`${table.version}>0 and ${table.currentContentVersion} between 1 and 100`),
+    check("document_records_metadata_pairs_check", sql`num_nonnulls(${table.archivedAt},${table.archivedByMembershipId})<>1 and num_nonnulls(${table.redactionRequestedAt},${table.redactionRequestedByMembershipId})<>1 and num_nonnulls(${table.redactedAt},${table.redactedByMembershipId})<>1 and num_nonnulls(${table.purgeRequestedAt},${table.purgeRequestedByMembershipId})<>1 and num_nonnulls(${table.purgedAt},${table.purgedByMembershipId})<>1`),
+    check("document_records_lifecycle_metadata_check", sql`
+      (${table.lifecycle}='active' and num_nonnulls(${table.archivedAt},${table.archivedByMembershipId},${table.redactionRequestedAt},${table.redactionRequestedByMembershipId},${table.redactedAt},${table.redactedByMembershipId},${table.purgeRequestedAt},${table.purgeRequestedByMembershipId},${table.purgedAt},${table.purgedByMembershipId})=0) or
+      (${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.redactionRequestedAt} is null and ${table.redactedAt} is null and ${table.purgeRequestedAt} is null and ${table.purgedAt} is null) or
+      (${table.lifecycle}='redaction_pending' and ${table.redactionRequestedAt} is not null and ${table.redactedAt} is null and ${table.purgeRequestedAt} is null and ${table.purgedAt} is null) or
+      (${table.lifecycle}='redacted' and ${table.redactionRequestedAt} is not null and ${table.redactedAt} is not null and ${table.purgeRequestedAt} is null and ${table.purgedAt} is null) or
+      (${table.lifecycle}='purge_pending' and ${table.purgeRequestedAt} is not null and ${table.purgedAt} is null and (${table.archivedAt} is not null or (${table.redactionRequestedAt} is not null and ${table.redactedAt} is not null))) or
+      (${table.lifecycle}='purged' and ${table.purgeRequestedAt} is not null and ${table.purgedAt} is not null and (${table.archivedAt} is not null or (${table.redactionRequestedAt} is not null and ${table.redactedAt} is not null)))`),
+    check("document_records_terminal_availability_check", sql`${table.lifecycle} not in ('redaction_pending','redacted','purge_pending','purged') or ${table.availability}='unavailable'`),
+  ],
+);
+
+export const documentVersions = pgTable(
+  "document_versions",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    documentId: uuid("document_id").notNull(),
+    contentVersion: integer("content_version").notNull(),
+    state: text("state").notNull().default("reserved"),
+    displayFilename: text("display_filename"),
+    declaredMimeType: text("declared_mime_type"),
+    detectedMimeType: text("detected_mime_type"),
+    byteSize: bigint("byte_size", { mode: "number" }),
+    sha256Hex: char("sha256_hex", { length: 64 }),
+    redactionMarker: text("redaction_marker"),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true }),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+    purgedAt: timestamp("purged_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("document_versions_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("document_versions_workspace_document_content_uq").on(table.workspaceId, table.documentId, table.contentVersion),
+    index("document_versions_workspace_document_content_idx").on(table.workspaceId, table.documentId, table.contentVersion.desc()),
+    foreignKey({ name: "document_versions_document_fk", columns: [table.workspaceId, table.documentId], foreignColumns: [documentRecords.workspaceId, documentRecords.id] }),
+    foreignKey({ name: "document_versions_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("document_versions_content_version_check", sql`${table.contentVersion} between 1 and 100`),
+    check("document_versions_state_check", sql`${table.state} in ('reserved','uploaded','quarantined','available','blocked','failed','redacted','purged')`),
+    check("document_versions_filename_check", sql`${table.displayFilename} is null or (char_length(btrim(${table.displayFilename})) between 1 and 255 and ${table.displayFilename} !~ '[[:cntrl:]/\\\\]')`),
+    check("document_versions_declared_mime_check", sql`${table.declaredMimeType} is null or ${table.declaredMimeType} in ('application/pdf','image/jpeg','image/png','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation')`),
+    check("document_versions_detected_mime_check", sql`${table.detectedMimeType} is null or ${table.detectedMimeType} in ('application/pdf','image/jpeg','image/png','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation')`),
+    check("document_versions_size_check", sql`${table.byteSize} is null or ${table.byteSize} between 1 and 26214400`),
+    check("document_versions_hash_check", sql`${table.sha256Hex} is null or ${table.sha256Hex} ~ '^[0-9a-f]{64}$'`),
+    check("document_versions_state_metadata_check", sql`
+      (${table.state}='reserved' and ${table.displayFilename} is not null and ${table.declaredMimeType} is not null and ${table.detectedMimeType} is null and ${table.byteSize} is null and ${table.sha256Hex} is null and ${table.availableAt} is null and ${table.redactedAt} is null and ${table.purgedAt} is null and ${table.redactionMarker} is null) or
+      (${table.state} in ('uploaded','quarantined') and ${table.displayFilename} is not null and ${table.declaredMimeType} is not null and ${table.detectedMimeType} is not null and ${table.byteSize} is not null and ${table.sha256Hex} is not null and ${table.availableAt} is null and ${table.redactedAt} is null and ${table.purgedAt} is null and ${table.redactionMarker} is null) or
+      (${table.state}='available' and ${table.displayFilename} is not null and ${table.declaredMimeType} is not null and ${table.detectedMimeType} is not null and ${table.byteSize} is not null and ${table.sha256Hex} is not null and ${table.availableAt} is not null and ${table.redactedAt} is null and ${table.purgedAt} is null and ${table.redactionMarker} is null) or
+      (${table.state} in ('blocked','failed') and ${table.displayFilename} is not null and ${table.declaredMimeType} is not null and ${table.detectedMimeType} is not null and ${table.byteSize} is not null and ${table.sha256Hex} is not null and ${table.redactedAt} is null and ${table.purgedAt} is null and ${table.redactionMarker} is null) or
+      (${table.state}='redacted' and ${table.displayFilename} is null and ${table.declaredMimeType} is null and ${table.detectedMimeType} is null and ${table.byteSize} is null and ${table.sha256Hex} is null and ${table.redactionMarker}='content_redacted' and ${table.redactedAt} is not null and ${table.purgedAt} is null) or
+      (${table.state}='purged' and ${table.displayFilename} is null and ${table.declaredMimeType} is null and ${table.detectedMimeType} is null and ${table.byteSize} is null and ${table.sha256Hex} is null and ${table.redactionMarker}='content_redacted' and ${table.purgedAt} is not null)`),
+  ],
+);
+
+export const documentRecordReferences = pgTable(
+  "document_record_references",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    documentId: uuid("document_id").notNull(),
+    recordType: text("record_type").notNull(),
+    recordId: uuid("record_id").notNull(),
+    relationshipRole: text("relationship_role").notNull().default("related"),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "document_record_references_pk", columns: [table.workspaceId, table.documentId, table.recordType, table.recordId] }),
+    index("document_record_references_target_idx").on(table.workspaceId, table.recordType, table.recordId, table.documentId),
+    foreignKey({ name: "document_record_references_document_fk", columns: [table.workspaceId, table.documentId], foreignColumns: [documentRecords.workspaceId, documentRecords.id] }),
+    foreignKey({ name: "document_record_references_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("document_record_references_type_check", sql`${table.recordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
+    check("document_record_references_role_check", sql`${table.relationshipRole}='related'`),
+  ],
+);
+
+export const documentStorageObjects = pgTable(
+  "document_storage_objects",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    documentId: uuid("document_id").notNull(),
+    contentVersion: integer("content_version").notNull(),
+    storageAdapterCode: text("storage_adapter_code").notNull(),
+    residencyRegionCode: text("residency_region_code").notNull(),
+    residencyPolicyVersion: text("residency_policy_version").notNull(),
+    containerHandle: text("container_handle").notNull(),
+    objectKey: text("object_key").notNull(),
+    providerObjectVersion: text("provider_object_version"),
+    etag: text("etag"),
+    encryptionMode: text("encryption_mode").notNull(),
+    encryptionKeyHandle: text("encryption_key_handle"),
+    state: text("state").notNull().default("reserved"),
+    uploadExpiresAt: timestamp("upload_expires_at", { withTimezone: true }).notNull(),
+    uploadVerifiedAt: timestamp("upload_verified_at", { withTimezone: true }),
+    deleteRequestedAt: timestamp("delete_requested_at", { withTimezone: true }),
+    deleteVerifiedAt: timestamp("delete_verified_at", { withTimezone: true }),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("document_storage_objects_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("document_storage_objects_workspace_document_content_uq").on(table.workspaceId, table.documentId, table.contentVersion),
+    uniqueIndex("document_storage_objects_locator_uq").on(table.storageAdapterCode, table.residencyRegionCode, table.containerHandle, table.objectKey),
+    index("document_storage_objects_worker_idx").on(table.state, table.nextAttemptAt, table.id),
+    index("document_storage_objects_workspace_state_updated_idx").on(table.workspaceId, table.state, table.updatedAt, table.id),
+    foreignKey({ name: "document_storage_objects_version_fk", columns: [table.workspaceId, table.documentId, table.contentVersion], foreignColumns: [documentVersions.workspaceId, documentVersions.documentId, documentVersions.contentVersion] }),
+    check("document_storage_objects_adapter_check", sql`${table.storageAdapterCode} ~ '^[a-z][a-z0-9_.-]{1,63}$' and ${table.residencyRegionCode} ~ '^[a-z][a-z0-9_.-]{1,63}$'`),
+    check("document_storage_objects_policy_check", sql`char_length(btrim(${table.residencyPolicyVersion})) between 1 and 64`),
+    check("document_storage_objects_container_check", sql`char_length(btrim(${table.containerHandle})) between 1 and 200 and ${table.containerHandle} !~ '[[:cntrl:]]'`),
+    check("document_storage_objects_key_check", sql`char_length(btrim(${table.objectKey})) between 1 and 512 and ${table.objectKey} !~ '[[:cntrl:]]' and ${table.objectKey} !~ '^/' and ${table.objectKey} !~ '(^|/)\\.{1,2}(/|$)'`),
+    check("document_storage_objects_provider_facts_check", sql`(${table.providerObjectVersion} is null or (char_length(btrim(${table.providerObjectVersion})) between 1 and 256 and ${table.providerObjectVersion} !~ '[[:cntrl:]]')) and (${table.etag} is null or (char_length(btrim(${table.etag})) between 1 and 256 and ${table.etag} !~ '[[:cntrl:]]'))`),
+    check("document_storage_objects_encryption_check", sql`${table.encryptionMode} in ('provider_managed','customer_managed_envelope') and ((${table.state}<>'purged' and ${table.encryptionMode}='provider_managed' and ${table.encryptionKeyHandle} is null) or (${table.state}<>'purged' and ${table.encryptionMode}='customer_managed_envelope' and char_length(btrim(${table.encryptionKeyHandle})) between 1 and 256 and ${table.encryptionKeyHandle} !~ '[[:cntrl:]]') or (${table.state}='purged' and ${table.encryptionKeyHandle} is null))`),
+    check("document_storage_objects_state_check", sql`${table.state} in ('reserved','uploaded','quarantined','scanning','clean','blocked','failed','delete_pending','purged')`),
+    check("document_storage_objects_attempt_check", sql`${table.attemptCount} between 0 and 3`),
+    check("document_storage_objects_state_metadata_check", sql`
+      (${table.state}='reserved' and ${table.uploadVerifiedAt} is null and ${table.deleteRequestedAt} is null and ${table.deleteVerifiedAt} is null) or
+      (${table.state} in ('uploaded','quarantined','scanning','clean','blocked','failed') and ${table.uploadVerifiedAt} is not null and ${table.deleteRequestedAt} is null and ${table.deleteVerifiedAt} is null) or
+      (${table.state}='delete_pending' and ${table.deleteRequestedAt} is not null and ${table.deleteVerifiedAt} is null) or
+      (${table.state}='purged' and ${table.deleteRequestedAt} is not null and ${table.deleteVerifiedAt} is not null and ${table.providerObjectVersion} is null and ${table.etag} is null)`),
+    check("document_storage_objects_retry_check", sql`${table.nextAttemptAt} is null or ${table.state} in ('quarantined','scanning','failed')`),
+  ],
+);
+
+export const documentScanResults = pgTable(
+  "document_scan_results",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    storageObjectId: uuid("storage_object_id").notNull(),
+    attemptNumber: integer("attempt_number").notNull(),
+    outcome: text("outcome").notNull(),
+    engineCode: text("engine_code").notNull(),
+    engineVersion: text("engine_version").notNull(),
+    signatureSetVersion: text("signature_set_version").notNull(),
+    scannedSha256Hex: char("scanned_sha256_hex", { length: 64 }).notNull(),
+    safeResultCode: text("safe_result_code").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_scan_results_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("document_scan_results_workspace_object_attempt_uq").on(table.workspaceId, table.storageObjectId, table.attemptNumber),
+    index("document_scan_results_workspace_object_attempt_idx").on(table.workspaceId, table.storageObjectId, table.attemptNumber.desc()),
+    foreignKey({ name: "document_scan_results_object_fk", columns: [table.workspaceId, table.storageObjectId], foreignColumns: [documentStorageObjects.workspaceId, documentStorageObjects.id] }),
+    check("document_scan_results_attempt_check", sql`${table.attemptNumber} between 1 and 3`),
+    check("document_scan_results_outcome_check", sql`${table.outcome} in ('clean','infected','error','timeout')`),
+    check("document_scan_results_codes_check", sql`char_length(btrim(${table.engineCode})) between 1 and 128 and ${table.engineCode} !~ '[[:cntrl:]]' and char_length(btrim(${table.engineVersion})) between 1 and 128 and ${table.engineVersion} !~ '[[:cntrl:]]' and char_length(btrim(${table.signatureSetVersion})) between 1 and 128 and ${table.signatureSetVersion} !~ '[[:cntrl:]]' and char_length(btrim(${table.safeResultCode})) between 1 and 128 and ${table.safeResultCode} !~ '[[:cntrl:]]'`),
+    check("document_scan_results_hash_check", sql`${table.scannedSha256Hex} ~ '^[0-9a-f]{64}$'`),
+    check("document_scan_results_time_check", sql`${table.completedAt}>=${table.startedAt}`),
+  ],
+);
+
+export const retentionLegalHolds = pgTable(
+  "retention_legal_holds",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    recordType: text("record_type").notNull().default("crm.document"),
+    recordId: uuid("record_id").notNull(),
+    status: text("status").notNull().default("active"),
+    reasonCode: text("reason_code").notNull(),
+    caseReference: text("case_reference"),
+    policyVersion: text("policy_version").notNull(),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    placedAt: timestamp("placed_at", { withTimezone: true }).defaultNow().notNull(),
+    placedByMembershipId: uuid("placed_by_membership_id").notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releasedByMembershipId: uuid("released_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("retention_legal_holds_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("retention_legal_holds_active_record_uq").on(table.workspaceId, table.recordType, table.recordId).where(sql`${table.status}='active'`),
+    index("retention_legal_holds_record_idx").on(table.workspaceId, table.recordType, table.recordId, table.status, table.id),
+    index("retention_legal_holds_workspace_status_updated_idx").on(table.workspaceId, table.status, table.updatedAt, table.id),
+    foreignKey({ name: "retention_legal_holds_workspace_placer_fk", columns: [table.workspaceId, table.placedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "retention_legal_holds_workspace_releaser_fk", columns: [table.workspaceId, table.releasedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("retention_legal_holds_record_type_check", sql`${table.recordType}='crm.document'`),
+    check("retention_legal_holds_status_check", sql`${table.status} in ('active','released')`),
+    check("retention_legal_holds_reason_check", sql`${table.reasonCode} in ('legal_dispute','regulatory','investigation','customer_request','other')`),
+    check("retention_legal_holds_case_check", sql`${table.caseReference} is null or (char_length(btrim(${table.caseReference})) between 1 and 200 and ${table.caseReference} !~ '[[:cntrl:]]')`),
+    check("retention_legal_holds_policy_check", sql`char_length(btrim(${table.policyVersion})) between 1 and 64`),
+    check("retention_legal_holds_version_check", sql`${table.version}>0`),
+    check("retention_legal_holds_release_check", sql`(${table.status}='active' and ${table.releasedAt} is null and ${table.releasedByMembershipId} is null) or (${table.status}='released' and ${table.releasedAt} is not null and ${table.releasedByMembershipId} is not null)`),
   ],
 );
 
