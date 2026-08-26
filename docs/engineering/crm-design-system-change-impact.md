@@ -22,6 +22,17 @@ Binding visual source: `crm-dashboard-light-end-product-mock.html` (`a8bb678ceb7
 
 ## Pending stages
 
-- Stage 2: authenticated shell, navigation, and direct Sign out.
 - Stage 3: shared controls, panels, tables, forms, badges, and feedback states.
 - Stage 4: Lead surfaces and held Duplicates integration.
+
+## Stage 2 — authenticated shell and direct Sign out
+
+- Owner: shared authenticated product shell.
+- Public contract: `ProductShell` receives server-filtered navigation and preserves the existing secure logout endpoint/CSRF flow.
+- Consumers: CRM and Workspace administration shells.
+- Change: the desktop reference rail now consumes the measured 232px token; content padding consumes the measured 28px token; the duplicate Account dropdown was removed and replaced by a labelled 44px direct Sign out control with logout icon, busy copy, disabled state, recoverable generic failure, keyboard focus, and responsive parity.
+- Security/authority: authentication, session revocation, redirect, and failure behavior are unchanged; no client authorization logic was introduced.
+- Superseded design: Account-menu component state and styling were removed rather than preserved.
+- Validation executed: `npx tsc --noEmit` passed; `npm run lint` passed with the same pre-existing unused-variable warning.
+- Browser/visual evidence: deferred to user testing by explicit direction.
+- Rollback: revert the immutable Stage 2 commit, then Stage 1 if the entire visual foundation must be removed.

@@ -244,17 +244,15 @@ describe("design-system document boundary", () => {
     );
   });
 
-  it("keeps the supported account actions discoverable in the shared shell", () => {
+  it("uses one direct labelled Sign out control instead of an Account menu", () => {
     const shell = readFileSync(
       new URL("../src/app/product-shell.tsx", import.meta.url),
       "utf8",
     );
-    expect(shell).toContain('aria-label="Account menu"');
-    expect(shell).toContain('aria-haspopup="menu"');
-    expect(shell).toContain('role="menu"');
-    expect(shell).toContain('role="menuitem"');
-    expect(shell).toContain('href="/settings"');
-    expect(shell).toContain("Personal settings");
+    expect(shell).not.toContain('aria-label="Account menu"');
+    expect(shell).not.toContain('aria-haspopup="menu"');
+    expect(shell).not.toContain('role="menu"');
+    expect(shell).toContain('className="product-signout"');
     expect(shell).toContain("Sign out");
     expect(shell).not.toMatch(/global search|create menu|billing portal/i);
   });

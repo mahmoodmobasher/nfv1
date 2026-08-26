@@ -122,9 +122,6 @@ export function ProductShell({
 }) {
   const pathname = usePathname(),
     [open, setOpen] = useState(false),
-    [accountOpen, setAccountOpen] = useState<"desktop" | "mobile" | null>(
-      null,
-    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null),
@@ -133,15 +130,10 @@ export function ProductShell({
     rail = useRef<HTMLElement>(null),
     topbar = useRef<HTMLElement>(null),
     mobileContext = useRef<HTMLDivElement>(null),
-    mobileAccount = useRef<HTMLDivElement>(null),
     main = useRef<HTMLElement>(null),
-    accountMenu = useRef<HTMLDivElement>(null),
-    activeAccountTrigger = useRef<HTMLButtonElement | null>(null),
     previousPath = useRef(pathname),
     openFrame = useRef<number | null>(null),
-    restoreFrame = useRef<number | null>(null),
-    accountOpenFrame = useRef<number | null>(null),
-    accountRestoreFrame = useRef<number | null>(null);
+    restoreFrame = useRef<number | null>(null);
   function close(focus = true) {
     setOpen(false);
     if (focus)
@@ -149,73 +141,11 @@ export function ProductShell({
         () => trigger.current?.isConnected && trigger.current.focus(),
       );
   }
-  function closeAccount(focus = true) {
-    setAccountOpen(null);
-    if (focus)
-      accountRestoreFrame.current = requestAnimationFrame(
-        () =>
-          activeAccountTrigger.current?.isConnected &&
-          activeAccountTrigger.current.focus(),
-      );
-  }
   useEffect(() => {
     if (pathname === previousPath.current) return;
     previousPath.current = pathname;
     if (open) close(false);
-    if (accountOpen) closeAccount(false);
-  }, [pathname, open, accountOpen]);
-  useEffect(() => {
-    if (!accountOpen) return;
-    accountOpenFrame.current = requestAnimationFrame(() =>
-      accountMenu.current
-        ?.querySelector<HTMLElement>("a[href],button:not([disabled])")
-        ?.focus(),
-    );
-    const pointer = (event: PointerEvent) => {
-        const target = event.target as Node;
-        if (
-          accountMenu.current?.contains(target) ||
-          activeAccountTrigger.current?.contains(target)
-        )
-          return;
-        closeAccount();
-      },
-      key = (event: KeyboardEvent) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          closeAccount();
-          return;
-        }
-        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key))
-          return;
-        const items = accountMenu.current?.querySelectorAll<HTMLElement>(
-          '[role="menuitem"]:not([disabled])',
-        );
-        if (!items?.length) return;
-        event.preventDefault();
-        const current = Array.from(items).indexOf(
-            document.activeElement as HTMLElement,
-          ),
-          next =
-            event.key === "Home"
-              ? 0
-              : event.key === "End"
-                ? items.length - 1
-                : event.key === "ArrowUp"
-                  ? (current - 1 + items.length) % items.length
-                  : (current + 1) % items.length;
-        items[next].focus();
-      };
-    document.addEventListener("pointerdown", pointer);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", pointer);
-      document.removeEventListener("keydown", key);
-      if (accountOpenFrame.current !== null)
-        cancelAnimationFrame(accountOpenFrame.current);
-      accountOpenFrame.current = null;
-    };
-  }, [accountOpen]);
+  }, [pathname, open]);
   useEffect(() => {
     if (!open) return;
     const targets = [
@@ -223,7 +153,6 @@ export function ProductShell({
         rail.current,
         topbar.current,
         mobileContext.current,
-        mobileAccount.current,
         trigger.current,
         main.current,
       ].filter((node): node is HTMLElement => Boolean(node)),
@@ -273,10 +202,6 @@ export function ProductShell({
       if (openFrame.current !== null) cancelAnimationFrame(openFrame.current);
       if (restoreFrame.current !== null)
         cancelAnimationFrame(restoreFrame.current);
-      if (accountOpenFrame.current !== null)
-        cancelAnimationFrame(accountOpenFrame.current);
-      if (accountRestoreFrame.current !== null)
-        cancelAnimationFrame(accountRestoreFrame.current);
     },
     [],
   );
@@ -296,63 +221,12 @@ export function ProductShell({
       setBusy(false);
     }
   }
-  const accountControl = (placement: "desktop" | "mobile") => {
-    const expanded = accountOpen === placement;
-    return (
-      <div className="product-account">
-        <button
-          className="product-account-trigger"
-          aria-label="Account menu"
-          aria-expanded={expanded}
-          aria-haspopup="menu"
-          onClick={(event) => {
-            activeAccountTrigger.current = event.currentTarget;
-            if (expanded) closeAccount();
-            else {
-              if (open) close(false);
-              setAccountOpen(placement);
-            }
-          }}
-        >
-          <span className="product-account-avatar" aria-hidden="true">
-            <UserRound />
-          </span>
-          <span>Account</span>
-        </button>
-        {expanded && (
-          <div
-            ref={accountMenu}
-            className="product-account-menu"
-            role="menu"
-            aria-label="Account menu"
-          >
-            <Link
-              href="/settings"
-              role="menuitem"
-              onClick={() => closeAccount(false)}
-            >
-              <UserRound aria-hidden="true" />
-              <span>Personal settings</span>
-            </Link>
-            <button
-              role="menuitem"
-              className="product-account-signout"
-              disabled={busy}
-              onClick={logout}
-            >
-              <LogOut aria-hidden="true" />
-              <span>{busy ? "Signing out…" : "Sign out"}</span>
-            </button>
-            {error && (
-              <p className="product-account-error" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const signOutControl = (
+    <button className="product-signout" onClick={logout} disabled={busy}>
+      <LogOut aria-hidden="true" />
+      <span>{busy ? "Signing out…" : "Sign out"}</span>
+    </button>
+  );
   const item = (entry: ProductNavItem) => {
     const active = entry.exact
         ? pathname === entry.href
@@ -391,10 +265,6 @@ export function ProductShell({
             ))}
           </section>
         ))}
-        <button className="signout" onClick={logout} disabled={busy}>
-          <LogOut aria-hidden={true} />
-          <span>{busy ? "Signing out…" : "Sign out"}</span>
-        </button>
       </nav>
     </div>
   );
@@ -425,7 +295,7 @@ export function ProductShell({
           >
             <Palette aria-hidden="true" />
           </Link>
-          {accountControl("desktop")}
+          {signOutControl}
         </div>
       </header>
       <header className={`${mobileClass} product-mobile`}>
@@ -433,9 +303,7 @@ export function ProductShell({
           <Brand />
           <span>{workspace}</span>
         </div>
-        <div ref={mobileAccount} className="product-mobile-account">
-          {accountControl("mobile")}
-        </div>
+        <div className="product-mobile-account">{signOutControl}</div>
         <button
           ref={trigger}
           className="menu-button"
@@ -445,7 +313,7 @@ export function ProductShell({
           onClick={() =>
             open
               ? close()
-              : (accountOpen && closeAccount(false), setOpen(true))
+              : setOpen(true)
           }
         >
           {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
@@ -481,7 +349,7 @@ export function ProductShell({
       </header>
       <main ref={main} id="product-main" tabIndex={-1} className="product-main">
         <div className="preview-banner">{banner}</div>
-        {error && !accountOpen && (
+        {error && (
           <div className="alert error" role="alert">
             {error}
           </div>
