@@ -31,7 +31,8 @@ export const leadSummaryItemV1Schema = z.object({
   updatedAt: z.string().datetime({ offset: true }),
   originalAttribution: z.object({ sourceCategory, sourcePlatform, sourceMedium, sourceDetail: context,
     campaignContext: context, attributionContractVersion: z.string().min(1).max(80), intakeChannel }).strict(),
-  capabilities: z.object({ canView: z.literal(true), canEdit: z.literal(false), canReview: z.boolean() }).strict(),
+  capabilities: z.object({ canView: z.literal(true), canEdit: z.literal(false), canEditLead: z.boolean(),
+    canMoveStage: z.boolean(), canReview: z.boolean() }).strict(),
   nextView: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("lead_detail"), leadId: uuid }).strict(),
     z.object({ kind: z.literal("identity_review_detail"), leadId: uuid }).strict(),

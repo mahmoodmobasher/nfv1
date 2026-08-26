@@ -61,7 +61,8 @@ function item(row: Record<string, unknown>, labels: Labels, companies: Map<strin
       sourceMedium:row.sourceMedium as LeadSummaryItemV1["originalAttribution"]["sourceMedium"],sourceDetail:safeContext(row.sourceDetail),
       campaignContext:safeContext(row.campaignContext),attributionContractVersion:String(row.attributionContractVersion),
       intakeChannel:row.intakeChannel as LeadSummaryItemV1["originalAttribution"]["intakeChannel"]},
-    capabilities:{canView:true,canEdit:false,canReview:row.identityReviewStatus==="pending"&&
+    capabilities:{canView:true,canEdit:false,canEditLead:actor.role==="owner"||actor.role==="admin",
+      canMoveStage:actor.role==="owner"||actor.role==="admin"||membershipId===actor.membershipId,canReview:row.identityReviewStatus==="pending"&&
       (actor.role==="owner"||actor.role==="admin"||membershipId===actor.membershipId)},
     nextView:row.identityReviewStatus==="pending"&&(actor.role==="owner"||actor.role==="admin"||membershipId===actor.membershipId)
       ?{kind:"identity_review_detail",leadId}:{kind:"lead_detail",leadId} };

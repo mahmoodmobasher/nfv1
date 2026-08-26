@@ -100,7 +100,7 @@ suite("P1A canonical Lead presentation disclosure",()=>{beforeAll(async()=>{awai
     const controlled=mutateBeforeRevalidation(pool,async()=>{await pool.query(`update workspace_memberships set role_id=(
       select id from roles where workspace_id=$1 and code='owner') where id=$2`,[f.workspace.id,f.member.membershipId])});
     const page=await listLeadSummariesV1(controlled,f.member,{q:"",limit:50});
-    expect(page.items[0].capabilities).toEqual({canView:true,canEdit:false,canReview:true});
+    expect(page.items[0].capabilities).toEqual({canView:true,canEdit:false,canEditLead:true,canMoveStage:true,canReview:true});
     expect(page.items[0].nextView.kind).toBe("identity_review_detail");
   });
 

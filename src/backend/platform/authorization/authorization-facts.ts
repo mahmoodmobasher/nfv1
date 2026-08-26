@@ -60,6 +60,12 @@ export async function revalidateActiveActor(tx: ModuleTransaction, actor: Truste
 
 export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
   return {
+    canEditLead(actor: TrustedActor) {
+      return actor.role === "owner" || actor.role === "admin";
+    },
+    canMoveLeadStage(actor: TrustedActor, lead: { owner_membership_id: string | null }) {
+      return actor.role === "owner" || actor.role === "admin" || lead.owner_membership_id === actor.membershipId;
+    },
     async visibleLeadIds(actor: TrustedActor, leads: Array<{ id: string; visibility: string; ownerMembershipId: string | null }>) {
       if (actor.role !== "member") return new Set(leads.map(lead => lead.id));
       if (!leads.length) return new Set<string>();
@@ -76,6 +82,19 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
         [workspaceId, [...new Set(teamIds)].sort()])).rows : [];
       return { memberships: new Map(memberships.map(value => [value.id, value.label])),
         teams: new Map(teams.map(value => [value.id, value.label])) };
+    },
+    async operationalEditOptions(workspaceId: string) {
+      const memberships = (await tx.query<{ id: string; label: string }>(
+        `select m.id,coalesce(nullif(btrim(u.display_name),''),'Workspace member') label
+           from workspace_memberships m join users u on u.id=m.user_id and u.status='active'
+          where m.workspace_id=$1 and m.status='active' order by lower(coalesce(nullif(btrim(u.display_name),''),'Workspace member')),m.id limit 501`,
+        [workspaceId],
+      )).rows;
+      const teams = (await tx.query<{ id: string; label: string }>(
+        `select id,name label from teams where workspace_id=$1 and status='active' order by lower(name),id limit 101`,
+        [workspaceId],
+      )).rows;
+      return { memberships, teams };
     },
     async lockReferences(input: { workspaceId: string; leadId?: string; leadIds?: string[];
       membershipIds?: Array<string | null>; teamIds?: Array<string | null> }) {
@@ -99,10 +118,20 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
     },
     async validateAssignment(workspaceId: string, membershipId: string | null, teamId: string | null) {
       if (membershipId && !(await tx.query(
-        `select 1 from workspace_memberships where workspace_id=$1 and id=$2 and status='active'`, [workspaceId, membershipId])).rows[0])
+        `select 1 from workspace_memberships m join users u on u.id=m.user_id and u.status='active'
+          where m.workspace_id=$1 and m.id=$2 and m.status='active'`, [workspaceId, membershipId])).rows[0])
         throw Object.assign(new Error("assignment_unavailable"), { code: "assignment_unavailable", status: 409 });
       if (teamId && !(await tx.query(
         `select 1 from teams where workspace_id=$1 and id=$2 and status='active'`, [workspaceId, teamId])).rows[0])
+        throw Object.assign(new Error("assignment_unavailable"), { code: "assignment_unavailable", status: 409 });
+    },
+    async validateVisibleTeams(workspaceId: string, teamIds: string[]) {
+      if (!teamIds.length) return;
+      const count = Number((await tx.query<{ count: number }>(
+        `select count(*)::int count from teams where workspace_id=$1 and id=any($2::uuid[]) and status='active'`,
+        [workspaceId, [...new Set(teamIds)].sort()],
+      )).rows[0]?.count ?? 0);
+      if (count !== new Set(teamIds).size)
         throw Object.assign(new Error("assignment_unavailable"), { code: "assignment_unavailable", status: 409 });
     },
     async canDiscloseLead(actor: TrustedActor, lead: { id: string; owner_membership_id: string | null; visibility: string }) {

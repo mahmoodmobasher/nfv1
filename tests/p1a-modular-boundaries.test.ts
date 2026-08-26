@@ -45,7 +45,8 @@ function sqlOwnershipViolations(path: string, source: string) {
 }
 const platformSql = {
   authorization: new Set(["workspace_memberships", "roles", "workspaces", "users", "sessions", "teams", "team_memberships", "lead_visible_teams"]),
-  audit: new Set(["audit_events"]), outbox: new Set(["outbox_messages"]), database: new Set<string>(), idempotency: new Set<string>(),
+  audit: new Set(["audit_events"]), outbox: new Set(["outbox_messages"]), database: new Set<string>(),
+  idempotency: new Set(["idempotency_records"]),
 };
 function platformSqlViolations(path: string, source: string) {
   const area = path.split("/")[3] as keyof typeof platformSql;
@@ -67,6 +68,7 @@ describe("P1A modular-monolith boundaries", () => {
     const rows = ownershipRows(registry), required = ["leads", "lead_intakes", "lead_activities", "lead_visible_teams",
       "contacts", "companies", "lead_identity_reviews", "lead_identity_candidates", "lead_identity_decisions",
       "lead_identity_decision_heads", "audit_events", "outbox_messages"];
+    required.push("idempotency_records");
     expect(duplicate(rows.map(row => row.table))).toBeUndefined();
     for (const table of required) expect(rows.filter(row => row.table === table), table).toHaveLength(1);
   });
@@ -127,6 +129,7 @@ describe("P1A modular-monolith boundaries", () => {
   it("requires public operations in manifests/registry and forbids wildcard repository exports", () => {
     const leadManifest = readFileSync("src/backend/modules/leads/README.md", "utf8");
     for (const operation of ["submitLeadInquiryV1", "listLeadSummariesV1", "getLeadDetailV1", "listLeadPipelineStagesV1",
+      "getLeadOperationalEditV1", "editLeadOperationalV1", "transitionLeadStageV1",
       "getIdentityReviewDetailV1", "listIdentityReviewQueueV1", "decideLeadIdentityReviewV1"])
       expect(`${registry}\n${leadManifest}`).toContain(operation);
     for (const moduleName of modules) expect(readFileSync(`src/backend/modules/${moduleName}/index.ts`, "utf8")).not.toMatch(/export \* /);

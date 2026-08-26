@@ -1,8 +1,8 @@
 {
-  "operations": ["lead-inquiry-intake.v1", "lead-identity-review-decision.v1"],
-  "queries": ["lead-identity-review-detail.v1", "lead-identity-review-queue.v1"],
-  "auditActions": ["crm.inquiry_created", "crm.inquiry_held_for_review", "crm.inquiry_review_resolved"],
-  "events": ["crm.inquiry.created.v1", "crm.inquiry.review_required.v1", "crm.inquiry.review_resolved.v1", "crm.inquiry.linked.v1", "crm.contact.created.v1", "crm.company.created.v1"],
+  "operations": ["lead-inquiry-intake.v1", "lead-identity-review-decision.v1", "lead-operational-edit.v1", "lead-stage-transition.v1"],
+  "queries": ["lead-identity-review-detail.v1", "lead-identity-review-queue.v1", "getLeadOperationalEdit.v1"],
+  "auditActions": ["crm.inquiry_created", "crm.inquiry_held_for_review", "crm.inquiry_review_resolved", "crm.lead_operational_updated", "crm.lead_stage_transitioned"],
+  "events": ["crm.inquiry.created.v1", "crm.inquiry.review_required.v1", "crm.inquiry.review_resolved.v1", "crm.inquiry.linked.v1", "crm.contact.created.v1", "crm.company.created.v1", "crm.lead.operational_updated.v1", "crm.lead.stage_transitioned.v1"],
   "sources": ["website", "referral", "outbound", "event", "partner", "social_media", "import", "manual", "other"],
   "socialPlatforms": ["tiktok", "instagram", "facebook", "linkedin", "x", "youtube", "other_social"],
   "sourceMedia": ["organic", "paid", "unknown"],

@@ -1,7 +1,8 @@
 import type { ModuleTransaction } from "../database";
 
 export type P1AEventTopic = "crm.inquiry.created.v1" | "crm.inquiry.review_required.v1" |
-  "crm.inquiry.review_resolved.v1" | "crm.inquiry.linked.v1" | "crm.contact.created.v1" | "crm.company.created.v1";
+  "crm.inquiry.review_resolved.v1" | "crm.inquiry.linked.v1" | "crm.contact.created.v1" | "crm.company.created.v1" |
+  "crm.lead.operational_updated.v1" | "crm.lead.stage_transitioned.v1";
 export type DomainEventV1 = {
   topic: P1AEventTopic;
   aggregateType: "lead" | "contact" | "company";
@@ -22,6 +23,10 @@ const topicContract: Record<P1AEventTopic, { aggregate: DomainEventV1["aggregate
     "reviewVersion", "contactId", "companyId", "requestId"], allowed: [] },
   "crm.contact.created.v1": { aggregate: "contact", required: ["schemaVersion", "workspaceId", "contactId", "version", "requestId"], allowed: [] },
   "crm.company.created.v1": { aggregate: "company", required: ["schemaVersion", "workspaceId", "companyId", "version", "requestId"], allowed: [] },
+  "crm.lead.operational_updated.v1": { aggregate: "lead", required: ["schemaVersion", "workspaceId", "leadId", "leadVersion",
+    "changeFields", "requestId"], allowed: [] },
+  "crm.lead.stage_transitioned.v1": { aggregate: "lead", required: ["schemaVersion", "workspaceId", "leadId", "leadVersion",
+    "previousStageId", "stageId", "requestId"], allowed: [] },
 };
 
 function assertEventContract(event: DomainEventV1, workspaceId: string) {
@@ -65,6 +70,15 @@ function assertEventContract(event: DomainEventV1, workspaceId: string) {
   if ((event.topic === "crm.contact.created.v1" && !version(payload.version)) ||
       (event.topic === "crm.company.created.v1" && !version(payload.version)))
     throw new Error("invalid_p1a_event_payload");
+  if (event.topic === "crm.lead.operational_updated.v1" &&
+      (!version(payload.leadVersion) || !Array.isArray(payload.changeFields) || payload.changeFields.length < 1 ||
+       payload.changeFields.length > 4 || payload.changeFields.some(field => typeof field !== "string" ||
+         !["responsibleMembershipId", "responsibleTeamId", "visibility", "visibleTeamIds"].includes(field))))
+    throw new Error("invalid_p1a_event_payload");
+  if (event.topic === "crm.lead.stage_transitioned.v1" &&
+      (!version(payload.leadVersion) || !text(payload.previousStageId) || !text(payload.stageId) ||
+       payload.previousStageId === payload.stageId))
+    throw new Error("invalid_p1a_event_payload");
 }
 
 export async function writeDomainEventSet(tx: ModuleTransaction, input: {
@@ -92,6 +106,8 @@ export async function writeDomainEventSet(tx: ModuleTransaction, input: {
     "crm.contact.created.v1,crm.inquiry.linked.v1,crm.inquiry.review_resolved.v1",
     "crm.company.created.v1,crm.inquiry.linked.v1,crm.inquiry.review_resolved.v1",
     "crm.company.created.v1,crm.contact.created.v1,crm.inquiry.linked.v1,crm.inquiry.review_resolved.v1",
+    "crm.lead.operational_updated.v1",
+    "crm.lead.stage_transitioned.v1",
   ]);
   if (!allowedSets.has(topicSet)) throw new Error("invalid_p1a_event_set");
   for (const event of input.events) {

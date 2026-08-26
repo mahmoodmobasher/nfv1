@@ -12,10 +12,10 @@ export const safeLeadSummaryFixture:LeadSummariesView["items"][number]={
   updatedAt:"2026-08-25T12:00:00.000Z",originalAttribution:{sourceCategory:"manual",sourcePlatform:null,
     sourceMedium:"unknown",sourceDetail:{operator_context:"sales desk"},campaignContext:{},
     attributionContractVersion:"p1a-attribution-v1",intakeChannel:"manual"},
-  capabilities:{canView:true,canEdit:false,canReview:false},nextView:{kind:"lead_detail",leadId},
+  capabilities:{canView:true,canEdit:false,canEditLead:true,canMoveStage:true,canReview:false},nextView:{kind:"lead_detail",leadId},
 };
 export const pendingReviewLeadFixture:LeadSummariesView["items"][number]={...safeLeadSummaryFixture,
-  identityReviewStatus:"pending",capabilities:{canView:true,canEdit:false,canReview:true},
+  identityReviewStatus:"pending",capabilities:{canView:true,canEdit:false,canEditLead:true,canMoveStage:true,canReview:true},
   nextView:{kind:"identity_review_detail",leadId}};
 export const leadSummariesFixture:LeadSummariesView={contractVersion:"listLeadSummaries.v1",requestId,
   items:[safeLeadSummaryFixture],nextCursor:null};

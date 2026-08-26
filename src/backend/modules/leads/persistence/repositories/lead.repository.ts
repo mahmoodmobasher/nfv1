@@ -10,6 +10,29 @@ export type LeadIntakeContext = Record<string, unknown> & {
   phone_country_code_used: string | null;
 };
 
+export type LeadMutationRow = {
+  id: string;
+  version: number;
+  stage_id: string;
+  owner_membership_id: string | null;
+  responsible_team_id: string | null;
+  visibility: "workspace" | "teams";
+};
+
+export type LockedPipelineStage = { id: string; name: string; position: number; status: "active" | "archived" };
+
+export const LEAD_MUTATION_LOCK_SQL_V1 = `select id,version,stage_id,owner_membership_id,responsible_team_id,visibility
+  from leads where workspace_id=$1 and id=$2 for update`;
+export const LEAD_STAGE_LOCK_SQL_V1 = `select id,name,position,status from pipeline_stages
+  where workspace_id=$1 and id=$2 for no key update`;
+export const LEAD_OPERATIONAL_UPDATE_SQL_V1 = `update leads
+  set owner_membership_id=$4,responsible_team_id=$5,visibility=$6,version=version+1,updated_at=now()
+  where workspace_id=$1 and id=$2 and version=$3 returning version`;
+export const LEAD_STAGE_UPDATE_SQL_V1 = `update leads set stage_id=$4,version=version+1,updated_at=now()
+  where workspace_id=$1 and id=$2 and version=$3 returning version`;
+export const LEAD_ACTIVITY_APPEND_SQL_V1 = `insert into lead_activities(workspace_id,lead_id,kind,body,created_by_membership_id)
+  values($1,$2,$3,$4,$5)`;
+
 function context(row: Record<string, unknown>): LeadIntakeContext {
   const outcome = row.outcome as Record<string, unknown> | null;
   return { ...row, candidate_query: outcome?._candidateQuery as CandidateQueryV1 | undefined } as LeadIntakeContext;
@@ -127,6 +150,60 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
       )).rows[0];
       if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return row as { version: number };
+    },
+    async lockForMutation(workspaceId: string, leadId: string): Promise<LeadMutationRow> {
+      const row = (await tx.query<LeadMutationRow>(LEAD_MUTATION_LOCK_SQL_V1, [workspaceId, leadId])).rows[0];
+      if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return row;
+    },
+    async readOperational(workspaceId: string, leadId: string): Promise<LeadMutationRow> {
+      const row = (await tx.query<LeadMutationRow>(
+        `select id,version,stage_id,owner_membership_id,responsible_team_id,visibility
+           from leads where workspace_id=$1 and id=$2`,
+        [workspaceId, leadId],
+      )).rows[0];
+      if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return row;
+    },
+    async lockPipelineStage(workspaceId: string, stageId: string): Promise<LockedPipelineStage | null> {
+      const row = (await tx.query<LockedPipelineStage>(LEAD_STAGE_LOCK_SQL_V1, [workspaceId, stageId])).rows[0];
+      return row ?? null;
+    },
+    async visibleTeamIds(workspaceId: string, leadId: string): Promise<string[]> {
+      return (await tx.query<{ team_id: string }>(
+        `select team_id from lead_visible_teams where workspace_id=$1 and lead_id=$2 order by team_id`,
+        [workspaceId, leadId],
+      )).rows.map(row => row.team_id);
+    },
+    async updateOperational(input: { workspaceId: string; leadId: string; expectedVersion: number;
+      responsibleMembershipId: string | null; responsibleTeamId: string | null; visibility: "workspace" | "teams";
+      visibleTeamIds: string[] }): Promise<number> {
+      const row = (await tx.query<{ version: number }>(
+        LEAD_OPERATIONAL_UPDATE_SQL_V1,
+        [input.workspaceId, input.leadId, input.expectedVersion, input.responsibleMembershipId,
+          input.responsibleTeamId, input.visibility],
+      )).rows[0];
+      if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
+      await tx.query(`delete from lead_visible_teams where workspace_id=$1 and lead_id=$2`, [input.workspaceId, input.leadId]);
+      for (const teamId of input.visibleTeamIds)
+        await tx.query(`insert into lead_visible_teams(workspace_id,lead_id,team_id) values($1,$2,$3)`,
+          [input.workspaceId, input.leadId, teamId]);
+      return row.version;
+    },
+    async transitionStage(input: { workspaceId: string; leadId: string; expectedVersion: number; stageId: string }): Promise<number> {
+      const row = (await tx.query<{ version: number }>(
+        LEAD_STAGE_UPDATE_SQL_V1,
+        [input.workspaceId, input.leadId, input.expectedVersion, input.stageId],
+      )).rows[0];
+      if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
+      return row.version;
+    },
+    async addMutationActivity(input: { workspaceId: string; leadId: string; actorMembershipId: string;
+      kind: "updated" | "stage_changed"; body: string }): Promise<void> {
+      await tx.query(
+        LEAD_ACTIVITY_APPEND_SQL_V1,
+        [input.workspaceId, input.leadId, input.kind, input.body, input.actorMembershipId],
+      );
     },
   };
 }

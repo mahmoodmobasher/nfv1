@@ -118,7 +118,8 @@ export const leadSummaryItemSchema = z.object({
   originalAttribution: z.object({ sourceCategory, sourcePlatform: socialPlatform.nullable(), sourceMedium,
     sourceDetail: leadContext, campaignContext: leadContext, attributionContractVersion: z.string().min(1).max(80),
     intakeChannel: z.enum(["web_form", "manual", "csv", "spreadsheet", "future_api", "future_integration"]) }).strict(),
-  capabilities: z.object({ canView: z.literal(true), canEdit: z.literal(false), canReview: z.boolean() }).strict(),
+  capabilities: z.object({ canView: z.literal(true), canEdit: z.literal(false), canEditLead: z.boolean(),
+    canMoveStage: z.boolean(), canReview: z.boolean() }).strict(),
   nextView: z.discriminatedUnion("kind", [leadNavigation, leadReviewNavigation]),
 }).strict().superRefine((lead, issue) => {
   if (lead.nextView.leadId !== lead.leadId) issue.addIssue({ code: "custom", message: "navigation_identity_mismatch" });
@@ -139,6 +140,52 @@ export const leadPipelineStagesViewSchema = z.object({ contractVersion: z.litera
       issue.addIssue({ code: "custom", message: "pipeline_stage_order_invalid", path: ["items", index] });
   }
 });
+
+const leadOperationalFieldsSchema = z.object({ responsibleMembershipId: uuid.nullable(), responsibleTeamId: uuid.nullable(),
+  visibility: z.enum(["workspace", "teams"]), visibleTeamIds: z.array(uuid).max(100) }).strict();
+const leadOperationalOptionSchema = z.object({ id: uuid, label: z.string().min(1).max(200) }).strict();
+export const leadOperationalEditCommandSchema = leadOperationalFieldsSchema.extend({
+  contractVersion: z.literal("lead-operational-edit.v1"), expectedVersion: positiveVersion,
+}).strict().superRefine((command, issue) => {
+  if (new Set(command.visibleTeamIds).size !== command.visibleTeamIds.length)
+    issue.addIssue({ code: "custom", message: "duplicate_visible_team", path: ["visibleTeamIds"] });
+  if (command.visibility === "teams" && command.visibleTeamIds.length === 0)
+    issue.addIssue({ code: "custom", message: "visible_team_required", path: ["visibleTeamIds"] });
+  if (command.visibility === "teams" && command.responsibleTeamId && !command.visibleTeamIds.includes(command.responsibleTeamId))
+    issue.addIssue({ code: "custom", message: "responsible_team_must_be_visible", path: ["visibleTeamIds"] });
+});
+export const leadStageTransitionCommandSchema = z.object({ contractVersion: z.literal("lead-stage-transition.v1"),
+  expectedVersion: positiveVersion, targetStageId: uuid }).strict();
+export const leadOperationalEditViewSchema = z.object({ contractVersion: z.literal("getLeadOperationalEdit.v1"), requestId: uuid,
+  leadId: uuid, version: positiveVersion, operational: leadOperationalFieldsSchema,
+  options: z.object({ responsibleMemberships: z.array(leadOperationalOptionSchema).max(500),
+    teams: z.array(leadOperationalOptionSchema).max(100) }).strict(), capabilities: z.object({ canEditLead: z.boolean() }).strict(),
+  nextView: z.discriminatedUnion("kind", [z.object({ kind: z.literal("lead_edit"), leadId: uuid }).strict(),
+    z.object({ kind: z.literal("lead_detail"), leadId: uuid }).strict()]) }).strict().superRefine((view, issue) => {
+  if (view.nextView.leadId !== view.leadId) issue.addIssue({ code: "custom", message: "navigation_identity_mismatch", path: ["nextView"] });
+  if (view.capabilities.canEditLead !== (view.nextView.kind === "lead_edit"))
+    issue.addIssue({ code: "custom", message: "edit_capability_navigation_mismatch", path: ["capabilities"] });
+  if (!view.capabilities.canEditLead && (view.options.responsibleMemberships.length || view.options.teams.length))
+    issue.addIssue({ code: "custom", message: "unauthorized_option_disclosure", path: ["options"] });
+});
+export const leadOperationalEditResultSchema = z.object({ contractVersion: z.literal("lead-operational-edit-result.v1"),
+  leadId: uuid, leadVersion: positiveVersion, operational: leadOperationalFieldsSchema, changed: z.literal(true), replayed: z.boolean(),
+  requestId: uuid, nextView: z.object({ kind: z.literal("lead_detail"), leadId: uuid }).strict() }).strict();
+export const leadStageTransitionResultSchema = z.object({ contractVersion: z.literal("lead-stage-transition-result.v1"),
+  leadId: uuid, leadVersion: positiveVersion, stage: z.object({ stageId: uuid, name: z.string().min(1).max(160),
+    position: z.number().int().min(0) }).strict(), changed: z.boolean(), replayed: z.boolean(), requestId: uuid,
+  nextView: z.object({ kind: z.literal("lead_detail"), leadId: uuid }).strict() }).strict();
+export const leadOperationalEditSuccessEnvelopeSchema = z.object({ data: leadOperationalEditViewSchema }).strict();
+export const leadOperationalEditMutationSuccessEnvelopeSchema = z.object({ data: leadOperationalEditResultSchema }).strict();
+export const leadStageTransitionSuccessEnvelopeSchema = z.object({ data: leadStageTransitionResultSchema }).strict();
+export const leadManagementErrorEnvelopeSchema = z.object({ error: z.object({ code: z.enum(["authentication_required",
+  "permission_required", "resource_not_found", "validation_failed", "unsupported_contract_version", "idempotency_conflict",
+  "stale_version", "stage_unavailable", "assignment_unavailable", "rate_limited", "lead_mutation_unavailable", "unexpected_error"]),
+  message: z.string().min(1).max(200), retryable: z.boolean(), reconciliation: z.object({ required: z.boolean(), action: z.enum([
+    "none", "refetch_lead", "refetch_lead_and_stages", "refetch_lead_operational_edit", "retry_same_request"]), }).strict(),
+  details: z.object({ fields: z.array(z.enum(["contractVersion", "expectedVersion", "responsibleMembershipId",
+    "responsibleTeamId", "visibility", "visibleTeamIds", "targetStageId", "idempotencyKey"])).max(16) }).strict().optional() }).strict(),
+  requestId: uuid }).strict();
 
 const dimensionDecision = z.discriminatedUnion("action", [z.object({ action: z.literal("dismiss") }).strict(), z.object({ action: z.literal("create") }).strict(),
   z.object({ action: z.literal("link"), candidateId: uuid, targetId: uuid, expectedTargetVersion: positiveVersion }).strict()]);
@@ -211,3 +258,9 @@ export type LeadSummariesView = z.infer<typeof leadSummariesViewSchema>;
 export type LeadDetailView = z.infer<typeof leadDetailViewSchema>;
 export type LeadPipelineStage = z.infer<typeof leadPipelineStageSchema>;
 export type LeadPipelineStagesView = z.infer<typeof leadPipelineStagesViewSchema>;
+export type LeadOperationalEditCommand = z.infer<typeof leadOperationalEditCommandSchema>;
+export type LeadStageTransitionCommand = z.infer<typeof leadStageTransitionCommandSchema>;
+export type LeadOperationalEditView = z.infer<typeof leadOperationalEditViewSchema>;
+export type LeadOperationalEditResult = z.infer<typeof leadOperationalEditResultSchema>;
+export type LeadStageTransitionResult = z.infer<typeof leadStageTransitionResultSchema>;
+export type LeadManagementErrorEnvelope = z.infer<typeof leadManagementErrorEnvelopeSchema>;
