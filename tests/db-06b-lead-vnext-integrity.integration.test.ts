@@ -857,6 +857,26 @@ integrationSuite("DB-06B Lead vNext no-DDL integrity", () => {
     expect((await pool.query("select count(*)::int count from lead_vnext_reconciliation_issues where run_id=$1", [runId])).rows[0].count).toBe(1);
     expect((await pool.query("select state from lead_vnext_mappings where reconciliation_run_id=$1", [runId])).rows[0].state).toBe("stale");
   });
+
+  it("uses the accepted Platform Audit target index for the frozen bounded lookup", async () => {
+    const fixture = await acceptedLeadFixture();
+    const catalog = (await pool.query<{ definition: string }>(`select pg_get_indexdef(indexrelid) definition from pg_index
+      where indexrelid='audit_events_workspace_target_action_occurred_idx'::regclass`)).rows[0]?.definition;
+    expect(catalog).toContain("workspace_id, target_type, target_id, action, occurred_at, id");
+    expect(catalog).toContain("WHERE ((workspace_id IS NOT NULL) AND (target_id IS NOT NULL))");
+    const client = await pool.connect();
+    try {
+      await client.query("begin"); await client.query("set local enable_seqscan=off");
+      const explain = (await client.query(`explain (analyze,buffers,format json)
+        select id,occurred_at,outcome,request_id,correlation_id,metadata_version,metadata from audit_events
+        where workspace_id=$1 and target_type='lead' and target_id=$2 and action='crm.lead_operational_updated'
+        and (occurred_at,id)>($3,$4) order by occurred_at,id limit 51`,
+      [fixture.actor.workspaceId, fixture.lead.id, "1970-01-01", "00000000-0000-0000-0000-000000000000"])).rows[0]["QUERY PLAN"][0];
+      expect(planNodes(explain.Plan)).not.toContain("Seq Scan");
+      expect(planIndexes(explain.Plan)).toContain("audit_events_workspace_target_action_occurred_idx");
+      await client.query("rollback");
+    } finally { client.release(); }
+  });
 });
 
 function percentile(values: number[], quantile: number) {
