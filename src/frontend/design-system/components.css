@@ -94,6 +94,9 @@
 .ds-lead-list .ds-action { min-height: 36px; padding-block: var(--nf-space-1-5); }
 .ds-detail-layout { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--nf-space-4); margin-top: var(--nf-space-5); }
 .ds-detail-layout>.ds-panel:last-child { grid-column: 1/-1; }
+.cg-affiliations { margin: 0; padding-inline-start: var(--nf-space-5); }
+.cg-affiliations li+li { margin-top: var(--nf-space-2); }
+.cg-lifecycle { display: contents; }
 .ds-fact-list { display: grid; gap: 0; margin: 0; }
 .ds-fact-list>div { display: grid; grid-template-columns: minmax(120px,.7fr) minmax(0,1.3fr); gap: var(--nf-space-3); padding-block: var(--nf-space-2-5); border-top: 1px solid var(--nx-border-subtle); }
 .ds-fact-list>div:first-child { border-top: 0; }
