@@ -16,7 +16,6 @@ export function AccountShell({
       workspace={workspace}
       role={role}
       navigation={crmNavigationForRole(role)}
-      banner="LOCAL SERVER · Your profile, preferences, and account security are saved to your account. Workspace administration and permissions remain separate."
     >
       {children}
     </ProductShell>

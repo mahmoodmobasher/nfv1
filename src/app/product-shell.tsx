@@ -112,14 +112,12 @@ export function ProductShell({
   workspace,
   role,
   navigation,
-  banner,
   children,
 }: {
   kind: ShellKind;
   workspace: string;
   role: string;
   navigation: ProductNavGroup[];
-  banner: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname(),
@@ -287,13 +285,12 @@ export function ProductShell({
       </nav>
     </div>
   );
-  const legacyClass = kind === "crm" ? "crm-preview" : "admin-shell",
-    mobileClass = kind === "crm" ? "mobile-crm" : "admin-mobile",
+  const shellVariant = `product-shell--${kind}`,
     menuName = kind === "crm" ? "CRM navigation" : "workspace navigation",
     menuId = kind === "crm" ? "crm-menu" : "workspace-menu";
   return (
     <div
-      className={`product-shell experience-product ${legacyClass}`}
+      className={`product-shell experience-product ${shellVariant}`}
       data-drawer-open={open || undefined}
     >
       <a ref={skip} className="skip-link" href="#product-main">
@@ -349,7 +346,7 @@ export function ProductShell({
           {signOutControl}
         </div>
       </header>
-      <header className={`${mobileClass} product-mobile`}>
+      <header className="product-mobile">
         <div ref={mobileContext}>
           <Brand />
           <span>{workspace}</span>
@@ -399,7 +396,6 @@ export function ProductShell({
         )}
       </header>
       <main ref={main} id="product-main" tabIndex={-1} className="product-main">
-        <div className="preview-banner">{banner}</div>
         {error && (
           <div className="alert error" role="alert">
             {error}

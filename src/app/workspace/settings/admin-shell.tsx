@@ -16,7 +16,6 @@ export function AdminShell({
       workspace={workspace}
       role={role}
       navigation={adminNavigationForRole(role)}
-      banner="LOCAL SERVER · Workspace settings, membership, roles, teams, and invitations are saved and authorized by the local server."
     >
       {children}
     </ProductShell>

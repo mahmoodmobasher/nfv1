@@ -16,7 +16,6 @@ export function CrmShell({
       workspace={workspace}
       role={role}
       navigation={crmNavigationForRole(role)}
-      banner="LOCAL SERVER · Leads, pipeline, ownership, visibility, notes, and activities are saved and authorized by the local server. Production providers and deployment are not connected."
     >
       {children}
     </ProductShell>

@@ -690,7 +690,7 @@ test("Workspace navigation states and representative controls retain keyboard fo
     await expect(
       page.getByRole("heading", { name: "Workspace settings" }),
     ).toBeVisible();
-    const aside = page.locator(".admin-shell>aside");
+    const aside = page.locator(".product-shell--admin>aside");
     const nav = aside.getByRole("navigation", { name: "Workspace navigation" });
     const defaultLink = nav.getByRole("link", { name: "CRM overview" });
     const activeLink = nav.getByRole("link", { name: "Workspace settings" });
@@ -1588,14 +1588,14 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     ).toBeGreaterThanOrEqual(4.5);
     expect(
       await renderedTextContrast(
-        page.locator(".crm-preview>aside .brand b"),
-        page.locator(".crm-preview>aside"),
+        page.locator(".product-shell--crm>aside .brand b"),
+        page.locator(".product-shell--crm>aside"),
       ),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
       await renderedTextContrast(
-        page.locator(".crm-preview>.product-topbar .admin-workspace b"),
-        page.locator(".crm-preview>.product-topbar"),
+        page.locator(".product-shell--crm>.product-topbar .admin-workspace b"),
+        page.locator(".product-shell--crm>.product-topbar"),
       ),
     ).toBeGreaterThanOrEqual(4.5);
     const defaultCardBorder = await card.evaluate(
@@ -1971,7 +1971,7 @@ test("local OIDC fixture provisions a server-derived sole-Owner workspace and su
   await mobileMenu.getByRole("link", { name: "Workspace settings" }).click();
   await expect(page).toHaveURL(/\/workspace\/settings/);
   await expect(
-    page.getByText(/LOCAL SERVER · Workspace settings/),
+    page.getByRole("heading", { name: "Workspace settings" }),
   ).toBeVisible();
   expect(
     await page.evaluate(

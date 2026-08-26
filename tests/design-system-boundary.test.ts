@@ -274,11 +274,24 @@ describe("design-system document boundary", () => {
     expect(shell).toContain('name="q"');
     expect(css).toMatch(/\.product-shell>\.product-topbar\s*\{[\s\S]*?position:\s*sticky/);
     expect(css).toMatch(
-      /\.product-shell\.crm-preview>\.product-topbar>\.product-breadcrumbs[^{}]*\{[^}]*display:\s*flex[^}]*margin:\s*0/,
+      /\.product-shell--crm>\.product-topbar>\.product-breadcrumbs[^{}]*\{[^}]*display:\s*flex[^}]*margin:\s*0/,
     );
     expect(css).toMatch(
-      /\.product-shell\.crm-preview \.ds-view-row>\.ds-view-tabs[^{}]*\{[^}]*display:\s*inline-flex[^}]*margin:\s*0/,
+      /\.product-shell--crm \.ds-view-row>\.ds-view-tabs[^{}]*\{[^}]*display:\s*inline-flex[^}]*margin:\s*0/,
     );
+    expect(shell).toContain("product-shell--${kind}");
+    expect(shell).not.toMatch(
+      /legacyClass|crm-preview|admin-shell|mobile-crm|admin-mobile|preview-banner|banner: string/,
+    );
+    for (const relativePath of [
+      "../src/app/crm/crm-shell.tsx",
+      "../src/app/settings/account-shell.tsx",
+      "../src/app/workspace/settings/admin-shell.tsx",
+    ]) {
+      const wrapper = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+      expect(wrapper).not.toContain("banner=");
+      expect(wrapper).not.toContain("LOCAL SERVER");
+    }
     expect(css).toContain("max-width: var(--nf-content-max)");
   });
   it("uses the configured Session cookie and preserves CSP for stale or invalid values", () => {
