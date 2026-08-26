@@ -1,0 +1,1 @@
+CREATE INDEX "audit_events_workspace_target_action_occurred_idx" ON "audit_events" USING btree ("workspace_id","target_type","target_id","action","occurred_at","id") WHERE "audit_events"."workspace_id" is not null and "audit_events"."target_id" is not null;

@@ -1991,6 +1991,9 @@ export const auditEvents = pgTable(
     metadata: jsonb("metadata").notNull().default({}),
   },
   (table) => [
+    index("audit_events_workspace_target_action_occurred_idx")
+      .on(table.workspaceId, table.targetType, table.targetId, table.action, table.occurredAt, table.id)
+      .where(sql`${table.workspaceId} is not null and ${table.targetId} is not null`),
     foreignKey({
       name: "audit_actor_workspace_membership_fk",
       columns: [table.workspaceId, table.actorMembershipId],
