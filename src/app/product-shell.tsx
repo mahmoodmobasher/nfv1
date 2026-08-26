@@ -130,6 +130,7 @@ export function ProductShell({
     rail = useRef<HTMLElement>(null),
     topbar = useRef<HTMLElement>(null),
     mobileContext = useRef<HTMLDivElement>(null),
+    mobileAccount = useRef<HTMLDivElement>(null),
     main = useRef<HTMLElement>(null),
     previousPath = useRef(pathname),
     openFrame = useRef<number | null>(null),
@@ -153,6 +154,7 @@ export function ProductShell({
         rail.current,
         topbar.current,
         mobileContext.current,
+        mobileAccount.current,
         trigger.current,
         main.current,
       ].filter((node): node is HTMLElement => Boolean(node)),
@@ -351,7 +353,9 @@ export function ProductShell({
           <Brand />
           <span>{workspace}</span>
         </div>
-        <div className="product-mobile-account">{signOutControl}</div>
+        <div ref={mobileAccount} className="product-mobile-account">
+          {signOutControl}
+        </div>
         <button
           ref={trigger}
           className="menu-button"

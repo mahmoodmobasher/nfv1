@@ -523,7 +523,7 @@ test("P1A surfaces retain focus and semantic boundaries under dark, forced colou
   const create = page.getByRole("button", { name: "Create lead" });
   await create.focus();
   await expect(create).toBeFocused();
-  await expect(page.locator(".p1a-readonly").getByText("Manual", { exact: true })).toBeVisible();
+  await expect(page.locator(".ds-readonly").getByText("Manual", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).not.toBe("smooth");
   await page.screenshot({ path: testInfo.outputPath("manual-intake-dark-forced-reduced.png"), fullPage: true });
 });

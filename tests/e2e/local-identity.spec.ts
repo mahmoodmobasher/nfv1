@@ -944,6 +944,7 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
     ".product-rail",
     ".product-topbar",
     ".product-mobile>div:first-child",
+    ".product-mobile>.product-mobile-account",
     ".product-mobile>.menu-button",
     "#product-main",
   ];
@@ -1121,7 +1122,7 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
       await expect(closeButton).toBeFocused();
       await page.keyboard.press("Shift+Tab");
       await expect(
-        dialog.getByRole("button", { name: "Sign out" }),
+        dialog.locator("a[href],button:not([disabled])").last(),
       ).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(closeButton).toBeFocused();
@@ -1169,7 +1170,14 @@ test("modal drawer isolates, scroll-locks, closes, and cleans up at phone and ta
           html: document.documentElement.style.overflow,
         })),
       ).toEqual({ body: "", html: "" });
-      await expect(page.locator(".skip-link")).toHaveCount(0);
+      const settingsSkip = page.locator(".skip-link");
+      await expect(settingsSkip).toHaveCount(1);
+      await expect(settingsSkip).not.toHaveAttribute("aria-hidden", "true");
+      expect(
+        await settingsSkip.evaluate(
+          (element) => (element as HTMLElement).inert,
+        ),
+      ).toBe(false);
     }
   }
   await page.emulateMedia({ forcedColors: "active" });
@@ -1549,13 +1557,15 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     await setServerAppearance(fixture.users[0].id, theme);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/crm/pipeline");
-    await expect(page.getByRole("heading", { name: "Pipeline" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Pipeline board", level: 1 }),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
     const populatedStage = page.getByRole("region", { name: /New/ });
     const emptyStage = page.getByRole("region", { name: /Proposal/ });
-    const card = populatedStage.locator(".pipeline-lead-card");
-    const count = populatedStage.locator(".pipeline-count");
-    const changeStage = card.getByRole("link", { name: "Change stage" });
+    const card = populatedStage.locator(".ds-lead-card");
+    const count = populatedStage.getByText("1 lead", { exact: true });
+    const viewLead = card.getByRole("link", { name: "View lead" });
     expect(
       await renderedTextContrast(
         populatedStage.getByRole("heading", { name: /New/ }),
@@ -1572,13 +1582,16 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
       ),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
-      await renderedTextContrast(card.locator(".pipeline-company"), card),
+      await renderedTextContrast(
+        card.getByText("Acme North", { exact: true }),
+        card,
+      ),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
-      await renderedTextContrast(card.locator(".pipeline-owner"), card),
+      await renderedTextContrast(card.locator("p").nth(1), card),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
-      await renderedTextContrast(card.locator(".pipeline-visibility"), card),
+      await renderedTextContrast(card.locator("small"), card),
     ).toBeGreaterThanOrEqual(4.5);
     expect(
       await renderedTextContrast(
@@ -1598,25 +1611,27 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
         page.locator(".product-shell--crm>.product-topbar"),
       ),
     ).toBeGreaterThanOrEqual(4.5);
-    const defaultCardBorder = await card.evaluate(
-      (element) => getComputedStyle(element).borderColor,
+    const defaultActionBackground = await viewLead.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
     );
-    await card.hover();
+    await viewLead.hover();
     expect(
-      await card.evaluate((element) => getComputedStyle(element).borderColor),
-    ).not.toBe(defaultCardBorder);
+      await viewLead.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      ),
+    ).not.toBe(defaultActionBackground);
     await page.mouse.move(0, 0);
-    await tabTo(page, changeStage);
-    await expectVisibleFocus(changeStage, card);
+    await tabTo(page, viewLead);
+    await expectVisibleFocus(viewLead, card);
     expect(
-      await renderedTextContrast(changeStage, card),
+      await renderedTextContrast(viewLead, card),
     ).toBeGreaterThanOrEqual(4.5);
     await visualBaseline(page, `design-system-pipeline-${theme}.png`);
 
     await page.goto("/crm/pipeline?q=not-a-real-lead");
-    const empty = page.locator(".empty");
+    const empty = page.locator(".ds-empty");
     await expect(
-      page.getByRole("heading", { name: "No leads match these filters." }),
+      page.getByRole("heading", { name: "No matching leads" }),
     ).toBeVisible();
     expect(
       await renderedTextContrast(empty.getByRole("heading"), empty),
@@ -1630,11 +1645,11 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
-    const mobileCard = page.locator(".pipeline-lead-card").first();
+    const mobileCard = page.locator(".ds-lead-card").first();
     const mobileBox = await mobileCard.boundingBox();
     expect(mobileBox!.x).toBeGreaterThanOrEqual(0);
     expect(mobileBox!.x + mobileBox!.width).toBeLessThanOrEqual(320);
-    const mobileAction = mobileCard.getByRole("link", { name: "Change stage" });
+    const mobileAction = mobileCard.getByRole("link", { name: "View lead" });
     expect((await mobileAction.boundingBox())!.height).toBeGreaterThanOrEqual(
       44,
     );
@@ -1644,14 +1659,14 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     await page.goto("/crm/pipeline");
     await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
     const zoomAction = page
-      .locator(".pipeline-lead-card")
+      .locator(".ds-lead-card")
       .first()
-      .getByRole("link", { name: "Change stage" });
+      .getByRole("link", { name: "View lead" });
     await tabTo(page, zoomAction);
     await zoomAction.scrollIntoViewIfNeeded();
     await expectVisibleFocus(
       zoomAction,
-      page.locator(".pipeline-lead-card").first(),
+      page.locator(".ds-lead-card").first(),
     );
     const zoomBox = await zoomAction.boundingBox();
     expect(zoomBox!.x).toBeGreaterThanOrEqual(0);

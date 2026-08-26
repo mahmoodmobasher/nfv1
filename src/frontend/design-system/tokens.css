@@ -25,9 +25,9 @@ html[data-theme="light"] {
   --nx-focus: #5b57d6;
   --nx-focus-ring: 0 0 0 3px #efeefc;
   --nx-blanket: rgb(30 29 27 / 58%);
-  --nx-success: #3c8a5e;
+  --nx-success: #2f7650;
   --nx-success-surface: #eaf4ee;
-  --nx-warning: #9a6415;
+  --nx-warning: #945f10;
   --nx-warning-surface: #fbf1e1;
   --nx-danger: #b13c28;
   --nx-danger-surface: #fbebe7;
