@@ -37,9 +37,36 @@ function context(row: Record<string, unknown>): LeadIntakeContext {
   const outcome = row.outcome as Record<string, unknown> | null;
   return { ...row, candidate_query: outcome?._candidateQuery as CandidateQueryV1 | undefined } as LeadIntakeContext;
 }
-
 export function leadTransactionParticipant(tx: ModuleTransaction) {
   return {
+    async conversionContext(workspaceId: string, leadId: string, lock = false) {
+      if (lock) {
+        await tx.query(`select id from leads where workspace_id=$1 and id=$2 for update`, [workspaceId, leadId]);
+        await tx.query(`select id from lead_intakes where workspace_id=$1 and lead_id=$2 order by id for update`, [workspaceId, leadId]);
+      }
+      const row = (await tx.query(
+        `select l.id,l.display_name "displayName",l.status,l.version,l.identity_review_status "identityReviewStatus",
+          l.company_id "companyId",l.contact_id "contactId",l.owner_membership_id "ownerMembershipId",
+          l.responsible_team_id "responsibleTeamId",l.visibility,l.authority_contract_version "authorityContractVersion",
+          d.code lifecycle,i.id "intakeId",i.version "intakeVersion"
+          from leads l join lead_lifecycle_definitions d on d.id=l.lifecycle_definition_id
+          join lead_intakes i on i.workspace_id=l.workspace_id and i.lead_id=l.id
+          where l.workspace_id=$1 and l.id=$2`, [workspaceId, leadId])).rows[0];
+      if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return row as { id:string;displayName:string;status:"open"|"won"|"lost";version:number;identityReviewStatus:string;
+        companyId:string|null;contactId:string|null;ownerMembershipId:string|null;responsibleTeamId:string|null;
+        visibility:"workspace"|"teams";authorityContractVersion:string;lifecycle:string;intakeId:string;intakeVersion:number };
+    },
+    async convertLifecycle(input: { workspaceId: string; leadId: string; expectedVersion: number;
+      actorMembershipId: string; operationId: string }) {
+      const row = (await tx.query<{version:number}>(
+        `update leads set lifecycle_definition_id=(select id from lead_lifecycle_definitions where code='converted' and status='active'),
+          governing_operation_id=$4,updated_by_membership_id=$5,version=version+1,updated_at=now()
+          where workspace_id=$1 and id=$2 and version=$3 returning version`,
+        [input.workspaceId,input.leadId,input.expectedVersion,input.operationId,input.actorMembershipId])).rows[0];
+      if (!row) throw Object.assign(new Error("stale_preview"), { code: "stale_preview", status: 409 });
+      return row.version;
+    },
     async readReviewPresentationContexts(workspaceId: string, refs: Array<{ leadId: string; intakeId: string }>) {
       if (!refs.length) return [];
       const leadIds = refs.map(ref => ref.leadId), intakeIds = refs.map(ref => ref.intakeId);

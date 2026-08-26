@@ -4,6 +4,23 @@ import type { CompanyCandidateV1 } from "@/backend/modules/companies";
 
 export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
   return {
+    async conversionReview(workspaceId: string, leadId: string, intakeId: string, lock = false) {
+      if (lock) {
+        await tx.query(`select id from lead_identity_reviews where workspace_id=$1 and lead_id=$2 order by id for update`, [workspaceId, leadId]);
+        await tx.query(`select intake_id from lead_identity_decision_heads where workspace_id=$1 and intake_id=$2 for update`, [workspaceId, intakeId]);
+      }
+      const pending = Boolean((await tx.query(
+        `select 1 from lead_identity_reviews where workspace_id=$1 and lead_id=$2 and state='pending' limit 1`,
+        [workspaceId, leadId])).rows[0]);
+      const resolved = (await tx.query(
+        `select r.id "reviewId",r.version "reviewVersion",h.decision_id "decisionHeadId",h.version "decisionHeadVersion",
+          d.company_id "companyId",d.contact_id "contactId"
+          from lead_identity_decision_heads h join lead_identity_decisions d on d.workspace_id=h.workspace_id and d.intake_id=h.intake_id and d.id=h.decision_id
+          join lead_identity_reviews r on r.workspace_id=d.workspace_id and r.id=d.review_id and r.intake_id=d.intake_id
+          where r.workspace_id=$1 and r.lead_id=$2 and r.intake_id=$3 and r.state='resolved'`,
+        [workspaceId, leadId, intakeId])).rows[0] as {reviewId:string;reviewVersion:number;decisionHeadId:string;decisionHeadVersion:number;companyId:string|null;contactId:string|null}|undefined;
+      return { pending, resolved: resolved ?? null };
+    },
     async listPendingPage(input: { workspaceId: string; beforeUpdatedAt: string | null; beforeId: string | null;
       limit: number; evidence: "any" | "email" | "phone" | "name_company" }) {
       return (await tx.query(

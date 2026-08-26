@@ -27,3 +27,12 @@ export type { LeadDetailViewV1, LeadSummariesViewV1, LeadSummaryFiltersV1,
   LeadSummaryItemV1, LeadPipelineStageV1, LeadPipelineStagesViewV1 } from "./contracts/lead-presentation.contract";
 export { parsePersonPhoneV2, optionalPersonPhoneV2, PersonPhoneValidationError,
   PHONE_NORMALIZATION_VERSION } from "./domain/person-phone.domain";
+
+export { LEAD_CONVERSION_PREVIEW_QUERY, LEAD_CONVERT_TO_DEAL_OPERATION, LeadConversionError,
+  leadConvertToDealCommandV1Schema, leadConversionPreviewV1Schema, leadConversionResultV1Schema,
+  leadConversionErrorEnvelopeV1Schema } from "./contracts/lead-conversion.contract";
+export type { LeadConvertToDealCommandV1, LeadConversionPreviewV1, LeadConversionResultV1,
+  LeadConversionErrorCode, LeadConversionIneligibilityReasonV1 } from "./contracts/lead-conversion.contract";
+export { convertLeadToDealV1, getLeadConversionPreviewV1 } from
+  "./application/orchestrators/convert-lead-to-deal.orchestrator";
+export { leadConversionFailure, leadConversionJson } from "./presentation/lead-conversion.http";

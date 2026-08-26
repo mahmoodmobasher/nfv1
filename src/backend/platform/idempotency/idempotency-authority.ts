@@ -5,7 +5,8 @@ export type IdempotentMutationOperation = "lead-operational-edit.v1" | "lead-sta
   "company-create.v1" | "company-edit.v1" | "company-archive.v1" | "company-restore.v1" |
   "contact-create.v1" | "contact-edit.v1" | "contact-archive.v1" | "contact-restore.v1" |
   "contact-affiliation-replace.v1" | "sales-deal-create.v1" | "sales-deal-update.v1" |
-  "sales-deal-stage-transition.v1" | "sales-deal-archive.v1" | "sales-deal-restore.v1";
+  "sales-deal-stage-transition.v1" | "sales-deal-archive.v1" | "sales-deal-restore.v1" |
+  "lead-convert-to-deal.v1";
 export type LeadMutationOperation = Extract<IdempotentMutationOperation,"lead-operational-edit.v1"|"lead-stage-transition.v1">;
 
 export type IdempotencyReceipt<T = unknown> = {
@@ -25,7 +26,6 @@ function canonical(value: unknown): string {
   }
   return JSON.stringify(value);
 }
-
 export function canonicalRequestHash(value: unknown): string {
   return createHash("sha256").update(canonical(value)).digest("hex");
 }

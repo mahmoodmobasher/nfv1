@@ -67,6 +67,48 @@ export function dealPartyReferenceParticipant(tx: ModuleTransaction) {
     return values;
   }
   return {
+    async conversionChoices(
+      actor: TrustedActor,
+      input: { companyId: string | null; contactId: string | null },
+      lock = false,
+    ) {
+      if (!input.companyId) return { company: null, contact: null };
+      const values = await resolve(
+        actor,
+        [
+          { recordType: "crm.company", recordId: input.companyId },
+          ...(input.contactId
+            ? [
+                {
+                  recordType: "crm.contact" as const,
+                  recordId: input.contactId,
+                },
+              ]
+            : []),
+        ],
+        lock,
+      );
+      const companyPresentation = values.get(`crm.company:${input.companyId}`);
+      const company = companyPresentation?.available
+        ? ((
+            await tx.query<{ id: string; version: number; label: string }>(
+              `select id,version,display_name label from companies where workspace_id=$1 and id=$2 and status='active' and authority_contract_version='customer-graph-v1'`,
+              [actor.workspaceId, input.companyId],
+            )
+          ).rows[0] ?? null)
+        : null;
+      if (!company || !input.contactId) return { company, contact: null };
+      const contactPresentation = values.get(`crm.contact:${input.contactId}`);
+      const contact = contactPresentation?.available
+        ? ((
+            await tx.query<{ id: string; version: number; label: string }>(
+              `select c.id,c.version,c.display_name label from contacts c join contact_company_affiliations a on a.workspace_id=c.workspace_id and a.contact_id=c.id and a.company_id=$3 and a.lifecycle='active' and a.is_primary where c.workspace_id=$1 and c.id=$2 and c.status='active' and c.authority_contract_version='customer-graph-v1'`,
+              [actor.workspaceId, input.contactId, input.companyId],
+            )
+          ).rows[0] ?? null)
+        : null;
+      return { company, contact };
+    },
     async lockAndRequire(actor: TrustedActor, refs: DealPartyRef[]) {
       const values = await resolve(actor, refs, true);
       if (
