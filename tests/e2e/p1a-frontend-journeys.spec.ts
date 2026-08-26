@@ -565,7 +565,8 @@ test("canonical Lead operational edit and explicit stage movement preserve autho
   await expect.poll(async () => (await database.query<{stage_id:string}>("select stage_id from leads where id=$1", [created.leadId])).rows[0].stage_id).toBe(working.id);
 
   await page.goto(`/crm/leads/${created.leadId}`);
-  await expect(page.getByRole("link", { name: "Edit Lead operations" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit lead", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Lead operations" })).toHaveCount(0);
   const detailMove = page.getByRole("button", { name: /Move stage for Managed Canonical Lead/ });
   await detailMove.click();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();

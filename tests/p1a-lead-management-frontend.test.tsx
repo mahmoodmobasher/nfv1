@@ -41,10 +41,12 @@ describe("P1A Lead management frontend", () => {
 
   it("renders Edit and Move actions only from server-provided capabilities", () => {
     const allowed = renderToStaticMarkup(<LeadReadOnlyDetail lead={safeLeadSummaryFixture} workspaceId="70000000-0000-4000-8000-000000000071" stages={stages}/>);
-    expect(allowed).toContain("Edit Lead operations");
+    expect(allowed).toContain("Edit lead");
+    expect(allowed).not.toContain("Edit Lead operations");
     expect(allowed).toContain("Move stage");
     const deniedLead = { ...safeLeadSummaryFixture, capabilities: { ...safeLeadSummaryFixture.capabilities, canEditLead: false, canMoveStage: false } };
     const denied = renderToStaticMarkup(<LeadReadOnlyDetail lead={deniedLead} workspaceId="70000000-0000-4000-8000-000000000071" stages={stages}/>);
+    expect(denied).not.toContain("Edit lead");
     expect(denied).not.toContain("Edit Lead operations");
     expect(denied).not.toContain("Move stage");
   });
