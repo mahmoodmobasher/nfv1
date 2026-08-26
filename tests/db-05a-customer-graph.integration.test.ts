@@ -557,6 +557,17 @@ performanceSuite("DB-05A Customer Graph representative performance", () => {
          timestamptz '2026-01-01'+((g%1000)||' seconds')::interval from generate_series(1,100001) g`,
         [actor.workspaceId, runId],
       );
+      await performancePool.query(
+        `insert into customer_graph_reconciliation_issues(id,workspace_id,run_id,stream,source_record_type,
+         source_record_id,issue_code,safe_metadata,created_at,updated_at) values
+         ('8a000000-0000-0000-0000-000000000050',$1,$2,'contact_email','contact',
+          '82000000-0000-0000-0000-000000000050','invalid_legacy_value',
+          '{"sourceVersion":1,"validationCode":"email_format"}'::jsonb,now(),now()),
+         ('8b000000-0000-0000-0000-000000000050',$1,$2,'contact_email','contact',
+          '82000000-0000-0000-0000-000000000050','ambiguous_primary',
+          '{"sourceVersion":1,"activeCandidateCount":2}'::jsonb,now(),now())`,
+        [actor.workspaceId, runId],
+      );
       await performancePool.query("commit");
     } catch (error) { await performancePool.query("rollback"); throw error; }
     await performancePool.query(
@@ -621,8 +632,8 @@ performanceSuite("DB-05A Customer Graph representative performance", () => {
       [actor.workspaceId, "82000000-0000-0000-0000-000000050000"]),
       issues: await measure("issues", `select source_record_id,id from customer_graph_reconciliation_issues where
         workspace_id=$1 and run_id=$2 and state='open' and stream='contact_email'
-        and ($3::uuid is null or source_record_id>$3) order by source_record_id,id limit 51`,
-      [actor.workspaceId, runId, null]),
+        and ($3::uuid is null or (source_record_id,id)>($3,$4::uuid)) order by source_record_id,id limit 51`,
+      [actor.workspaceId, runId, null, null]),
     };
 
     const traversedContacts = new Set<string>();
@@ -646,12 +657,13 @@ performanceSuite("DB-05A Customer Graph representative performance", () => {
     expect(traversedContacts.size).toBe(100001);
 
     const traversedIssues = new Set<string>();
-    let issueCursor: string | null = null;
+    let issueCursorSource: string | null = null, issueCursorId: string | null = null;
     while (true) {
       const rows: Array<{ id: string; source_record_id: string }> = (await performancePool.query<{ id: string; source_record_id: string }>(
         `select id,source_record_id from customer_graph_reconciliation_issues where workspace_id=$1 and run_id=$2
-         and state='open' and stream='contact_email' and ($3::uuid is null or source_record_id>$3)
-         order by source_record_id,id limit 51`, [actor.workspaceId, runId, issueCursor],
+         and state='open' and stream='contact_email'
+         and ($3::uuid is null or (source_record_id,id)>($3,$4::uuid))
+         order by source_record_id,id limit 51`, [actor.workspaceId, runId, issueCursorSource, issueCursorId],
       )).rows;
       const page: Array<{ id: string; source_record_id: string }> = rows.slice(0, 50);
       for (const row of page) {
@@ -659,9 +671,15 @@ performanceSuite("DB-05A Customer Graph representative performance", () => {
         traversedIssues.add(row.id);
       }
       if (rows.length <= 50) break;
-      issueCursor = page[page.length - 1].source_record_id;
+      issueCursorSource = page[page.length - 1].source_record_id;
+      issueCursorId = page[page.length - 1].id;
     }
-    expect(traversedIssues.size).toBe(100001);
+    expect(traversedIssues.size).toBe(100003);
+    for (const boundaryIssueId of [
+      "89000000-0000-0000-0000-000000000050",
+      "8a000000-0000-0000-0000-000000000050",
+      "8b000000-0000-0000-0000-000000000050",
+    ]) expect(traversedIssues.has(boundaryIssueId)).toBe(true);
     const sizes = (await performancePool.query(
       `select relname,pg_relation_size(oid)::bigint heap_bytes,pg_indexes_size(oid)::bigint index_bytes
        from pg_class where relkind='r' and relname in ('contacts','companies','contact_identity_points',
