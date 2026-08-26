@@ -12,11 +12,16 @@ import {
 } from "../src/app/product-navigation";
 
 describe("design-system document boundary", () => {
-  it("publishes one Spectrum semantic contract with explicit compatibility aliases", () => {
+  it("publishes one CRM end-product semantic contract with explicit compatibility aliases", () => {
     const css = readFileSync(
       new URL("../src/app/globals.css", import.meta.url),
       "utf8",
     );
+    const tokens = readFileSync(
+      new URL("../src/frontend/design-system/tokens.css", import.meta.url),
+      "utf8",
+    );
+    expect(css).toContain('@import "../frontend/design-system/tokens.css"');
     for (const token of [
       "canvas",
       "surface-primary",
@@ -40,7 +45,7 @@ describe("design-system document boundary", () => {
       "focus",
       "blanket",
     ]) {
-      expect(css, token).toContain(`--nx-${token}:`);
+      expect(tokens, token).toContain(`--nx-${token}:`);
     }
     for (const alias of [
       "--nf-canvas: var(--nx-canvas)",
@@ -52,30 +57,35 @@ describe("design-system document boundary", () => {
       "--primary: var(--nf-brand)",
       "--ring: var(--nf-focus)",
     ]) {
-      expect(css, alias).toContain(alias);
+      expect(tokens, alias).toContain(alias);
     }
+    expect(tokens).toContain("--nf-font-sans: var(--font-geist)");
+    expect(tokens).toContain("--nf-font-mono: var(--font-geist-mono)");
+    expect(tokens).toContain("--nf-sidebar-width: 232px");
+    expect(tokens).toContain("--nf-content-max: 1400px");
+    expect(tokens).toContain("--nf-content-padding: 28px");
+    expect(tokens).toContain("--nx-canvas: #f7f7f5");
+    expect(tokens).toContain("--nx-action-primary: #5b57d6");
+    expect(tokens).toContain("--nf-radius-card: 14px");
+    expect(tokens).not.toMatch(/--spectrum-/);
   });
 
-  it("centralizes Spectrum foundations behind only thin product and website configurations", () => {
+  it("centralizes the replacement foundation behind only thin product and website configurations", () => {
     const css = readFileSync(
       new URL("../src/app/globals.css", import.meta.url),
       "utf8",
     );
-    const foundationMarker =
-        "/* Nexa Spectrum — Phase 1 foundation with compatibility aliases */",
+    const tokens = readFileSync(
+        new URL("../src/frontend/design-system/tokens.css", import.meta.url),
+        "utf8",
+      ),
+      foundationMarker = "/* CRM end-product design system foundation.",
       phase2Marker = "/* Nexa Spectrum — Phase 2 shared authenticated shell */",
       foundationStart = css.indexOf(foundationMarker),
       phase2Start = css.indexOf(phase2Marker),
       migrated = css.slice(phase2Start),
       deferredLegacy = css.slice(0, foundationStart);
-    expect(
-      css.match(
-        new RegExp(
-          foundationMarker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-          "g",
-        ),
-      ),
-    ).toHaveLength(1);
+    expect(tokens.match(/--nx-canvas:/g)).toHaveLength(3);
     expect(foundationStart).toBeGreaterThan(0);
     expect(phase2Start).toBeGreaterThan(foundationStart);
     expect(migrated).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
@@ -162,7 +172,7 @@ describe("design-system document boundary", () => {
     expect(labels(adminNavigationForRole("owner"))).toContain("Invitations");
   });
 
-  it("keeps migrated shell typography in the approved 400/500/600 range", () => {
+  it("keeps migrated shell typography in the approved 400/500/600/700 range", () => {
     const css = readFileSync(
       new URL("../src/app/globals.css", import.meta.url),
       "utf8",
@@ -170,7 +180,7 @@ describe("design-system document boundary", () => {
     const shell = css.slice(
       css.indexOf("/* Nexa Spectrum — Phase 2 shared authenticated shell */"),
     );
-    expect(shell).not.toMatch(/font-weight:\s*(?:[789]00|[1-9]\d{3,})/);
+    expect(shell).not.toMatch(/font-weight:\s*(?:[89]00|[1-9]\d{3,})/);
     expect(shell).toContain(".product-shell .brand>span");
     expect(shell).toContain("font-weight: 600");
   });
@@ -185,7 +195,7 @@ describe("design-system document boundary", () => {
     expect(phase3).toContain(marker);
     expect(phase3).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
     expect(phase3).not.toMatch(/html\[data-theme|data-account-theme/);
-    expect(phase3).not.toMatch(/font-weight:\s*(?:[789]00|[1-9]\d{3,})/);
+    expect(phase3).not.toMatch(/font-weight:\s*(?:[89]00|[1-9]\d{3,})/);
     expect(phase3).not.toMatch(/--(?:nx|nf|spectrum)-[\w-]+\s*:/);
     for (const property of ["border-radius", "box-shadow"]) {
       for (const match of phase3.matchAll(
