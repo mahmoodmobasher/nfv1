@@ -1446,11 +1446,13 @@ export const activityRecordReferences = pgTable(
     activityId: uuid("activity_id").notNull(),
     recordType: text("record_type").notNull(),
     recordId: uuid("record_id").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ name: "activity_record_references_pk", columns: [table.workspaceId, table.activityId] }),
     index("activity_record_references_record_lookup_idx").on(table.workspaceId, table.recordType, table.recordId, table.activityId),
+    index("activity_record_references_target_timeline_idx").on(table.workspaceId, table.recordType, table.recordId, table.occurredAt.desc().nullsLast(), table.activityId.desc().nullsLast()),
     foreignKey({ name: "activity_record_references_activity_fk", columns: [table.workspaceId, table.activityId], foreignColumns: [activityRecords.workspaceId, activityRecords.id] }),
     check("activity_record_references_type_check", sql`${table.recordType}='crm.lead'`),
   ],
