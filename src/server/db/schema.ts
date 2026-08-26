@@ -4,10 +4,12 @@ import {
   boolean,
   char,
   check,
+  date,
   foreignKey,
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -976,6 +978,326 @@ export const retentionLegalHolds = pgTable(
     check("retention_legal_holds_policy_check", sql`char_length(btrim(${table.policyVersion})) between 1 and 64`),
     check("retention_legal_holds_version_check", sql`${table.version}>0`),
     check("retention_legal_holds_release_check", sql`(${table.status}='active' and ${table.releasedAt} is null and ${table.releasedByMembershipId} is null) or (${table.status}='released' and ${table.releasedAt} is not null and ${table.releasedByMembershipId} is not null)`),
+  ],
+);
+
+const customFieldDefinitionColumns = {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    targetRecordType: text("target_record_type").notNull(),
+    code: text("code").notNull(),
+    label: text("label").notNull(),
+    description: text("description"),
+    fieldType: text("field_type").notNull(),
+    lifecycle: text("lifecycle").notNull().default("draft"),
+    required: boolean("required").notNull().default(false),
+    searchable: boolean("searchable").notNull().default(false),
+    filterable: boolean("filterable").notNull().default(false),
+    sortable: boolean("sortable").notNull().default(false),
+    displayOrder: integer("display_order").notNull(),
+    normalizationVersion: text("normalization_version").notNull().default("custom-field-normalization-v1"),
+    defaultTextValue: text("default_text_value"),
+    defaultIntegerValue: bigint("default_integer_value", { mode: "number" }),
+    defaultDecimalValue: numeric("default_decimal_value", { precision: 18, scale: 6 }),
+    defaultBooleanValue: boolean("default_boolean_value"),
+    defaultDateValue: date("default_date_value"),
+    defaultTimestampValue: timestamp("default_timestamp_value", { withTimezone: true }),
+    defaultOptionId: uuid("default_option_id"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+  ...timestamps,
+};
+// Drizzle needs an explicit shape to type the mutually referential composite option FKs.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const customFieldDefinitionsShape = () => pgTable("custom_field_definitions", customFieldDefinitionColumns);
+export const customFieldDefinitions: ReturnType<typeof customFieldDefinitionsShape> = pgTable(
+  "custom_field_definitions",
+  customFieldDefinitionColumns,
+  (table) => [
+    uniqueIndex("custom_field_definitions_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("custom_field_definitions_workspace_target_code_uq").on(table.workspaceId, table.targetRecordType, table.code),
+    uniqueIndex("custom_field_definitions_active_order_uq").on(table.workspaceId, table.targetRecordType, table.displayOrder).where(sql`${table.lifecycle}<>'archived'`),
+    index("custom_field_definitions_admin_idx").on(table.workspaceId, table.targetRecordType, table.lifecycle, table.displayOrder, table.id),
+    foreignKey({ name: "custom_field_definitions_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_definitions_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_definitions_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_definitions_default_option_fk", columns: [table.workspaceId, table.defaultOptionId, table.id], foreignColumns: [customFieldOptions.workspaceId, customFieldOptions.id, customFieldOptions.definitionId] }),
+    check("custom_field_definitions_target_check", sql`${table.targetRecordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
+    check("custom_field_definitions_code_check", sql`${table.code} ~ '^[a-z][a-z0-9_]{1,63}$'`),
+    check("custom_field_definitions_label_check", sql`${table.label}=btrim(${table.label}) and char_length(${table.label}) between 1 and 80 and ${table.label} !~ '[[:cntrl:]]'`),
+    check("custom_field_definitions_description_check", sql`${table.description} is null or (${table.description}=btrim(${table.description}) and char_length(${table.description}) between 1 and 500 and ${table.description} !~ '[[:cntrl:]]')`),
+    check("custom_field_definitions_type_check", sql`${table.fieldType} in ('short_text','long_text','integer','decimal','boolean','date','timestamp','single_select','multi_select')`),
+    check("custom_field_definitions_lifecycle_check", sql`${table.lifecycle} in ('draft','active','archived')`),
+    check("custom_field_definitions_order_version_check", sql`${table.displayOrder} between 0 and 9999 and ${table.version}>0`),
+    check("custom_field_definitions_normalization_check", sql`${table.normalizationVersion}='custom-field-normalization-v1'`),
+    check("custom_field_definitions_archive_check", sql`(${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null) or (${table.lifecycle}<>'archived' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null)`),
+    check("custom_field_definitions_capabilities_check", sql`(not ${table.searchable} or ${table.fieldType} in ('short_text','single_select')) and (not ${table.filterable} or ${table.fieldType} in ('short_text','integer','decimal','boolean','date','timestamp','single_select','multi_select')) and (not ${table.sortable} or ${table.fieldType} in ('short_text','integer','decimal','boolean','date','timestamp','single_select')) and (${table.fieldType}<>'long_text' or (not ${table.searchable} and not ${table.filterable} and not ${table.sortable}))`),
+    check("custom_field_definitions_default_count_check", sql`num_nonnulls(${table.defaultTextValue},${table.defaultIntegerValue},${table.defaultDecimalValue},${table.defaultBooleanValue},${table.defaultDateValue},${table.defaultTimestampValue},${table.defaultOptionId})<=1`),
+    check("custom_field_definitions_default_shape_check", sql`coalesce((
+      (${table.defaultTextValue} is null and ${table.defaultIntegerValue} is null and ${table.defaultDecimalValue} is null and ${table.defaultBooleanValue} is null and ${table.defaultDateValue} is null and ${table.defaultTimestampValue} is null and ${table.defaultOptionId} is null)
+      or (${table.fieldType}='short_text' and ${table.defaultTextValue}=btrim(${table.defaultTextValue}) and char_length(${table.defaultTextValue}) between 1 and 500 and ${table.defaultTextValue} !~ '[[:cntrl:]]')
+      or (${table.fieldType}='long_text' and ${table.defaultTextValue}=btrim(${table.defaultTextValue}) and char_length(${table.defaultTextValue}) between 1 and 10000 and ${table.defaultTextValue} !~ '[[:cntrl:]]')
+      or (${table.fieldType}='integer' and ${table.defaultIntegerValue} between -9007199254740991 and 9007199254740991)
+      or (${table.fieldType}='decimal' and ${table.defaultDecimalValue} between -999999999999.999999 and 999999999999.999999)
+      or (${table.fieldType}='boolean' and ${table.defaultBooleanValue} is not null)
+      or (${table.fieldType}='date' and ${table.defaultDateValue} is not null)
+      or (${table.fieldType}='timestamp' and ${table.defaultTimestampValue} is not null)
+      or (${table.fieldType}='single_select' and ${table.defaultOptionId} is not null)),false)`),
+    check("custom_field_definitions_multi_default_check", sql`${table.fieldType}<>'multi_select' or num_nonnulls(${table.defaultTextValue},${table.defaultIntegerValue},${table.defaultDecimalValue},${table.defaultBooleanValue},${table.defaultDateValue},${table.defaultTimestampValue},${table.defaultOptionId})=0`),
+  ],
+);
+
+const customFieldOptionColumns = {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    definitionId: uuid("definition_id").notNull(),
+    code: text("code").notNull(),
+    label: text("label").notNull(),
+    displayOrder: integer("display_order").notNull(),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+  ...timestamps,
+};
+// Drizzle needs an explicit shape to type the mutually referential composite definition FKs.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const customFieldOptionsShape = () => pgTable("custom_field_options", customFieldOptionColumns);
+export const customFieldOptions: ReturnType<typeof customFieldOptionsShape> = pgTable(
+  "custom_field_options",
+  customFieldOptionColumns,
+  (table) => [
+    uniqueIndex("custom_field_options_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("custom_field_options_workspace_id_definition_uq").on(table.workspaceId, table.id, table.definitionId),
+    uniqueIndex("custom_field_options_definition_code_uq").on(table.workspaceId, table.definitionId, table.code),
+    uniqueIndex("custom_field_options_active_order_uq").on(table.workspaceId, table.definitionId, table.displayOrder).where(sql`${table.lifecycle}='active'`),
+    index("custom_field_options_admin_idx").on(table.workspaceId, table.definitionId, table.lifecycle, table.displayOrder, table.id),
+    foreignKey({ name: "custom_field_options_definition_fk", columns: [table.workspaceId, table.definitionId], foreignColumns: [customFieldDefinitions.workspaceId, customFieldDefinitions.id] }),
+    foreignKey({ name: "custom_field_options_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_options_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_options_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("custom_field_options_code_check", sql`${table.code} ~ '^[a-z][a-z0-9_]{1,63}$'`),
+    check("custom_field_options_label_check", sql`${table.label}=btrim(${table.label}) and char_length(${table.label}) between 1 and 80 and ${table.label} !~ '[[:cntrl:]]'`),
+    check("custom_field_options_order_check", sql`${table.displayOrder} between 0 and 999`),
+    check("custom_field_options_lifecycle_check", sql`${table.lifecycle} in ('active','archived')`),
+    check("custom_field_options_version_check", sql`${table.version}>0`),
+    check("custom_field_options_archive_check", sql`(${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null) or (${table.lifecycle}='active' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null)`),
+  ],
+);
+
+export const customFieldValues = pgTable(
+  "custom_field_values",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    definitionId: uuid("definition_id").notNull(),
+    targetRecordType: text("target_record_type").notNull(),
+    targetRecordId: uuid("target_record_id").notNull(),
+    fieldType: text("field_type").notNull(),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    textValue: text("text_value"),
+    textNormalized: text("text_normalized"),
+    integerValue: bigint("integer_value", { mode: "number" }),
+    decimalValue: numeric("decimal_value", { precision: 18, scale: 6 }),
+    booleanValue: boolean("boolean_value"),
+    dateValue: date("date_value"),
+    timestampValue: timestamp("timestamp_value", { withTimezone: true }),
+    redactionMarker: text("redaction_marker"),
+    normalizationVersion: text("normalization_version").notNull().default("custom-field-normalization-v1"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+    redactedByMembershipId: uuid("redacted_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("custom_field_values_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("custom_field_values_workspace_id_definition_uq").on(table.workspaceId, table.id, table.definitionId),
+    uniqueIndex("custom_field_values_target_definition_uq").on(table.workspaceId, table.definitionId, table.targetRecordType, table.targetRecordId),
+    index("custom_field_values_text_idx").on(table.workspaceId, table.definitionId, table.textNormalized.asc().op("text_pattern_ops"), table.targetRecordType, table.targetRecordId).where(sql`${table.lifecycle}='active' and ${table.textNormalized} is not null`),
+    index("custom_field_values_integer_idx").on(table.workspaceId, table.definitionId, table.integerValue, table.targetRecordType, table.targetRecordId).where(sql`${table.lifecycle}='active' and ${table.integerValue} is not null`),
+    index("custom_field_values_decimal_idx").on(table.workspaceId, table.definitionId, table.decimalValue, table.targetRecordType, table.targetRecordId).where(sql`${table.lifecycle}='active' and ${table.decimalValue} is not null`),
+    index("custom_field_values_boolean_idx").on(table.workspaceId, table.definitionId, table.booleanValue, table.targetRecordType, table.targetRecordId).where(sql`${table.lifecycle}='active' and ${table.booleanValue} is not null`),
+    index("custom_field_values_date_idx").on(table.workspaceId, table.definitionId, table.dateValue, table.targetRecordType, table.targetRecordId).where(sql`${table.lifecycle}='active' and ${table.dateValue} is not null`),
+    index("custom_field_values_timestamp_idx").on(table.workspaceId, table.definitionId, table.timestampValue, table.targetRecordType, table.targetRecordId).where(sql`${table.lifecycle}='active' and ${table.timestampValue} is not null`),
+    foreignKey({ name: "custom_field_values_definition_fk", columns: [table.workspaceId, table.definitionId], foreignColumns: [customFieldDefinitions.workspaceId, customFieldDefinitions.id] }),
+    foreignKey({ name: "custom_field_values_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_values_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_values_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "custom_field_values_redactor_fk", columns: [table.workspaceId, table.redactedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("custom_field_values_target_check", sql`${table.targetRecordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
+    check("custom_field_values_type_check", sql`${table.fieldType} in ('short_text','long_text','integer','decimal','boolean','date','timestamp','single_select','multi_select')`),
+    check("custom_field_values_lifecycle_check", sql`${table.lifecycle} in ('active','archived','redacted')`),
+    check("custom_field_values_version_normalization_check", sql`${table.version}>0 and ${table.normalizationVersion}='custom-field-normalization-v1'`),
+    check("custom_field_values_metadata_check", sql`
+      (${table.lifecycle}='active' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null and ${table.redactedAt} is null and ${table.redactedByMembershipId} is null)
+      or (${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null and ${table.redactedAt} is null and ${table.redactedByMembershipId} is null)
+      or (${table.lifecycle}='redacted' and ${table.redactedAt} is not null and ${table.redactedByMembershipId} is not null and ((${table.archivedAt} is null and ${table.archivedByMembershipId} is null) or (${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null)))`),
+    check("custom_field_values_shape_check", sql`coalesce((
+      (${table.lifecycle}='redacted' and num_nonnulls(${table.textValue},${table.textNormalized},${table.integerValue},${table.decimalValue},${table.booleanValue},${table.dateValue},${table.timestampValue})=0 and ${table.redactionMarker}='content_redacted')
+      or (${table.lifecycle}<>'redacted' and ${table.redactionMarker} is null and (
+        (${table.fieldType}='short_text' and ${table.textValue}=btrim(${table.textValue}) and char_length(${table.textValue}) between 1 and 500 and ${table.textValue} !~ '[[:cntrl:]]' and ${table.textNormalized}=lower(btrim(${table.textNormalized})) and ${table.textNormalized}=lower(btrim(${table.textValue})) and num_nonnulls(${table.textValue},${table.textNormalized})=2 and num_nonnulls(${table.integerValue},${table.decimalValue},${table.booleanValue},${table.dateValue},${table.timestampValue})=0)
+        or (${table.fieldType}='long_text' and ${table.textValue}=btrim(${table.textValue}) and char_length(${table.textValue}) between 1 and 10000 and ${table.textValue} !~ '[[:cntrl:]]' and ${table.textNormalized} is null and num_nonnulls(${table.integerValue},${table.decimalValue},${table.booleanValue},${table.dateValue},${table.timestampValue})=0)
+        or (${table.fieldType}='integer' and ${table.integerValue} between -9007199254740991 and 9007199254740991 and num_nonnulls(${table.textValue},${table.textNormalized},${table.decimalValue},${table.booleanValue},${table.dateValue},${table.timestampValue})=0)
+        or (${table.fieldType}='decimal' and ${table.decimalValue} between -999999999999.999999 and 999999999999.999999 and num_nonnulls(${table.textValue},${table.textNormalized},${table.integerValue},${table.booleanValue},${table.dateValue},${table.timestampValue})=0)
+        or (${table.fieldType}='boolean' and ${table.booleanValue} is not null and num_nonnulls(${table.textValue},${table.textNormalized},${table.integerValue},${table.decimalValue},${table.dateValue},${table.timestampValue})=0)
+        or (${table.fieldType}='date' and ${table.dateValue} is not null and num_nonnulls(${table.textValue},${table.textNormalized},${table.integerValue},${table.decimalValue},${table.booleanValue},${table.timestampValue})=0)
+        or (${table.fieldType}='timestamp' and ${table.timestampValue} is not null and num_nonnulls(${table.textValue},${table.textNormalized},${table.integerValue},${table.decimalValue},${table.booleanValue},${table.dateValue})=0)
+        or (${table.fieldType} in ('single_select','multi_select') and num_nonnulls(${table.textValue},${table.textNormalized},${table.integerValue},${table.decimalValue},${table.booleanValue},${table.dateValue},${table.timestampValue})=0)))),false)`),
+  ],
+);
+
+export const customFieldValueOptions = pgTable(
+  "custom_field_value_options",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    valueId: uuid("value_id").notNull(),
+    definitionId: uuid("definition_id").notNull(),
+    optionId: uuid("option_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "custom_field_value_options_pk", columns: [table.workspaceId, table.valueId, table.optionId] }),
+    index("custom_field_value_options_lookup_idx").on(table.workspaceId, table.definitionId, table.optionId, table.valueId),
+    foreignKey({ name: "custom_field_value_options_value_fk", columns: [table.workspaceId, table.valueId, table.definitionId], foreignColumns: [customFieldValues.workspaceId, customFieldValues.id, customFieldValues.definitionId] }),
+    foreignKey({ name: "custom_field_value_options_option_fk", columns: [table.workspaceId, table.optionId, table.definitionId], foreignColumns: [customFieldOptions.workspaceId, customFieldOptions.id, customFieldOptions.definitionId] }),
+    foreignKey({ name: "custom_field_value_options_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+  ],
+);
+
+export const customizationTags = pgTable(
+  "customization_tags",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    code: text("code").notNull(),
+    label: text("label").notNull(),
+    normalizedLabel: text("normalized_label").notNull(),
+    normalizationVersion: text("normalization_version").notNull().default("tag-normalization-v1"),
+    colorCode: text("color_code").notNull().default("neutral"),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customization_tags_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("customization_tags_workspace_code_uq").on(table.workspaceId, table.code),
+    uniqueIndex("customization_tags_workspace_label_uq").on(table.workspaceId, table.normalizedLabel),
+    index("customization_tags_admin_idx").on(table.workspaceId, table.lifecycle, table.normalizedLabel, table.id),
+    foreignKey({ name: "customization_tags_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "customization_tags_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "customization_tags_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("customization_tags_code_check", sql`${table.code} ~ '^[a-z][a-z0-9_]{1,63}$'`),
+    check("customization_tags_label_check", sql`${table.label}=btrim(${table.label}) and char_length(${table.label}) between 1 and 50 and ${table.label} !~ '[[:cntrl:]]' and ${table.normalizedLabel}=lower(btrim(${table.normalizedLabel})) and char_length(${table.normalizedLabel}) between 1 and 50 and ${table.normalizedLabel}=lower(btrim(${table.label}))`),
+    check("customization_tags_normalization_check", sql`${table.normalizationVersion}='tag-normalization-v1'`),
+    check("customization_tags_color_check", sql`${table.colorCode} in ('neutral','gray','red','orange','amber','green','teal','blue','indigo','violet','pink')`),
+    check("customization_tags_lifecycle_check", sql`${table.lifecycle} in ('active','archived') and ${table.version}>0`),
+    check("customization_tags_archive_check", sql`(${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null) or (${table.lifecycle}='active' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null)`),
+  ],
+);
+
+export const recordTagAssignments = pgTable(
+  "record_tag_assignments",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    tagId: uuid("tag_id").notNull(),
+    recordType: text("record_type").notNull(),
+    recordId: uuid("record_id").notNull(),
+    assignedByMembershipId: uuid("assigned_by_membership_id").notNull(),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "record_tag_assignments_pk", columns: [table.workspaceId, table.tagId, table.recordType, table.recordId] }),
+    index("record_tag_assignments_target_idx").on(table.workspaceId, table.recordType, table.recordId, table.tagId),
+    foreignKey({ name: "record_tag_assignments_tag_fk", columns: [table.workspaceId, table.tagId], foreignColumns: [customizationTags.workspaceId, customizationTags.id] }),
+    foreignKey({ name: "record_tag_assignments_assigner_fk", columns: [table.workspaceId, table.assignedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("record_tag_assignments_type_check", sql`${table.recordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
+  ],
+);
+
+export const savedLists = pgTable(
+  "saved_lists",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    targetRecordType: text("target_record_type").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    visibility: text("visibility").notNull().default("private"),
+    ownerMembershipId: uuid("owner_membership_id").notNull(),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    currentDefinitionVersion: integer("current_definition_version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("saved_lists_workspace_id_id_uq").on(table.workspaceId, table.id),
+    index("saved_lists_owner_discovery_idx").on(table.workspaceId, table.ownerMembershipId, table.lifecycle, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()),
+    index("saved_lists_workspace_discovery_idx").on(table.workspaceId, table.visibility, table.lifecycle, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()),
+    foreignKey({ name: "saved_lists_owner_fk", columns: [table.workspaceId, table.ownerMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "saved_lists_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "saved_lists_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "saved_lists_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("saved_lists_target_check", sql`${table.targetRecordType} in ('crm.lead','crm.contact','crm.company','sales.deal','delivery.project')`),
+    check("saved_lists_name_check", sql`${table.name}=btrim(${table.name}) and char_length(${table.name}) between 1 and 100 and ${table.name} !~ '[[:cntrl:]]'`),
+    check("saved_lists_description_check", sql`${table.description} is null or (${table.description}=btrim(${table.description}) and char_length(${table.description}) between 1 and 500 and ${table.description} !~ '[[:cntrl:]]')`),
+    check("saved_lists_visibility_check", sql`${table.visibility} in ('private','workspace')`),
+    check("saved_lists_lifecycle_check", sql`${table.lifecycle} in ('active','archived') and ${table.version}>0 and ${table.currentDefinitionVersion}>0`),
+    check("saved_lists_archive_check", sql`(${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null) or (${table.lifecycle}='active' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null)`),
+  ],
+);
+
+export const savedListVersions = pgTable(
+  "saved_list_versions",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    listId: uuid("list_id").notNull(),
+    definitionVersion: integer("definition_version").notNull(),
+    contractVersion: text("contract_version").notNull().default("saved-list-filter.v1"),
+    filterAst: jsonb("filter_ast").notNull(),
+    filterAstHash: char("filter_ast_hash", { length: 64 }).notNull(),
+    sortSource: text("sort_source").notNull(),
+    sortFieldCode: text("sort_field_code"),
+    sortDefinitionId: uuid("sort_definition_id"),
+    sortDirection: text("sort_direction").notNull().default("asc"),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("saved_list_versions_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("saved_list_versions_workspace_list_version_uq").on(table.workspaceId, table.listId, table.definitionVersion),
+    index("saved_list_versions_history_idx").on(table.workspaceId, table.listId, table.definitionVersion.desc()),
+    foreignKey({ name: "saved_list_versions_list_fk", columns: [table.workspaceId, table.listId], foreignColumns: [savedLists.workspaceId, savedLists.id] }),
+    foreignKey({ name: "saved_list_versions_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("saved_list_versions_definition_check", sql`${table.definitionVersion}>0`),
+    check("saved_list_versions_contract_check", sql`${table.contractVersion}='saved-list-filter.v1'`),
+    check("saved_list_versions_ast_size_check", sql`jsonb_typeof(${table.filterAst})='object' and octet_length(${table.filterAst}::text)<=8192`),
+    check("saved_list_versions_hash_check", sql`${table.filterAstHash} ~ '^[0-9a-f]{64}$'`),
+    check("saved_list_versions_sort_check", sql`${table.sortDirection} in ('asc','desc') and ((${table.sortSource}='system' and ${table.sortFieldCode} is not null and ${table.sortFieldCode}=btrim(${table.sortFieldCode}) and char_length(${table.sortFieldCode}) between 1 and 64 and ${table.sortFieldCode} !~ '[[:cntrl:]]' and ${table.sortDefinitionId} is null) or (${table.sortSource}='custom' and ${table.sortFieldCode} is null and ${table.sortDefinitionId} is not null))`),
   ],
 );
 

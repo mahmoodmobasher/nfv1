@@ -127,6 +127,13 @@
       "when": 1787732698396,
       "tag": "0017_db_03_documents_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787735346879,
+      "tag": "0018_db_04_customization_v1",
+      "breakpoints": true
     }
   ]
 }
