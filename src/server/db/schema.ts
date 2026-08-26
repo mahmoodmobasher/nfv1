@@ -624,6 +624,56 @@ export const leadActivities = pgTable(
   ],
 );
 
+export const activityRecords = pgTable(
+  "activity_records",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    origin: text("origin").notNull().default("manual"),
+    kind: text("kind").notNull(),
+    direction: text("direction"),
+    outcome: text("outcome"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes"),
+    subject: text("subject").notNull(),
+    details: text("details"),
+    version: integer("version").notNull().default(1),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("activity_records_workspace_id_id_uq").on(table.workspaceId, table.id),
+    index("activity_records_workspace_timeline_idx").on(table.workspaceId, table.occurredAt.desc(), table.id.desc()),
+    index("activity_records_workspace_kind_timeline_idx").on(table.workspaceId, table.kind, table.occurredAt.desc(), table.id.desc()),
+    foreignKey({ name: "activity_records_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("activity_records_origin_check", sql`${table.origin}='manual'`),
+    check("activity_records_kind_check", sql`${table.kind} in ('note','call','meeting','email','message','other')`),
+    check("activity_records_direction_check", sql`${table.direction} is null or ${table.direction} in ('inbound','outbound','internal')`),
+    check("activity_records_outcome_check", sql`${table.outcome} is null or ${table.outcome} in ('completed','connected','no_answer','left_message','rescheduled','cancelled','follow_up_required','other')`),
+    check("activity_records_duration_check", sql`${table.durationMinutes} is null or ${table.durationMinutes} between 1 and 1440`),
+    check("activity_records_subject_check", sql`length(btrim(${table.subject})) between 1 and 200`),
+    check("activity_records_details_check", sql`${table.details} is null or length(btrim(${table.details})) between 1 and 10000`),
+    check("activity_records_version_check", sql`${table.version}>0`),
+  ],
+);
+
+export const activityRecordReferences = pgTable(
+  "activity_record_references",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    activityId: uuid("activity_id").notNull(),
+    recordType: text("record_type").notNull(),
+    recordId: uuid("record_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "activity_record_references_pk", columns: [table.workspaceId, table.activityId] }),
+    index("activity_record_references_record_lookup_idx").on(table.workspaceId, table.recordType, table.recordId, table.activityId),
+    foreignKey({ name: "activity_record_references_activity_fk", columns: [table.workspaceId, table.activityId], foreignColumns: [activityRecords.workspaceId, activityRecords.id] }),
+    check("activity_record_references_type_check", sql`${table.recordType}='lead'`),
+  ],
+);
+
 export const onboardingProgress = pgTable(
   "onboarding_progress",
   {
