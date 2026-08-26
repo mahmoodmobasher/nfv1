@@ -22,13 +22,11 @@ CREATE TABLE "note_records" (
 	"updated_by_membership_id" uuid NOT NULL,
 	"archived_at" timestamp with time zone,
 	"archived_by_membership_id" uuid,
-	"redacted_at" timestamp with time zone,
-	"redacted_by_membership_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "note_records_lifecycle_check" CHECK ("note_records"."lifecycle" in ('active','archived','redacted')),
+	CONSTRAINT "note_records_lifecycle_check" CHECK ("note_records"."lifecycle" in ('active','archived')),
 	CONSTRAINT "note_records_version_check" CHECK ("note_records"."version">0 and "note_records"."current_revision_number"="note_records"."version"),
-	CONSTRAINT "note_records_lifecycle_metadata_check" CHECK (("note_records"."lifecycle"='active' and num_nonnulls("note_records"."archived_at","note_records"."archived_by_membership_id","note_records"."redacted_at","note_records"."redacted_by_membership_id")=0) or ("note_records"."lifecycle"='archived' and "note_records"."archived_at" is not null and "note_records"."archived_by_membership_id" is not null and "note_records"."redacted_at" is null and "note_records"."redacted_by_membership_id" is null) or ("note_records"."lifecycle"='redacted' and "note_records"."redacted_at" is not null and "note_records"."redacted_by_membership_id" is not null and (("note_records"."archived_at" is null and "note_records"."archived_by_membership_id" is null) or ("note_records"."archived_at" is not null and "note_records"."archived_by_membership_id" is not null))))
+	CONSTRAINT "note_records_lifecycle_metadata_check" CHECK (("note_records"."lifecycle"='active' and num_nonnulls("note_records"."archived_at","note_records"."archived_by_membership_id")=0) or ("note_records"."lifecycle"='archived' and "note_records"."archived_at" is not null and "note_records"."archived_by_membership_id" is not null))
 );
 --> statement-breakpoint
 CREATE TABLE "note_revisions" (
@@ -37,13 +35,12 @@ CREATE TABLE "note_revisions" (
 	"note_id" uuid NOT NULL,
 	"revision_number" integer NOT NULL,
 	"subject" text,
-	"body" text,
-	"redaction_marker" text,
+	"body" text NOT NULL,
 	"governing_operation_id" uuid NOT NULL,
 	"created_by_membership_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "note_revisions_number_check" CHECK ("note_revisions"."revision_number">0),
-	CONSTRAINT "note_revisions_content_check" CHECK (("note_revisions"."redaction_marker" is null and ("note_revisions"."subject" is null or char_length(btrim("note_revisions"."subject")) between 1 and 200) and "note_revisions"."body" is not null and char_length(btrim("note_revisions"."body")) between 1 and 20000) or ("note_revisions"."redaction_marker"='content_redacted' and "note_revisions"."subject" is null and "note_revisions"."body" is null))
+	CONSTRAINT "note_revisions_content_check" CHECK (("note_revisions"."subject" is null or char_length(btrim("note_revisions"."subject")) between 1 and 200) and char_length(btrim("note_revisions"."body")) between 1 and 20000)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "note_records_workspace_id_id_uq" ON "note_records" USING btree ("workspace_id","id");--> statement-breakpoint
@@ -53,7 +50,6 @@ ALTER TABLE "note_records" ADD CONSTRAINT "note_records_workspace_id_workspaces_
 ALTER TABLE "note_records" ADD CONSTRAINT "note_records_workspace_creator_fk" FOREIGN KEY ("workspace_id","created_by_membership_id") REFERENCES "public"."workspace_memberships"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note_records" ADD CONSTRAINT "note_records_workspace_updater_fk" FOREIGN KEY ("workspace_id","updated_by_membership_id") REFERENCES "public"."workspace_memberships"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note_records" ADD CONSTRAINT "note_records_workspace_archiver_fk" FOREIGN KEY ("workspace_id","archived_by_membership_id") REFERENCES "public"."workspace_memberships"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "note_records" ADD CONSTRAINT "note_records_workspace_redactor_fk" FOREIGN KEY ("workspace_id","redacted_by_membership_id") REFERENCES "public"."workspace_memberships"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note_revisions" ADD CONSTRAINT "note_revisions_note_fk" FOREIGN KEY ("workspace_id","note_id") REFERENCES "public"."note_records"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note_revisions" ADD CONSTRAINT "note_revisions_workspace_creator_fk" FOREIGN KEY ("workspace_id","created_by_membership_id") REFERENCES "public"."workspace_memberships"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "note_record_references_target_idx" ON "note_record_references" USING btree ("workspace_id","record_type","record_id","note_id");--> statement-breakpoint
@@ -89,19 +85,13 @@ END $$;--> statement-breakpoint
 CREATE TRIGGER note_revisions_append_only_v1 BEFORE UPDATE OR DELETE ON note_revisions
 FOR EACH ROW EXECUTE FUNCTION note_revisions_append_only_v1();--> statement-breakpoint
 CREATE FUNCTION note_records_require_current_revision_v1() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE revision_marker text;
 BEGIN
-  SELECT redaction_marker INTO revision_marker
-  FROM note_revisions
+  PERFORM 1 FROM note_revisions
   WHERE workspace_id=NEW.workspace_id AND note_id=NEW.id
     AND revision_number=NEW.current_revision_number
     AND governing_operation_id=NEW.governing_operation_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'note_current_revision_required';
-  END IF;
-  IF (NEW.lifecycle='redacted' AND revision_marker IS DISTINCT FROM 'content_redacted') OR
-     (NEW.lifecycle<>'redacted' AND revision_marker IS NOT NULL) THEN
-    RAISE EXCEPTION 'note_revision_lifecycle_mismatch';
   END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint

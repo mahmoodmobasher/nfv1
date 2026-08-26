@@ -687,8 +687,6 @@ export const noteRecords = pgTable(
     updatedByMembershipId: uuid("updated_by_membership_id").notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     archivedByMembershipId: uuid("archived_by_membership_id"),
-    redactedAt: timestamp("redacted_at", { withTimezone: true }),
-    redactedByMembershipId: uuid("redacted_by_membership_id"),
     ...timestamps,
   },
   (table) => [
@@ -697,10 +695,9 @@ export const noteRecords = pgTable(
     foreignKey({ name: "note_records_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
     foreignKey({ name: "note_records_workspace_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
     foreignKey({ name: "note_records_workspace_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
-    foreignKey({ name: "note_records_workspace_redactor_fk", columns: [table.workspaceId, table.redactedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
-    check("note_records_lifecycle_check", sql`${table.lifecycle} in ('active','archived','redacted')`),
+    check("note_records_lifecycle_check", sql`${table.lifecycle} in ('active','archived')`),
     check("note_records_version_check", sql`${table.version}>0 and ${table.currentRevisionNumber}=${table.version}`),
-    check("note_records_lifecycle_metadata_check", sql`(${table.lifecycle}='active' and num_nonnulls(${table.archivedAt},${table.archivedByMembershipId},${table.redactedAt},${table.redactedByMembershipId})=0) or (${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null and ${table.redactedAt} is null and ${table.redactedByMembershipId} is null) or (${table.lifecycle}='redacted' and ${table.redactedAt} is not null and ${table.redactedByMembershipId} is not null and ((${table.archivedAt} is null and ${table.archivedByMembershipId} is null) or (${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null)))`),
+    check("note_records_lifecycle_metadata_check", sql`(${table.lifecycle}='active' and num_nonnulls(${table.archivedAt},${table.archivedByMembershipId})=0) or (${table.lifecycle}='archived' and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null)`),
   ],
 );
 
@@ -712,8 +709,7 @@ export const noteRevisions = pgTable(
     noteId: uuid("note_id").notNull(),
     revisionNumber: integer("revision_number").notNull(),
     subject: text("subject"),
-    body: text("body"),
-    redactionMarker: text("redaction_marker"),
+    body: text("body").notNull(),
     governingOperationId: uuid("governing_operation_id").notNull(),
     createdByMembershipId: uuid("created_by_membership_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -724,7 +720,7 @@ export const noteRevisions = pgTable(
     foreignKey({ name: "note_revisions_note_fk", columns: [table.workspaceId, table.noteId], foreignColumns: [noteRecords.workspaceId, noteRecords.id] }),
     foreignKey({ name: "note_revisions_workspace_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
     check("note_revisions_number_check", sql`${table.revisionNumber}>0`),
-    check("note_revisions_content_check", sql`(${table.redactionMarker} is null and (${table.subject} is null or char_length(btrim(${table.subject})) between 1 and 200) and ${table.body} is not null and char_length(btrim(${table.body})) between 1 and 20000) or (${table.redactionMarker}='content_redacted' and ${table.subject} is null and ${table.body} is null)`),
+    check("note_revisions_content_check", sql`(${table.subject} is null or char_length(btrim(${table.subject})) between 1 and 200) and char_length(btrim(${table.body})) between 1 and 20000`),
   ],
 );
 

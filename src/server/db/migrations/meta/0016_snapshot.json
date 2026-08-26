@@ -1,5 +1,5 @@
 {
-  "id": "46d782f3-b9da-4276-a465-70f48b3a6954",
+  "id": "eeb663f9-321d-4813-8c9e-f6a6c28417c6",
   "prevId": "782c394e-05bc-4bd9-9a93-0315e00ad907",
   "version": "7",
   "dialect": "postgresql",
@@ -4034,18 +4034,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "redacted_at": {
-          "name": "redacted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "redacted_by_membership_id": {
-          "name": "redacted_by_membership_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4175,21 +4163,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "note_records_workspace_redactor_fk": {
-          "name": "note_records_workspace_redactor_fk",
-          "tableFrom": "note_records",
-          "tableTo": "workspace_memberships",
-          "columnsFrom": [
-            "workspace_id",
-            "redacted_by_membership_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4198,7 +4171,7 @@
       "checkConstraints": {
         "note_records_lifecycle_check": {
           "name": "note_records_lifecycle_check",
-          "value": "\"note_records\".\"lifecycle\" in ('active','archived','redacted')"
+          "value": "\"note_records\".\"lifecycle\" in ('active','archived')"
         },
         "note_records_version_check": {
           "name": "note_records_version_check",
@@ -4206,7 +4179,7 @@
         },
         "note_records_lifecycle_metadata_check": {
           "name": "note_records_lifecycle_metadata_check",
-          "value": "(\"note_records\".\"lifecycle\"='active' and num_nonnulls(\"note_records\".\"archived_at\",\"note_records\".\"archived_by_membership_id\",\"note_records\".\"redacted_at\",\"note_records\".\"redacted_by_membership_id\")=0) or (\"note_records\".\"lifecycle\"='archived' and \"note_records\".\"archived_at\" is not null and \"note_records\".\"archived_by_membership_id\" is not null and \"note_records\".\"redacted_at\" is null and \"note_records\".\"redacted_by_membership_id\" is null) or (\"note_records\".\"lifecycle\"='redacted' and \"note_records\".\"redacted_at\" is not null and \"note_records\".\"redacted_by_membership_id\" is not null and ((\"note_records\".\"archived_at\" is null and \"note_records\".\"archived_by_membership_id\" is null) or (\"note_records\".\"archived_at\" is not null and \"note_records\".\"archived_by_membership_id\" is not null)))"
+          "value": "(\"note_records\".\"lifecycle\"='active' and num_nonnulls(\"note_records\".\"archived_at\",\"note_records\".\"archived_by_membership_id\")=0) or (\"note_records\".\"lifecycle\"='archived' and \"note_records\".\"archived_at\" is not null and \"note_records\".\"archived_by_membership_id\" is not null)"
         }
       },
       "isRLSEnabled": false
@@ -4250,13 +4223,7 @@
           "name": "body",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
-        },
-        "redaction_marker": {
-          "name": "redaction_marker",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "governing_operation_id": {
           "name": "governing_operation_id",
@@ -4370,7 +4337,7 @@
         },
         "note_revisions_content_check": {
           "name": "note_revisions_content_check",
-          "value": "(\"note_revisions\".\"redaction_marker\" is null and (\"note_revisions\".\"subject\" is null or char_length(btrim(\"note_revisions\".\"subject\")) between 1 and 200) and \"note_revisions\".\"body\" is not null and char_length(btrim(\"note_revisions\".\"body\")) between 1 and 20000) or (\"note_revisions\".\"redaction_marker\"='content_redacted' and \"note_revisions\".\"subject\" is null and \"note_revisions\".\"body\" is null)"
+          "value": "(\"note_revisions\".\"subject\" is null or char_length(btrim(\"note_revisions\".\"subject\")) between 1 and 200) and char_length(btrim(\"note_revisions\".\"body\")) between 1 and 20000"
         }
       },
       "isRLSEnabled": false
