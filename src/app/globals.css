@@ -287,11 +287,11 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   border-bottom: 1px solid var(--nx-border-subtle);
   background: var(--nx-surface-primary);
 }
-.product-breadcrumbs { display: flex; min-width: 0; align-items: center; gap: var(--nf-space-2); color: var(--nx-text-muted); font-size: var(--nf-text-body); white-space: nowrap; }
-.product-breadcrumbs a { color: var(--nx-text-muted); text-decoration: none; }
-.product-breadcrumbs a:hover { color: var(--nx-link); }
-.product-breadcrumbs span { min-width: 0; overflow: hidden; color: var(--nx-text-strong); font-weight: 600; text-overflow: ellipsis; }
-.product-breadcrumbs svg { width: 14px; height: 14px; flex: none; }
+.product-shell.crm-preview>.product-topbar>.product-breadcrumbs,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: var(--nf-space-2); margin: 0; padding: 0; background: transparent; color: var(--nx-text-muted); font-size: var(--nf-text-body); white-space: nowrap; }
+.product-shell.crm-preview>.product-topbar>.product-breadcrumbs a,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs a { display: inline-flex; min-height: 44px; align-items: center; margin: 0; padding: 0; border-radius: var(--nf-radius-compact); background: transparent; color: var(--nx-text-muted); font-weight: 500; text-decoration: none; }
+.product-shell.crm-preview>.product-topbar>.product-breadcrumbs a:hover,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs a:hover { background: transparent; color: var(--nx-link); }
+.product-shell.crm-preview>.product-topbar>.product-breadcrumbs span,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs span { min-width: 0; overflow: hidden; color: var(--nx-text-strong); font-weight: 600; text-overflow: ellipsis; }
+.product-shell.crm-preview>.product-topbar>.product-breadcrumbs svg,.product-shell.admin-shell>.product-topbar>.product-breadcrumbs svg { width: 14px; height: 14px; flex: none; }
 .product-shell .product-topbar .admin-workspace { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 var(--nf-space-2); max-width: 180px; margin: 0; padding: 4px 8px; border: 0; background: transparent; }
 .product-shell .product-topbar .admin-workspace b { grid-column: 1/-1; overflow: hidden; color: var(--nx-text-strong); font-size: var(--nf-text-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .product-shell .product-topbar .admin-workspace span,.product-shell .product-topbar .admin-workspace small,.product-shell .product-topbar .admin-workspace a { color: var(--nx-text-muted); font-size: var(--nf-text-nano); line-height: 1.2; text-transform: capitalize; }
