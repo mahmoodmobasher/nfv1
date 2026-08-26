@@ -298,15 +298,35 @@ export const companies = pgTable(
     normalizationVersion: text("normalization_version").notNull().default("p1a-identity-v1"),
     status: text("status").notNull().default("active"),
     version: integer("version").notNull().default(1),
+    responsibleMembershipId: uuid("responsible_membership_id"),
+    responsibleTeamId: uuid("responsible_team_id"),
+    visibility: text("visibility").notNull().default("workspace"),
+    governingOperationId: uuid("governing_operation_id"),
+    createdByMembershipId: uuid("created_by_membership_id"),
+    updatedByMembershipId: uuid("updated_by_membership_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    authorityContractVersion: text("authority_contract_version").notNull().default("legacy-p1a-root-v1"),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("companies_workspace_id_id_uq").on(table.workspaceId, table.id),
     index("companies_workspace_name_idx").on(table.workspaceId, table.nameNormalized, table.id),
     index("companies_workspace_domain_idx").on(table.workspaceId, table.domainNormalized, table.id),
+    index("companies_default_list_idx").on(table.workspaceId, table.status, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()),
+    index("companies_responsible_membership_idx").on(table.workspaceId, table.responsibleMembershipId, table.status, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()).where(sql`${table.responsibleMembershipId} is not null`),
+    index("companies_responsible_team_idx").on(table.workspaceId, table.responsibleTeamId, table.status, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()).where(sql`${table.responsibleTeamId} is not null`),
+    foreignKey({ name: "companies_responsible_membership_fk", columns: [table.workspaceId, table.responsibleMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "companies_responsible_team_fk", columns: [table.workspaceId, table.responsibleTeamId], foreignColumns: [teams.workspaceId, teams.id] }),
+    foreignKey({ name: "companies_creator_membership_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "companies_updater_membership_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "companies_archiver_membership_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
     check("companies_name_check", sql`length(btrim(${table.displayName})) between 1 and 200 and length(${table.nameNormalized}) between 1 and 200`),
     check("companies_status_check", sql`${table.status} in ('active','archived')`),
     check("companies_version_check", sql`${table.version} > 0`),
+    check("companies_visibility_check", sql`${table.visibility} in ('workspace','teams')`),
+    check("companies_authority_contract_check", sql`${table.authorityContractVersion} in ('legacy-p1a-root-v1','customer-graph-v1')`),
+    check("companies_archive_metadata_check", sql`(${table.archivedAt} is null)=(${table.archivedByMembershipId} is null) and (${table.status}='archived' or (${table.archivedAt} is null and ${table.archivedByMembershipId} is null)) and (${table.authorityContractVersion}='legacy-p1a-root-v1' or (${table.status}='active' and ${table.archivedAt} is null) or (${table.status}='archived' and ${table.archivedAt} is not null))`),
   ],
 );
 
@@ -328,6 +348,15 @@ export const contacts = pgTable(
     companyId: uuid("company_id"),
     status: text("status").notNull().default("active"),
     version: integer("version").notNull().default(1),
+    responsibleMembershipId: uuid("responsible_membership_id"),
+    responsibleTeamId: uuid("responsible_team_id"),
+    visibility: text("visibility").notNull().default("workspace"),
+    governingOperationId: uuid("governing_operation_id"),
+    createdByMembershipId: uuid("created_by_membership_id"),
+    updatedByMembershipId: uuid("updated_by_membership_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    authorityContractVersion: text("authority_contract_version").notNull().default("legacy-p1a-root-v1"),
     ...timestamps,
   },
   (table) => [
@@ -335,7 +364,15 @@ export const contacts = pgTable(
     index("contacts_workspace_email_idx").on(table.workspaceId, table.emailNormalized, table.id),
     index("contacts_workspace_phone_idx").on(table.workspaceId, table.phoneNormalized, table.id),
     index("contacts_workspace_name_company_idx").on(table.workspaceId, table.personNameNormalized, table.companyId, table.id),
+    index("contacts_default_list_idx").on(table.workspaceId, table.status, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()),
+    index("contacts_responsible_membership_idx").on(table.workspaceId, table.responsibleMembershipId, table.status, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()).where(sql`${table.responsibleMembershipId} is not null`),
+    index("contacts_responsible_team_idx").on(table.workspaceId, table.responsibleTeamId, table.status, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()).where(sql`${table.responsibleTeamId} is not null`),
     foreignKey({ name: "contacts_workspace_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+    foreignKey({ name: "contacts_responsible_membership_fk", columns: [table.workspaceId, table.responsibleMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "contacts_responsible_team_fk", columns: [table.workspaceId, table.responsibleTeamId], foreignColumns: [teams.workspaceId, teams.id] }),
+    foreignKey({ name: "contacts_creator_membership_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "contacts_updater_membership_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "contacts_archiver_membership_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
     check("contacts_name_check", sql`length(btrim(${table.displayName})) between 1 and 200`),
     check("contacts_normalized_name_check", sql`length(${table.personNameNormalized}) between 1 and 200 and ${table.personNameNormalized}=btrim(${table.personNameNormalized})`),
     check("contacts_email_pair_check", sql`(${table.emailDisplay} is null) = (${table.emailNormalized} is null)`),
@@ -344,6 +381,278 @@ export const contacts = pgTable(
     check("contacts_identity_check", sql`${table.emailNormalized} is not null or ${table.phoneNormalized} is not null or length(btrim(${table.displayName})) > 0`),
     check("contacts_status_check", sql`${table.status} in ('active','archived')`),
     check("contacts_version_check", sql`${table.version} > 0`),
+    check("contacts_visibility_check", sql`${table.visibility} in ('workspace','teams')`),
+    check("contacts_authority_contract_check", sql`${table.authorityContractVersion} in ('legacy-p1a-root-v1','customer-graph-v1')`),
+    check("contacts_archive_metadata_check", sql`(${table.archivedAt} is null)=(${table.archivedByMembershipId} is null) and (${table.status}='archived' or (${table.archivedAt} is null and ${table.archivedByMembershipId} is null)) and (${table.authorityContractVersion}='legacy-p1a-root-v1' or (${table.status}='active' and ${table.archivedAt} is null) or (${table.status}='archived' and ${table.archivedAt} is not null))`),
+  ],
+);
+
+export const contactIdentityPoints = pgTable(
+  "contact_identity_points",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    contactId: uuid("contact_id").notNull(),
+    kind: text("kind").notNull(),
+    displayValue: text("display_value").notNull(),
+    normalizedValue: text("normalized_value").notNull(),
+    phoneCountryCodeUsed: text("phone_country_code_used"),
+    normalizationVersion: text("normalization_version").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    verificationStatus: text("verification_status").notNull().default("unverified"),
+    verificationMethod: text("verification_method"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    source: text("source").notNull(),
+    sourceRecordId: uuid("source_record_id"),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id"),
+    updatedByMembershipId: uuid("updated_by_membership_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("contact_identity_points_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("contact_identity_points_active_value_uq").on(table.workspaceId, table.contactId, table.kind, table.normalizedValue, table.normalizationVersion).where(sql`${table.lifecycle}='active'`),
+    uniqueIndex("contact_identity_points_active_primary_uq").on(table.workspaceId, table.contactId, table.kind).where(sql`${table.lifecycle}='active' and ${table.isPrimary}`),
+    index("contact_identity_points_candidate_idx").on(table.workspaceId, table.kind, table.normalizedValue, table.normalizationVersion, table.lifecycle, table.contactId, table.id),
+    index("contact_identity_points_owner_idx").on(table.workspaceId, table.contactId, table.kind, table.lifecycle, table.isPrimary.desc(), table.id),
+    foreignKey({ name: "contact_identity_points_contact_fk", columns: [table.workspaceId, table.contactId], foreignColumns: [contacts.workspaceId, contacts.id] }),
+    foreignKey({ name: "contact_identity_points_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "contact_identity_points_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "contact_identity_points_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("contact_identity_points_kind_check", sql`${table.kind} in ('email','phone')`),
+    check("contact_identity_points_value_shape_check", sql`(
+      ${table.kind}='email' and char_length(${table.displayValue}) between 3 and 320 and char_length(${table.normalizedValue}) between 3 and 320
+        and ${table.displayValue}=btrim(${table.displayValue}) and ${table.normalizedValue}=lower(btrim(${table.normalizedValue}))
+        and ${table.displayValue} !~ '[[:cntrl:]]' and ${table.normalizedValue} !~ '[[:cntrl:]]' and ${table.phoneCountryCodeUsed} is null
+      ) or (
+      ${table.kind}='phone' and char_length(${table.displayValue}) between 1 and 50 and char_length(${table.normalizedValue}) between 3 and 32
+        and ${table.displayValue}=btrim(${table.displayValue}) and ${table.normalizedValue}=btrim(${table.normalizedValue})
+        and ${table.displayValue} !~ '[[:cntrl:]]' and ${table.normalizedValue} !~ '[[:cntrl:]]'
+        and ${table.phoneCountryCodeUsed}=btrim(${table.phoneCountryCodeUsed}) and char_length(${table.phoneCountryCodeUsed}) between 2 and 16
+        and ${table.phoneCountryCodeUsed} !~ '[[:cntrl:]]'
+      )`),
+    check("contact_identity_points_normalization_check", sql`${table.normalizationVersion}=btrim(${table.normalizationVersion}) and char_length(${table.normalizationVersion}) between 1 and 64 and ${table.normalizationVersion} !~ '[[:cntrl:]]'`),
+    check("contact_identity_points_verification_check", sql`(${table.verificationStatus}='unverified' and ${table.verificationMethod} is null and ${table.verifiedAt} is null) or (${table.verificationStatus}='verified' and ${table.verificationMethod} in ('identity_review','provider','workspace_asserted') and ${table.verifiedAt} is not null)`),
+    check("contact_identity_points_source_check", sql`${table.source} in ('legacy_root','lead_identity_review','manual','import','integration') and ((${table.source} in ('lead_identity_review','import','integration') and ${table.sourceRecordId} is not null) or (${table.source} in ('legacy_root','manual') and ${table.sourceRecordId} is null))`),
+    check("contact_identity_points_lifecycle_check", sql`${table.lifecycle} in ('active','archived') and ${table.version}>0 and ((${table.lifecycle}='active' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null) or (${table.lifecycle}='archived' and not ${table.isPrimary} and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null))`),
+  ],
+);
+
+export const companyDomainPoints = pgTable(
+  "company_domain_points",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    companyId: uuid("company_id").notNull(),
+    domainDisplay: text("domain_display").notNull(),
+    domainNormalized: text("domain_normalized").notNull(),
+    normalizationVersion: text("normalization_version").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    verificationStatus: text("verification_status").notNull().default("unverified"),
+    verificationMethod: text("verification_method"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    source: text("source").notNull(),
+    sourceRecordId: uuid("source_record_id"),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id"),
+    updatedByMembershipId: uuid("updated_by_membership_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByMembershipId: uuid("archived_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("company_domain_points_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("company_domain_points_active_value_uq").on(table.workspaceId, table.companyId, table.domainNormalized, table.normalizationVersion).where(sql`${table.lifecycle}='active'`),
+    uniqueIndex("company_domain_points_active_primary_uq").on(table.workspaceId, table.companyId).where(sql`${table.lifecycle}='active' and ${table.isPrimary}`),
+    index("company_domain_points_candidate_idx").on(table.workspaceId, table.domainNormalized, table.normalizationVersion, table.lifecycle, table.companyId, table.id),
+    index("company_domain_points_owner_idx").on(table.workspaceId, table.companyId, table.lifecycle, table.isPrimary.desc(), table.id),
+    foreignKey({ name: "company_domain_points_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+    foreignKey({ name: "company_domain_points_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "company_domain_points_updater_fk", columns: [table.workspaceId, table.updatedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "company_domain_points_archiver_fk", columns: [table.workspaceId, table.archivedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("company_domain_points_value_check", sql`${table.domainDisplay}=btrim(${table.domainDisplay}) and char_length(${table.domainDisplay}) between 1 and 253 and ${table.domainDisplay} !~ '[[:cntrl:]]' and ${table.domainNormalized}=lower(btrim(${table.domainNormalized})) and char_length(${table.domainNormalized}) between 1 and 253 and ${table.domainNormalized} !~ '[[:cntrl:]]' and ${table.domainNormalized} ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)([.][a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$'`),
+    check("company_domain_points_normalization_check", sql`${table.normalizationVersion}=btrim(${table.normalizationVersion}) and char_length(${table.normalizationVersion}) between 1 and 64 and ${table.normalizationVersion} !~ '[[:cntrl:]]'`),
+    check("company_domain_points_verification_check", sql`(${table.verificationStatus}='unverified' and ${table.verificationMethod} is null and ${table.verifiedAt} is null) or (${table.verificationStatus}='verified' and ${table.verificationMethod} in ('identity_review','provider','workspace_asserted') and ${table.verifiedAt} is not null)`),
+    check("company_domain_points_source_check", sql`${table.source} in ('legacy_root','lead_identity_review','manual','import','integration') and ((${table.source} in ('lead_identity_review','import','integration') and ${table.sourceRecordId} is not null) or (${table.source} in ('legacy_root','manual') and ${table.sourceRecordId} is null))`),
+    check("company_domain_points_lifecycle_check", sql`${table.lifecycle} in ('active','archived') and ${table.version}>0 and ((${table.lifecycle}='active' and ${table.archivedAt} is null and ${table.archivedByMembershipId} is null) or (${table.lifecycle}='archived' and not ${table.isPrimary} and ${table.archivedAt} is not null and ${table.archivedByMembershipId} is not null))`),
+  ],
+);
+
+export const contactCompanyAffiliations = pgTable(
+  "contact_company_affiliations",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    contactId: uuid("contact_id").notNull(),
+    companyId: uuid("company_id").notNull(),
+    roleCode: text("role_code").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull(),
+    validTo: timestamp("valid_to", { withTimezone: true }),
+    lifecycle: text("lifecycle").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    governingOperationId: uuid("governing_operation_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id"),
+    endedByMembershipId: uuid("ended_by_membership_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("contact_company_affiliations_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("contact_company_affiliations_active_pair_uq").on(table.workspaceId, table.contactId, table.companyId).where(sql`${table.lifecycle}='active'`),
+    uniqueIndex("contact_company_affiliations_active_primary_uq").on(table.workspaceId, table.contactId).where(sql`${table.lifecycle}='active' and ${table.isPrimary}`),
+    index("contact_company_affiliations_contact_idx").on(table.workspaceId, table.contactId, table.lifecycle, table.isPrimary.desc(), table.companyId, table.id),
+    index("contact_company_affiliations_company_idx").on(table.workspaceId, table.companyId, table.lifecycle, table.contactId, table.id),
+    index("contact_company_affiliations_history_idx").on(table.workspaceId, table.contactId, table.validFrom.desc(), table.id.desc()),
+    foreignKey({ name: "contact_company_affiliations_contact_fk", columns: [table.workspaceId, table.contactId], foreignColumns: [contacts.workspaceId, contacts.id] }),
+    foreignKey({ name: "contact_company_affiliations_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+    foreignKey({ name: "contact_company_affiliations_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    foreignKey({ name: "contact_company_affiliations_ender_fk", columns: [table.workspaceId, table.endedByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("contact_company_affiliations_role_check", sql`${table.roleCode} in ('employee','owner','executive','decision_maker','billing','technical','advisor','contractor','other')`),
+    check("contact_company_affiliations_state_check", sql`${table.lifecycle} in ('active','ended') and ${table.version}>0 and ((${table.lifecycle}='active' and ${table.validTo} is null and ${table.endedByMembershipId} is null) or (${table.lifecycle}='ended' and ${table.validTo} is not null and ${table.validTo}>=${table.validFrom} and ${table.endedByMembershipId} is not null))`),
+  ],
+);
+
+export const contactVisibleTeams = pgTable(
+  "contact_visible_teams",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    contactId: uuid("contact_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "contact_visible_teams_pk", columns: [table.workspaceId, table.contactId, table.teamId] }),
+    index("contact_visible_teams_team_idx").on(table.workspaceId, table.teamId, table.contactId),
+    foreignKey({ name: "contact_visible_teams_contact_fk", columns: [table.workspaceId, table.contactId], foreignColumns: [contacts.workspaceId, contacts.id] }),
+    foreignKey({ name: "contact_visible_teams_team_fk", columns: [table.workspaceId, table.teamId], foreignColumns: [teams.workspaceId, teams.id] }),
+    foreignKey({ name: "contact_visible_teams_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+  ],
+);
+
+export const companyVisibleTeams = pgTable(
+  "company_visible_teams",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    companyId: uuid("company_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "company_visible_teams_pk", columns: [table.workspaceId, table.companyId, table.teamId] }),
+    index("company_visible_teams_team_idx").on(table.workspaceId, table.teamId, table.companyId),
+    foreignKey({ name: "company_visible_teams_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+    foreignKey({ name: "company_visible_teams_team_fk", columns: [table.workspaceId, table.teamId], foreignColumns: [teams.workspaceId, teams.id] }),
+    foreignKey({ name: "company_visible_teams_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+  ],
+);
+
+export const customerGraphReconciliationRuns = pgTable(
+  "customer_graph_reconciliation_runs",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "no action" }),
+    contractVersion: text("contract_version").notNull().default("customer-graph-reconciliation.v1"),
+    state: text("state").notNull().default("pending"),
+    sourceCutoff: timestamp("source_cutoff", { withTimezone: true }).notNull(),
+    sourceCutoffId: uuid("source_cutoff_id").notNull(),
+    counts: jsonb("counts").notNull().default({
+      contactsScanned: 0,
+      companiesScanned: 0,
+      contactEmailPointsWritten: 0,
+      contactPhonePointsWritten: 0,
+      companyDomainPointsWritten: 0,
+      affiliationsWritten: 0,
+      issuesOpened: 0,
+      issuesResolved: 0,
+    }),
+    operationId: uuid("operation_id").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdByMembershipId: uuid("created_by_membership_id").notNull(),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_graph_reconciliation_runs_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("customer_graph_reconciliation_runs_running_uq").on(table.workspaceId).where(sql`${table.state}='running'`),
+    index("customer_graph_reconciliation_runs_state_idx").on(table.workspaceId, table.state, table.updatedAt.desc().nullsLast(), table.id.desc().nullsLast()),
+    foreignKey({ name: "customer_graph_reconciliation_runs_creator_fk", columns: [table.workspaceId, table.createdByMembershipId], foreignColumns: [workspaceMemberships.workspaceId, workspaceMemberships.id] }),
+    check("customer_graph_reconciliation_runs_contract_check", sql`${table.contractVersion}='customer-graph-reconciliation.v1'`),
+    check("customer_graph_reconciliation_runs_state_check", sql`${table.state} in ('pending','running','blocked','complete','abandoned') and ${table.version}>0 and ((${table.state}='pending' and ${table.startedAt} is null and ${table.completedAt} is null) or (${table.state} in ('running','blocked') and ${table.startedAt} is not null and ${table.completedAt} is null) or (${table.state}='complete' and ${table.startedAt} is not null and ${table.completedAt} is not null) or (${table.state}='abandoned' and ${table.completedAt} is not null))`),
+    check("customer_graph_reconciliation_runs_counts_check", sql`jsonb_typeof(${table.counts})='object' and octet_length(${table.counts}::text)<=1024 and ${table.counts} ?& array['contactsScanned','companiesScanned','contactEmailPointsWritten','contactPhonePointsWritten','companyDomainPointsWritten','affiliationsWritten','issuesOpened','issuesResolved'] and (${table.counts}-array['contactsScanned','companiesScanned','contactEmailPointsWritten','contactPhonePointsWritten','companyDomainPointsWritten','affiliationsWritten','issuesOpened','issuesResolved'])='{}'::jsonb
+      and jsonb_typeof(${table.counts}->'contactsScanned')='number' and (${table.counts}->>'contactsScanned') ~ '^[0-9]+$' and (${table.counts}->>'contactsScanned')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'companiesScanned')='number' and (${table.counts}->>'companiesScanned') ~ '^[0-9]+$' and (${table.counts}->>'companiesScanned')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'contactEmailPointsWritten')='number' and (${table.counts}->>'contactEmailPointsWritten') ~ '^[0-9]+$' and (${table.counts}->>'contactEmailPointsWritten')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'contactPhonePointsWritten')='number' and (${table.counts}->>'contactPhonePointsWritten') ~ '^[0-9]+$' and (${table.counts}->>'contactPhonePointsWritten')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'companyDomainPointsWritten')='number' and (${table.counts}->>'companyDomainPointsWritten') ~ '^[0-9]+$' and (${table.counts}->>'companyDomainPointsWritten')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'affiliationsWritten')='number' and (${table.counts}->>'affiliationsWritten') ~ '^[0-9]+$' and (${table.counts}->>'affiliationsWritten')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'issuesOpened')='number' and (${table.counts}->>'issuesOpened') ~ '^[0-9]+$' and (${table.counts}->>'issuesOpened')::numeric<=9007199254740991
+      and jsonb_typeof(${table.counts}->'issuesResolved')='number' and (${table.counts}->>'issuesResolved') ~ '^[0-9]+$' and (${table.counts}->>'issuesResolved')::numeric<=9007199254740991`),
+  ],
+);
+
+export const customerGraphReconciliationCheckpoints = pgTable(
+  "customer_graph_reconciliation_checkpoints",
+  {
+    workspaceId: uuid("workspace_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    stream: text("stream").notNull(),
+    lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }),
+    lastId: uuid("last_id"),
+    processedCount: bigint("processed_count", { mode: "number" }).notNull().default(0),
+    issueCount: bigint("issue_count", { mode: "number" }).notNull().default(0),
+    version: integer("version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "customer_graph_reconciliation_checkpoints_pk", columns: [table.workspaceId, table.runId, table.stream] }),
+    foreignKey({ name: "customer_graph_reconciliation_checkpoints_run_fk", columns: [table.workspaceId, table.runId], foreignColumns: [customerGraphReconciliationRuns.workspaceId, customerGraphReconciliationRuns.id] }),
+    check("customer_graph_reconciliation_checkpoints_stream_check", sql`${table.stream} in ('contact_email','contact_phone','contact_company','company_domain','root_authority')`),
+    check("customer_graph_reconciliation_checkpoints_cursor_check", sql`(${table.lastUpdatedAt} is null)=(${table.lastId} is null)`),
+    check("customer_graph_reconciliation_checkpoints_counts_check", sql`${table.processedCount}>=0 and ${table.issueCount}>=0 and ${table.version}>0`),
+  ],
+);
+
+export const customerGraphReconciliationIssues = pgTable(
+  "customer_graph_reconciliation_issues",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    stream: text("stream").notNull(),
+    sourceRecordType: text("source_record_type").notNull(),
+    sourceRecordId: uuid("source_record_id").notNull(),
+    issueCode: text("issue_code").notNull(),
+    safeMetadata: jsonb("safe_metadata").notNull(),
+    state: text("state").notNull().default("open"),
+    resolutionCode: text("resolution_code"),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_graph_reconciliation_issues_workspace_id_id_uq").on(table.workspaceId, table.id),
+    uniqueIndex("customer_graph_reconciliation_issues_identity_uq").on(table.workspaceId, table.runId, table.stream, table.sourceRecordId, table.issueCode),
+    index("customer_graph_reconciliation_issues_lookup_idx").on(table.workspaceId, table.runId, table.state, table.stream, table.sourceRecordId, table.id),
+    foreignKey({ name: "customer_graph_reconciliation_issues_run_fk", columns: [table.workspaceId, table.runId], foreignColumns: [customerGraphReconciliationRuns.workspaceId, customerGraphReconciliationRuns.id] }),
+    check("customer_graph_reconciliation_issues_stream_check", sql`${table.stream} in ('contact_email','contact_phone','contact_company','company_domain','root_authority')`),
+    check("customer_graph_reconciliation_issues_source_check", sql`${table.sourceRecordType} in ('contact','company')`),
+    check("customer_graph_reconciliation_issues_code_check", sql`${table.issueCode} in ('missing_normalized_value','invalid_legacy_value','ambiguous_primary','missing_company','version_changed','authority_conflict')`),
+    check("customer_graph_reconciliation_issues_state_check", sql`${table.state} in ('open','resolved','waived') and ${table.version}>0 and ((${table.state}='open' and ${table.resolutionCode} is null) or (${table.state}='resolved' and ${table.resolutionCode} in ('source_corrected','accepted_legacy','not_applicable','superseded')) or (${table.state}='waived' and ${table.resolutionCode}='operator_waiver'))`),
+    check("customer_graph_reconciliation_issues_metadata_check", sql`jsonb_typeof(${table.safeMetadata})='object' and octet_length(${table.safeMetadata}::text)<=1024 and (
+      (${table.issueCode} in ('missing_normalized_value','missing_company') and ${table.safeMetadata} ?& array['sourceVersion'] and (${table.safeMetadata}-array['sourceVersion'])='{}'::jsonb and jsonb_typeof(${table.safeMetadata}->'sourceVersion')='number' and (${table.safeMetadata}->>'sourceVersion') ~ '^[1-9][0-9]*$' and (${table.safeMetadata}->>'sourceVersion')::numeric<=9007199254740991)
+      or (${table.issueCode}='invalid_legacy_value' and ${table.safeMetadata} ?& array['sourceVersion','validationCode'] and (${table.safeMetadata}-array['sourceVersion','validationCode'])='{}'::jsonb and jsonb_typeof(${table.safeMetadata}->'sourceVersion')='number' and (${table.safeMetadata}->>'sourceVersion') ~ '^[1-9][0-9]*$' and (${table.safeMetadata}->>'sourceVersion')::numeric<=9007199254740991 and ${table.safeMetadata}->>'validationCode' in ('email_format','phone_format','domain_format','normalization_mismatch'))
+      or (${table.issueCode}='ambiguous_primary' and ${table.safeMetadata} ?& array['sourceVersion','activeCandidateCount'] and (${table.safeMetadata}-array['sourceVersion','activeCandidateCount'])='{}'::jsonb and jsonb_typeof(${table.safeMetadata}->'sourceVersion')='number' and (${table.safeMetadata}->>'sourceVersion') ~ '^[1-9][0-9]*$' and (${table.safeMetadata}->>'sourceVersion')::numeric<=9007199254740991 and jsonb_typeof(${table.safeMetadata}->'activeCandidateCount')='number' and (${table.safeMetadata}->>'activeCandidateCount') ~ '^[0-9]+$' and (${table.safeMetadata}->>'activeCandidateCount')::numeric between 2 and 20)
+      or (${table.issueCode}='version_changed' and ${table.safeMetadata} ?& array['expectedVersion','observedVersion'] and (${table.safeMetadata}-array['expectedVersion','observedVersion'])='{}'::jsonb and jsonb_typeof(${table.safeMetadata}->'expectedVersion')='number' and (${table.safeMetadata}->>'expectedVersion') ~ '^[1-9][0-9]*$' and (${table.safeMetadata}->>'expectedVersion')::numeric<=9007199254740991 and jsonb_typeof(${table.safeMetadata}->'observedVersion')='number' and (${table.safeMetadata}->>'observedVersion') ~ '^[1-9][0-9]*$' and (${table.safeMetadata}->>'observedVersion')::numeric<=9007199254740991)
+      or (${table.issueCode}='authority_conflict' and ${table.safeMetadata} ?& array['sourceVersion','authorityContractVersion'] and (${table.safeMetadata}-array['sourceVersion','authorityContractVersion'])='{}'::jsonb and jsonb_typeof(${table.safeMetadata}->'sourceVersion')='number' and (${table.safeMetadata}->>'sourceVersion') ~ '^[1-9][0-9]*$' and (${table.safeMetadata}->>'sourceVersion')::numeric<=9007199254740991 and ${table.safeMetadata}->>'authorityContractVersion' in ('legacy-p1a-root-v1','customer-graph-v1'))
+    )`),
   ],
 );
 

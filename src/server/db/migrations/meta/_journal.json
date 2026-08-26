@@ -134,6 +134,13 @@
       "when": 1787735346879,
       "tag": "0018_db_04_customization_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787739165325,
+      "tag": "0019_db_05a_customer_graph",
+      "breakpoints": true
     }
   ]
 }
