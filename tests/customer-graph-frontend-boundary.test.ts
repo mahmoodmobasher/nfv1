@@ -26,7 +26,7 @@ describe("CUSTOMER-GRAPH-01 frontend boundaries", () => {
     expect(contracts).toContain(").strict()");
   });
   it("registers stable Company and Contact navigation and route methods", () => {
-    expect(navigation).toContain('href: "/crm/companies"'); expect(navigation).toContain('href: "/crm/contacts"');
+    expect(navigation).toContain('capability.companies.canView ? [item("/crm/companies"'); expect(navigation).toContain('capability.contacts.canView ? [item("/crm/contacts"');
     expect(component).toContain('method: editing ? "PATCH" : "POST"');
     expect(component).toContain('"idempotency-key": request.current.key');
     expect(component).toContain("expectedVersion: record.version");

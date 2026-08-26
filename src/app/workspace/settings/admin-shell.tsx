@@ -1,5 +1,4 @@
 import { ProductShell } from "../../product-shell";
-import { adminNavigationForRole } from "../../product-navigation";
 
 export function AdminShell({
   workspace,
@@ -15,7 +14,6 @@ export function AdminShell({
       kind="admin"
       workspace={workspace}
       role={role}
-      navigation={adminNavigationForRole(role)}
     >
       {children}
     </ProductShell>

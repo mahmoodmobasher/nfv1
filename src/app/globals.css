@@ -233,9 +233,17 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-shell .brand .brand-accent { color: var(--nx-action-primary); }
 .product-shell .brand small { margin-top: 2px; color: var(--nx-text-muted); font-size: var(--nf-text-nano); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .product-navigation-content { display: flex; min-height: 0; flex: 1; flex-direction: column; }
-.product-shell .product-navigation-content>nav { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: var(--nf-space-4); margin: 0; }
+.product-shell .product-navigation-content>nav { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: var(--nf-space-2); margin: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .product-nav-group { display: grid; gap: 2px; }
-.product-nav-group h2 { margin: 0 10px 4px; padding-top: var(--nf-space-2); color: var(--nx-text-muted); font-size: var(--nf-text-eyebrow); line-height: 16px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.product-nav-group h2 { margin: 0; }
+.product-nav-group h2 button { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: var(--nf-space-2); padding: 8px 10px; border: 1px solid transparent; border-radius: var(--nf-radius-control); background: transparent; color: var(--nx-text-muted); font-size: var(--nf-text-eyebrow); line-height: 16px; font-weight: 700; letter-spacing: .07em; text-align: left; text-transform: uppercase; cursor: pointer; }
+.product-nav-group h2 button span { min-width: 0; overflow-wrap: anywhere; }
+.product-nav-group h2 button svg { width: 18px; height: 18px; flex: none; transition: transform 160ms ease; }
+.product-nav-group h2 button[aria-expanded="true"] svg { transform: rotate(180deg); }
+.product-nav-group h2 button:hover { border-color: var(--nx-border-emphasis); background: var(--nx-surface-secondary); color: var(--nx-text-strong); }
+.product-nav-group[data-active] h2 button { border-color: var(--nx-border-emphasis); color: var(--nx-text-strong); }
+.product-nav-group>div { display: grid; gap: 2px; padding-left: var(--nf-space-2); border-left: 2px solid var(--nx-border-subtle); }
+.product-nav-group>div[hidden] { display: none; }
 .product-shell .product-nav-group a,.product-shell .signout {
   display: flex;
   width: 100%;
@@ -496,6 +504,32 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 @media (forced-colors: active) {
   .product-shell>.product-rail,.product-shell>.product-topbar,.product-shell>.product-mobile,.product-shell .mobile-menu-panel,.product-signout { border-color: CanvasText; }
   .product-shell .product-nav-group a[aria-current="page"] { outline: 2px solid Highlight; }
+  .product-nav-group h2 button[aria-expanded="true"],.product-nav-group[data-active] h2 button,.product-nav-group>div { border-color: CanvasText; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-nav-group h2 button svg { transition: none; }
+}
+
+/* SCREEN-FORMS-01 */
+.screen-profile-form { display: grid; gap: var(--nf-space-6); }
+.screen-profile-form>section { display: grid; gap: var(--nf-space-4); min-width: 0; padding-block: var(--nf-space-2) var(--nf-space-5); border-bottom: 1px solid var(--nx-border-subtle); }
+.screen-profile-form>section h2 { margin: 0; color: var(--nx-text-strong); font-size: var(--nf-text-h3); overflow-wrap: anywhere; }
+.screen-profile-form .required-marker { margin-left: 4px; color: var(--nx-danger); font-size: inherit; font-weight: 600; }
+.screen-option-field { display: grid; min-width: 0; grid-template-columns: minmax(0,1fr) auto; gap: var(--nf-space-2); align-items: end; }
+.screen-option-field>.field:nth-of-type(2),.screen-option-field>p { grid-column: 1/-1; }
+.screen-option-field select,.screen-profile-form input,.screen-profile-form textarea,.screen-profile-form select { min-width: 0; max-width: 100%; }
+.screen-profile-form .ds-page-actions { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nf-space-3); padding-bottom: var(--nf-space-4); }
+.screen-profile-form .ds-page-actions>* { min-height: 44px; }
+@media (max-width: 640px) {
+  .screen-profile-form .form-grid,.screen-option-field { grid-template-columns: minmax(0,1fr); }
+  .screen-option-field>* { grid-column: 1; }
+  .screen-profile-form .ds-page-actions { flex-direction: column; }
+  .screen-profile-form .ds-page-actions>* { width: 100%; }
+}
+@media (forced-colors: active) {
+  .screen-profile-form>section,.screen-profile-form fieldset { border-color: CanvasText; }
+  .screen-profile-form .required-marker { color: CanvasText; }
 }
 
 /* Nexa Spectrum — Phase 3 operational CRM */

@@ -17,7 +17,9 @@ describe("DEALS-01 frontend boundaries", () => {
     expect(component).toContain("Dragging is not required or enabled.");
   });
   it("registers Deals navigation and responsive accessible Board treatment", () => {
-    expect(navigation).toContain('href: "/crm/deals"');
+    expect(navigation).toContain('capability.deals.canView ? [');
+    expect(navigation).toContain('item("/crm/deals", "Deals"');
+    expect(navigation).toContain('item("/crm/deals/board", "Deal pipeline"');
     expect(styles).toContain(".deal-board"); expect(styles).toContain("minmax(min(280px,100%),1fr)");
     expect(styles).toContain("@media (forced-colors: active)"); expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });

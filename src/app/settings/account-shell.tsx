@@ -1,5 +1,4 @@
 import { ProductShell } from "../product-shell";
-import { crmNavigationForRole } from "../product-navigation";
 
 export function AccountShell({
   workspace,
@@ -15,7 +14,6 @@ export function AccountShell({
       kind="crm"
       workspace={workspace}
       role={role}
-      navigation={crmNavigationForRole(role)}
     >
       {children}
     </ProductShell>

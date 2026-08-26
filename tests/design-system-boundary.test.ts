@@ -7,9 +7,9 @@ import {
   proxy,
 } from "../src/proxy";
 import {
-  adminNavigationForRole,
-  crmNavigationForRole,
+  navigationFromCapabilities,
 } from "../src/app/product-navigation";
+import type { WorkspaceNavigationCapabilitiesV1 } from "../src/frontend/shared/contracts/workspace-navigation";
 
 describe("design-system document boundary", () => {
   it("publishes one CRM end-product semantic contract with explicit compatibility aliases", () => {
@@ -145,32 +145,37 @@ describe("design-system document boundary", () => {
     }
   });
 
-  it("limits shell actions to supported Lead routes and omits future destinations", () => {
+  it("gates shell actions through fetched navigation capabilities", () => {
     const source = readFileSync(
       new URL("../src/app/product-shell.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toContain('href="/crm/leads/new"');
+    expect(source).toContain("parsed.data.capabilities.leads.canCreate");
+    expect(source).toContain("safeParse(payload?.data)");
     expect(source).toContain('action="/crm"');
     expect(source).toContain('name="q"');
-    expect(source).not.toMatch(/>Create<|Companies|Deals|Automation|Delivery/);
+    expect(source).not.toMatch(/>Create<|Automation|Delivery/);
   });
 
-  it("builds supported navigation in server adapters from trusted Role presentation facts", () => {
-    const labels = (groups: ReturnType<typeof crmNavigationForRole>) =>
+  it("builds supported navigation only from strict server capabilities", () => {
+    const value: WorkspaceNavigationCapabilitiesV1 = {
+      contractVersion: "workspace-navigation-capabilities.v1",
+      workspaceId: "10000000-0000-4000-8000-000000000001",
+      requestId: "10000000-0000-4000-8000-000000000002",
+      capabilities: {
+        home: { canView: true }, companies: { canView: true, canCreate: false },
+        contacts: { canView: true, canCreate: false }, leads: { canView: true, canCreate: false },
+        identityReview: { canView: false }, deals: { canView: true, canCreate: false },
+        pipeline: { canView: true }, settings: { canViewPersonal: true, canViewWorkspace: false,
+          canManagePeople: false, canManageInvitations: false, canManageTeams: false },
+      },
+    };
+    const labels = (groups: ReturnType<typeof navigationFromCapabilities>) =>
       groups.flatMap((group) => group.items.map((item) => item.label));
-    expect(labels(crmNavigationForRole("owner"))).toContain(
-      "Workspace settings",
-    );
-    expect(labels(crmNavigationForRole("admin"))).toContain("People and roles");
-    expect(labels(crmNavigationForRole("member"))).not.toContain(
-      "Workspace settings",
-    );
-    expect(labels(crmNavigationForRole("member"))).not.toContain(
-      "Personal settings",
-    );
-    expect(adminNavigationForRole("member")).toEqual([]);
-    expect(labels(adminNavigationForRole("owner"))).toContain("Invitations");
+    const actual = labels(navigationFromCapabilities(value));
+    expect(actual).toEqual(["Home", "Companies", "Contacts", "Leads", "Lead pipeline", "Deals", "Deal pipeline", "Personal settings"]);
+    expect(actual).not.toContain("Workspace settings");
+    expect(readFileSync(new URL("../src/app/product-navigation.ts", import.meta.url), "utf8")).not.toMatch(/role\s*===|navigationForRole/);
   });
 
   it("keeps migrated shell typography in the approved 400/500/600/700 range", () => {
@@ -268,6 +273,7 @@ describe("design-system document boundary", () => {
     );
     expect(shell).toContain('aria-label="Breadcrumb"');
     expect(shell).toContain('className="product-create-action"');
+    expect(shell).toContain("parsed.data.capabilities.leads.canCreate");
     expect(shell).toContain('href="/crm/leads/new"');
     expect(shell).toContain('className="product-global-search"');
     expect(shell).toContain('action="/crm"');

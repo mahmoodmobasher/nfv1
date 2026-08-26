@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
+  ChevronDown,
   Contact,
   House,
   Kanban,
@@ -24,6 +25,15 @@ import type {
   ProductNavIcon,
   ProductNavItem,
 } from "./product-navigation";
+import {
+  activeProductNavigation,
+  isProductNavItemActive,
+  navigationFromCapabilities,
+} from "./product-navigation";
+import {
+  workspaceNavigationCapabilitiesV1Schema,
+  workspaceNavigationErrorEnvelopeV1Schema,
+} from "@/frontend/shared/contracts/workspace-navigation";
 import { AccountThemeSync } from "./account-theme-sync";
 import { Brand } from "./onboarding/components";
 import { securePost } from "./onboarding/api";
@@ -111,17 +121,20 @@ export function ProductShell({
   kind,
   workspace,
   role,
-  navigation,
   children,
 }: {
   kind: ShellKind;
   workspace: string;
   role: string;
-  navigation: ProductNavGroup[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname(),
     [open, setOpen] = useState(false),
+    [navigation, setNavigation] = useState<ProductNavGroup[]>([]),
+    [canAddLead, setCanAddLead] = useState(false),
+    [navigationState, setNavigationState] = useState<"loading" | "ready" | "retry" | "cleared">("loading"),
+    [reloadNavigation, setReloadNavigation] = useState(0),
+    [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null),
@@ -135,6 +148,57 @@ export function ProductShell({
     previousPath = useRef(pathname),
     openFrame = useRef<number | null>(null),
     restoreFrame = useRef<number | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    setNavigation([]);
+    setCanAddLead(false);
+    setExpandedGroups(new Set());
+    setNavigationState("loading");
+    setOpen(false);
+    async function loadNavigation() {
+      try {
+        const workspaceResponse = await fetch("/api/workspaces/selectable", {
+          cache: "no-store", signal: controller.signal,
+        });
+        const workspacePayload = await workspaceResponse.json();
+        const current: Array<{ id?: unknown; current?: unknown }> = workspaceResponse.ok && Array.isArray(workspacePayload?.workspaces)
+          ? workspacePayload.workspaces.filter((entry: unknown) => entry && typeof entry === "object" && (entry as { current?: unknown }).current === true)
+          : [];
+        if (current.length !== 1 || typeof current[0].id !== "string") throw new Error("clear");
+        const workspaceId = current[0].id;
+        const response = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/navigation-capabilities`, {
+          cache: "no-store", signal: controller.signal,
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const error = workspaceNavigationErrorEnvelopeV1Schema.safeParse(payload);
+          if (error.success && error.data.error.code === "navigation_unavailable") throw new Error("retry");
+          throw new Error("clear");
+        }
+        const parsed = workspaceNavigationCapabilitiesV1Schema.safeParse(payload?.data);
+        if (!parsed.success || parsed.data.workspaceId !== workspaceId) throw new Error("clear");
+        const groups = navigationFromCapabilities(parsed.data);
+        setNavigation(groups);
+        setCanAddLead(parsed.data.capabilities.leads.canCreate);
+        setExpandedGroups(new Set());
+        setNavigationState("ready");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setNavigation([]);
+        setCanAddLead(false);
+        setExpandedGroups(new Set());
+        setOpen(false);
+        setNavigationState(error instanceof Error && error.message === "retry" ? "retry" : "cleared");
+      }
+    }
+    void loadNavigation();
+    return () => controller.abort();
+  }, [workspace, reloadNavigation]);
+  useEffect(() => {
+    if (navigationState !== "ready") return;
+    const active = activeProductNavigation(pathname, navigation);
+    if (active) setExpandedGroups((current) => new Set(current).add(active.groupId));
+  }, [pathname, navigation, navigationState]);
   function close(focus = true) {
     setOpen(false);
     if (focus)
@@ -175,12 +239,13 @@ export function ProductShell({
         return;
       }
       if (event.key !== "Tab") return;
-      const nodes = panel.current?.querySelectorAll<HTMLElement>(
+      const candidates = panel.current?.querySelectorAll<HTMLElement>(
         "a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
-      );
-      if (!nodes?.length) return;
-      const first = nodes[0],
-        last = nodes[nodes.length - 1];
+      ), nodes = candidates ? [...candidates].filter((node) =>
+        !node.closest("[hidden],[inert]") && node.getClientRects().length > 0
+      ) : [];
+      if (!nodes.length) return;
+      const first = nodes[0], last = nodes[nodes.length - 1];
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -229,15 +294,13 @@ export function ProductShell({
       <span>{busy ? "Signing out…" : "Sign out"}</span>
     </button>
   );
-  const item = (entry: ProductNavItem) => {
-    const active = entry.exact
-        ? pathname === entry.href
-        : pathname === entry.href || pathname.startsWith(`${entry.href}/`),
+  const item = (entry: ProductNavItem, drawer = false) => {
+    const active = isProductNavItemActive(pathname, entry),
       ItemIcon = icons[entry.icon];
     return (
       <Link
         href={entry.href}
-        aria-current={active ? "page" : undefined}
+        aria-current={active && (drawer ? open : !open) ? "page" : undefined}
         onClick={() => open && close(false)}
       >
         <ItemIcon aria-hidden={true} />
@@ -245,23 +308,10 @@ export function ProductShell({
       </Link>
     );
   };
-  const activeNavigation = navigation
-      .flatMap((group) =>
-        group.items.map((entry) => ({ entry, group: group.label })),
-      )
-      .find(({ entry }) =>
-        entry.exact
-          ? pathname === entry.href
-          : pathname === entry.href || pathname.startsWith(`${entry.href}/`),
-      ),
-    leadDetail = pathname.startsWith("/crm/leads/") &&
-      pathname !== "/crm/leads/new",
-    breadcrumbGroup = leadDetail
-      ? "Customers"
-      : activeNavigation?.group ?? (kind === "crm" ? "CRM" : "Workspace"),
-    breadcrumbPage = leadDetail
-      ? "Lead detail"
-      : activeNavigation?.entry.label ?? (kind === "crm" ? "CRM" : "Settings");
+  const activeNavigation = activeProductNavigation(pathname, navigation),
+    canViewLeads = navigation.flatMap((group) => group.items).some((entry) => entry.href === "/crm"),
+    breadcrumbGroup = activeNavigation?.group ?? "Workspace",
+    breadcrumbPage = activeNavigation?.entry.label ?? "Current page";
   const navigationContent = (drawer = false) => (
     <div
       className={
@@ -272,18 +322,23 @@ export function ProductShell({
       <nav
         aria-label={kind === "crm" ? "CRM navigation" : "Workspace navigation"}
       >
-        {navigation.map((group) => (
+        {navigation.map((group) => {
+          const expanded = expandedGroups.has(group.id), groupActive = activeNavigation?.groupId === group.id;
+          return (
           <section
             className="product-nav-group"
-            aria-label={group.label}
             key={group.label}
+            data-active={groupActive || undefined}
           >
-            <h2>{group.label}</h2>
-            {group.items.map((entry) => (
-              <div key={entry.href}>{item(entry)}</div>
-            ))}
+            <h2><button type="button" aria-expanded={expanded} aria-controls={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`}
+              onClick={() => setExpandedGroups((current) => { const next = new Set(current); if (next.has(group.id)) next.delete(group.id); else next.add(group.id); return next; })}>
+              <span>{group.label}</span><ChevronDown aria-hidden="true" />
+            </button></h2>
+            <div id={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`} hidden={!expanded}>
+              {group.items.map((entry) => <div key={entry.href}>{item(entry, drawer)}</div>)}
+            </div>
           </section>
-        ))}
+        )})}
       </nav>
     </div>
   );
@@ -301,7 +356,7 @@ export function ProductShell({
       <AccountThemeSync />
       <aside ref={rail} className="product-rail">
         <Brand />
-        {navigationContent()}
+        {navigationState === "ready" && navigationContent()}
       </aside>
       <header ref={topbar} className="product-topbar">
         <nav className="product-breadcrumbs" aria-label="Breadcrumb">
@@ -312,13 +367,13 @@ export function ProductShell({
           <span aria-current="page">{breadcrumbPage}</span>
         </nav>
         <div className="product-topbar-actions">
-          {kind === "crm" && (
+          {kind === "crm" && canAddLead && (
             <Link className="product-create-action" href="/crm/leads/new">
               <Plus aria-hidden="true" />
               <span>Add lead</span>
             </Link>
           )}
-          {kind === "crm" && (
+          {kind === "crm" && canViewLeads && (
             <form
               className="product-global-search"
               action="/crm"
@@ -337,7 +392,7 @@ export function ProductShell({
               />
             </form>
           )}
-          <WorkspaceControl name={workspace} role={role} />
+          {navigationState === "ready" && <WorkspaceControl name={workspace} role={role} />}
           <Link
             className="product-icon-action"
             href="/settings#preferences"
@@ -351,7 +406,7 @@ export function ProductShell({
       <header className="product-mobile">
         <div ref={mobileContext}>
           <Brand />
-          <span>{workspace}</span>
+          <span>{navigationState === "ready" ? workspace : "Workspace"}</span>
         </div>
         <div ref={mobileAccount} className="product-mobile-account">
           {signOutControl}
@@ -394,18 +449,24 @@ export function ProductShell({
                   <X aria-hidden="true" />
                 </button>
               </div>
-              {navigationContent(true)}
+              {navigationState === "ready" && navigationContent(true)}
             </div>
           </div>
         )}
       </header>
       <main ref={main} id="product-main" tabIndex={-1} className="product-main">
-        {error && (
+        {navigationState !== "ready" ? <section className="admin-content narrow-admin product-navigation-state" tabIndex={-1}>
+          <div className={`alert ${navigationState === "cleared" ? "error" : ""}`} role={navigationState === "loading" ? "status" : "alert"}>
+            <h1>{navigationState === "loading" ? "Loading workspace" : navigationState === "retry" ? "Navigation is temporarily unavailable" : "Workspace access is unavailable"}</h1>
+            <p>{navigationState === "loading" ? "Checking the latest workspace access…" : navigationState === "retry" ? "No workspace navigation or protected page details are shown. Try again safely." : "No workspace navigation or protected page details are shown. Sign in again or return to a safe page."}</p>
+            {navigationState === "retry" && <button className="secondary" onClick={() => setReloadNavigation((value) => value + 1)}>Retry navigation</button>}
+            {navigationState === "cleared" && <Link className="secondary link-button" href="/login">Return to sign in</Link>}
+          </div>
+        </section> : <>{error && (
           <div className="alert error" role="alert">
             {error}
           </div>
-        )}
-        {children}
+        )}{children}</>}
       </main>
     </div>
   );
