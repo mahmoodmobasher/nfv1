@@ -1,0 +1,4 @@
+import { COMPANY_EDIT, companyEditCommandV1Schema, editCompany, getCustomerGraph } from "@/backend/modules/customer-graph";
+import { graphRoute, parsed } from "@/backend/modules/customer-graph/presentation/customer-graph.route";
+export async function GET(request:Request,{params}:{params:Promise<{workspaceId:string;companyId:string}>}){const{workspaceId,companyId}=await params;return graphRoute(request,workspaceId,({pool,actor,requestId})=>getCustomerGraph(pool,actor,"company",companyId,requestId))}
+export async function PATCH(request:Request,{params}:{params:Promise<{workspaceId:string;companyId:string}>}){const{workspaceId,companyId}=await params;return graphRoute(request,workspaceId,({pool,actor,requestId,key,body})=>editCompany(pool,{actor,companyId,requestId,key,command:parsed(companyEditCommandV1Schema,body,COMPANY_EDIT)}),200,true)}

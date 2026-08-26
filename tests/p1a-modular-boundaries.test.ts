@@ -29,6 +29,8 @@ function ownershipRows(markdown: string) {
 const ownedByModule: Record<string, Set<string>> = {
   leads: new Set(["leads", "lead_lifecycle_definitions", "lead_intakes", "lead_activities", "lead_visible_teams", "pipeline_stages"]),
   contacts: new Set(["contacts"]), companies: new Set(["companies"]),
+  "customer-graph": new Set(["companies","company_domain_points","company_visible_teams","contacts","contact_identity_points",
+    "contact_company_affiliations","contact_visible_teams","workspace_memberships","users","teams","team_memberships"]),
   "identity-review": new Set(["lead_identity_reviews", "lead_identity_candidates", "lead_identity_decisions", "lead_identity_decision_heads"]),
 };
 function sqlTables(source: string) {

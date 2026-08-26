@@ -1,0 +1,15 @@
+import type { ModuleTransaction } from "../database";
+import type { TrustedActor } from "../authorization";
+import { writeCustomerGraphEvent } from "../outbox";
+export type CustomerGraphOperation="company-create.v1"|"company-edit.v1"|"company-archive.v1"|"company-restore.v1"|"contact-create.v1"|"contact-edit.v1"|"contact-archive.v1"|"contact-restore.v1"|"contact-affiliation-replace.v1";
+export type CustomerGraphAction="crm.company.created"|"crm.company.updated"|"crm.company.archived"|"crm.company.restored"|"crm.contact.created"|"crm.contact.updated"|"crm.contact.archived"|"crm.contact.restored"|"crm.contact.affiliation_replaced";
+const allowed:Record<CustomerGraphOperation,CustomerGraphAction>={"company-create.v1":"crm.company.created","company-edit.v1":"crm.company.updated","company-archive.v1":"crm.company.archived","company-restore.v1":"crm.company.restored","contact-create.v1":"crm.contact.created","contact-edit.v1":"crm.contact.updated","contact-archive.v1":"crm.contact.archived","contact-restore.v1":"crm.contact.restored","contact-affiliation-replace.v1":"crm.contact.affiliation_replaced"};
+const fields=new Set(["created","profile","domain","assignment","status","affiliation"]);
+export async function writeCustomerGraphEvidence(tx:ModuleTransaction,input:{actor:TrustedActor;operation:CustomerGraphOperation;action:CustomerGraphAction;kind:"company"|"contact";id:string;version:number;requestId:string;operationId:string;changeFields:string[]}){
+  if(allowed[input.operation]!==input.action||!input.action.startsWith(`crm.${input.kind}.`)||!Number.isInteger(input.version)||input.version<1||input.changeFields.some(f=>!fields.has(f)))throw new Error("invalid_customer_graph_evidence");
+  const metadata={operation:input.operation,result_version:input.version,change_fields:[...new Set(input.changeFields)].slice(0,8)},after={version:input.version},topic=`crm.${input.kind}.${input.action.split(".").at(-1)}.v1`,payload={schemaVersion:1,workspaceId:input.actor.workspaceId,[`${input.kind}Id`]:input.id,version:input.version,requestId:input.requestId,changeFields:[...new Set(input.changeFields)].slice(0,8)};
+  const forbiddenKeys=new Set(["email","emailDisplay","phone","phoneDisplay","displayName","domainValue","domainDisplay","firstName","lastName"]);
+  if([metadata,after,payload].some(value=>Object.keys(value).some(key=>forbiddenKeys.has(key))))throw new Error("customer_graph_evidence_privacy_violation");
+  await tx.query(`insert into audit_events(workspace_id,actor_user_id,actor_membership_id,actor_type,session_id,action,target_type,target_id,outcome,request_id,correlation_id,source_ip_policy,before,after,metadata_version,metadata) values($1,$2,$3,'user',$4,$5,$6,$7,'success',$8,$9,'omitted','{}',$10,1,$11)`,[input.actor.workspaceId,input.actor.userId,input.actor.membershipId,input.actor.sessionId,input.action,input.kind,input.id,input.requestId,input.operationId,JSON.stringify(after),JSON.stringify(metadata)]);
+  await writeCustomerGraphEvent(tx,{workspaceId:input.actor.workspaceId,topic,kind:input.kind,id:input.id,operationId:input.operationId,version:input.version,payload});
+}
