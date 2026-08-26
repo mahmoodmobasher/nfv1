@@ -62,7 +62,9 @@ async function createReservedDocument(client: PoolClient, actor: Awaited<ReturnT
 }
 
 async function makeAvailable(client: PoolClient, actor: Awaited<ReturnType<typeof actorFixture>>,
-  document: Awaited<ReturnType<typeof createReservedDocument>>) {
+  document: Awaited<ReturnType<typeof createReservedDocument>>, options?: {
+    omitScan?: boolean; outcome?: "clean" | "infected" | "error" | "timeout";
+  }) {
   const hash = "a".repeat(64);
   let operationId = randomUUID();
   await client.query("begin");
@@ -106,26 +108,31 @@ async function makeAvailable(client: PoolClient, actor: Awaited<ReturnType<typeo
 
   operationId = randomUUID();
   await client.query("begin");
-  await client.query(
-    `insert into document_scan_results(workspace_id,storage_object_id,attempt_number,outcome,engine_code,
-      engine_version,signature_set_version,scanned_sha256_hex,safe_result_code,started_at,completed_at,governing_operation_id)
-     values($1,$2,1,'clean','scanner','1','sig-1',$3,'clean',now()-interval '1 second',now(),$4)`,
-    [actor.workspaceId, document.objectId, hash, operationId],
-  );
-  await client.query(
-    `update document_versions set state='available',available_at=now(),governing_operation_id=$3
-     where workspace_id=$1 and document_id=$2`, [actor.workspaceId, document.documentId, operationId],
-  );
-  await client.query(
-    `update document_storage_objects set state='clean',next_attempt_at=null,governing_operation_id=$3,updated_at=now()
-     where workspace_id=$1 and id=$2`, [actor.workspaceId, document.objectId, operationId],
-  );
-  await client.query(
-    `update document_records set availability='available',version=4,governing_operation_id=$3,
-      updated_by_membership_id=$4,updated_at=now() where workspace_id=$1 and id=$2`,
-    [actor.workspaceId, document.documentId, operationId, actor.membershipId],
-  );
-  await client.query("commit");
+  try {
+    if (!options?.omitScan) await client.query(
+      `insert into document_scan_results(workspace_id,storage_object_id,attempt_number,outcome,engine_code,
+        engine_version,signature_set_version,scanned_sha256_hex,safe_result_code,started_at,completed_at,governing_operation_id)
+       values($1,$2,1,$3,'scanner','1','sig-1',$4,$3,now()-interval '1 second',now(),$5)`,
+      [actor.workspaceId, document.objectId, options?.outcome ?? "clean", hash, operationId],
+    );
+    await client.query(
+      `update document_versions set state='available',available_at=now(),governing_operation_id=$3
+       where workspace_id=$1 and document_id=$2`, [actor.workspaceId, document.documentId, operationId],
+    );
+    await client.query(
+      `update document_storage_objects set state='clean',next_attempt_at=null,governing_operation_id=$3,updated_at=now()
+       where workspace_id=$1 and id=$2`, [actor.workspaceId, document.objectId, operationId],
+    );
+    await client.query(
+      `update document_records set availability='available',version=4,governing_operation_id=$3,
+        updated_by_membership_id=$4,updated_at=now() where workspace_id=$1 and id=$2`,
+      [actor.workspaceId, document.documentId, operationId, actor.membershipId],
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
   return hash;
 }
 
@@ -219,8 +226,132 @@ suite("DB-03 Documents persistence", () => {
           governing_operation_id,placed_by_membership_id,status,released_at)
          values($1,$2,'unknown','v1',$3,$4,'active',now())`,
         [actor.workspaceId, document.documentId, randomUUID(), actor.membershipId],
-      )).rejects.toMatchObject({ code: "23514" });
+      )).rejects.toMatchObject({ code: "P0001" });
+      await expect(pool.query(
+        `insert into retention_legal_holds(workspace_id,record_id,status,reason_code,policy_version,version,
+          governing_operation_id,placed_by_membership_id,released_at,released_by_membership_id)
+         values($1,$2,'released','regulatory','v1',1,$3,$4,now(),$4)`,
+        [actor.workspaceId,randomUUID(),randomUUID(),actor.membershipId],
+      )).rejects.toMatchObject({code:"P0001"});
+      await expect(pool.query(
+        `insert into retention_legal_holds(workspace_id,record_id,reason_code,policy_version,version,
+          governing_operation_id,placed_by_membership_id) values($1,$2,'regulatory','v1',2,$3,$4)`,
+        [actor.workspaceId,randomUUID(),randomUUID(),actor.membershipId],
+      )).rejects.toMatchObject({code:"P0001"});
     } finally { client.release(); }
+  });
+
+  it("preserves reserved filename and declared MIME during upload confirmation", async()=>{
+    const actor=await actorFixture(),client=await pool.connect();
+    try{
+      const document=await createReservedDocument(client,actor,0);
+      await expect(pool.query(
+        `update document_versions set state='uploaded',display_filename='changed.pdf',detected_mime_type='application/pdf',
+          byte_size=10,sha256_hex=$2,governing_operation_id=$3 where id=$1`,
+        [document.versionId,"a".repeat(64),randomUUID()],
+      )).rejects.toMatchObject({code:"P0001"});
+      await expect(pool.query(
+        `update document_versions set state='uploaded',declared_mime_type='image/png',detected_mime_type='image/png',
+          byte_size=10,sha256_hex=$2,governing_operation_id=$3 where id=$1`,
+        [document.versionId,"a".repeat(64),randomUUID()],
+      )).rejects.toMatchObject({code:"P0001"});
+    }finally{client.release();}
+  });
+
+  it("binds clean downloadability to the exact current clean scan outcome",async()=>{
+    const actor=await actorFixture(),client=await pool.connect();
+    try{
+      const missing=await createReservedDocument(client,actor,0);
+      await expect(makeAvailable(client,actor,missing,{omitScan:true})).rejects.toMatchObject({code:"P0001"});
+      for(const outcome of ["infected","error","timeout"] as const){
+        const document=await createReservedDocument(client,actor,0);
+        await expect(makeAvailable(client,actor,document,{outcome})).rejects.toMatchObject({code:"P0001"});
+        expect(Number((await pool.query("select count(*) count from document_scan_results where storage_object_id=$1",[document.objectId])).rows[0].count)).toBe(0);
+      }
+
+      let operationId=randomUUID();
+      await client.query(
+        `update document_storage_objects set state='failed',next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[missing.objectId,operationId],
+      );
+      operationId=randomUUID();
+      await client.query(
+        `update document_storage_objects set state='quarantined',next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[missing.objectId,operationId],
+      );
+      operationId=randomUUID();
+      await client.query(
+        `update document_storage_objects set state='scanning',attempt_count=2,next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[missing.objectId,operationId],
+      );
+      operationId=randomUUID();
+      await client.query("begin");
+      await client.query(
+        `insert into document_scan_results(workspace_id,storage_object_id,attempt_number,outcome,engine_code,
+          engine_version,signature_set_version,scanned_sha256_hex,safe_result_code,started_at,completed_at,governing_operation_id)
+         values($1,$2,1,'error','scanner','1','sig',$3,'error',now(),now(),$4)`,
+        [actor.workspaceId,missing.objectId,"a".repeat(64),operationId],
+      );
+      await client.query(
+        `update document_storage_objects set state='failed',next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[missing.objectId,operationId],
+      );
+      await expect(client.query("commit")).rejects.toMatchObject({code:"P0001"});
+      await client.query("rollback");
+      expect(Number((await pool.query("select count(*) count from document_scan_results where storage_object_id=$1",[missing.objectId])).rows[0].count)).toBe(0);
+
+      const retry=await createReservedDocument(client,actor,0);
+      await expect(makeAvailable(client,actor,retry,{omitScan:true})).rejects.toMatchObject({code:"P0001"});
+      operationId=randomUUID();
+      await client.query("begin");
+      await client.query(
+        `insert into document_scan_results(workspace_id,storage_object_id,attempt_number,outcome,engine_code,
+          engine_version,signature_set_version,scanned_sha256_hex,safe_result_code,started_at,completed_at,governing_operation_id)
+         values($1,$2,1,'error','scanner','1','sig',$3,'temporary_error',now(),now(),$4)`,
+        [actor.workspaceId,retry.objectId,"a".repeat(64),operationId],
+      );
+      await client.query(
+        `update document_storage_objects set state='failed',next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[retry.objectId,operationId],
+      );
+      await client.query("commit");
+      operationId=randomUUID();
+      await client.query(
+        `update document_storage_objects set state='quarantined',next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[retry.objectId,operationId],
+      );
+      operationId=randomUUID();
+      await client.query(
+        `update document_storage_objects set state='scanning',attempt_count=2,next_attempt_at=now(),governing_operation_id=$2,updated_at=now()
+         where id=$1`,[retry.objectId,operationId],
+      );
+      operationId=randomUUID();
+      await client.query("begin");
+      await client.query(
+        `insert into document_scan_results(workspace_id,storage_object_id,attempt_number,outcome,engine_code,
+          engine_version,signature_set_version,scanned_sha256_hex,safe_result_code,started_at,completed_at,governing_operation_id)
+         values($1,$2,2,'clean','scanner','1','sig',$3,'clean',now(),now(),$4)`,
+        [actor.workspaceId,retry.objectId,"a".repeat(64),operationId],
+      );
+      await client.query(
+        `update document_versions set state='available',available_at=now(),governing_operation_id=$3
+         where workspace_id=$1 and document_id=$2`,[actor.workspaceId,retry.documentId,operationId],
+      );
+      await client.query(
+        `update document_storage_objects set state='clean',next_attempt_at=null,governing_operation_id=$2,updated_at=now()
+         where id=$1`,[retry.objectId,operationId],
+      );
+      await client.query(
+        `update document_records set availability='available',version=4,governing_operation_id=$3,
+          updated_by_membership_id=$4,updated_at=now() where workspace_id=$1 and id=$2`,
+        [actor.workspaceId,retry.documentId,operationId,actor.membershipId],
+      );
+      await client.query("commit");
+      expect((await pool.query(
+        `select attempt_number,outcome from document_scan_results where storage_object_id=$1 order by attempt_number`,
+        [retry.objectId],
+      )).rows).toEqual([{attempt_number:1,outcome:"error"},{attempt_number:2,outcome:"clean"}]);
+    }finally{client.release();}
   });
 
   it("enforces immutable versions, objects, scans, roots, and NO ACTION retention", async () => {

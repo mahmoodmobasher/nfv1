@@ -288,6 +288,11 @@ BEGIN
           (OLD.state='redacted' AND NEW.state='purged')) THEN
     RAISE EXCEPTION 'document_version_state_transition_invalid';
   END IF;
+  IF NEW.state NOT IN ('redacted','purged') AND
+     (NEW.display_filename IS DISTINCT FROM OLD.display_filename OR
+      NEW.declared_mime_type IS DISTINCT FROM OLD.declared_mime_type) THEN
+    RAISE EXCEPTION 'document_version_reservation_identity_immutable';
+  END IF;
   IF OLD.state<>'reserved' AND NEW.state NOT IN ('redacted','purged') AND
      (NEW.display_filename IS DISTINCT FROM OLD.display_filename OR NEW.declared_mime_type IS DISTINCT FROM OLD.declared_mime_type OR
       NEW.detected_mime_type IS DISTINCT FROM OLD.detected_mime_type OR NEW.byte_size IS DISTINCT FROM OLD.byte_size OR
@@ -360,15 +365,24 @@ END $$;--> statement-breakpoint
 CREATE TRIGGER document_storage_objects_enforce_v1 BEFORE INSERT OR UPDATE OR DELETE ON document_storage_objects
 FOR EACH ROW EXECUTE FUNCTION document_storage_objects_enforce_v1();--> statement-breakpoint
 CREATE FUNCTION document_storage_objects_pairing_v1() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE version_state text; root_state text; root_availability text; root_current integer; root_operation uuid;
+DECLARE version_state text; version_hash character(64); root_state text; root_availability text;
+  root_current integer; root_operation uuid; clean_result_count integer;
 BEGIN
-  SELECT v.state,d.lifecycle,d.availability,d.current_content_version,d.governing_operation_id
-    INTO version_state,root_state,root_availability,root_current,root_operation
+  SELECT v.state,v.sha256_hex,d.lifecycle,d.availability,d.current_content_version,d.governing_operation_id
+    INTO version_state,version_hash,root_state,root_availability,root_current,root_operation
     FROM document_versions v JOIN document_records d ON d.workspace_id=v.workspace_id AND d.id=v.document_id
     WHERE v.workspace_id=NEW.workspace_id AND v.document_id=NEW.document_id AND v.content_version=NEW.content_version;
   IF NEW.state='clean' AND (version_state<>'available' OR
      (root_current=NEW.content_version AND (root_state<>'active' OR root_availability<>'available'))) THEN
     RAISE EXCEPTION 'document_storage_clean_pairing_invalid';
+  END IF;
+  IF NEW.state='clean' THEN
+    IF NEW.attempt_count NOT BETWEEN 1 AND 3 THEN RAISE EXCEPTION 'document_storage_clean_attempt_invalid'; END IF;
+    SELECT count(*) INTO clean_result_count FROM document_scan_results
+      WHERE workspace_id=NEW.workspace_id AND storage_object_id=NEW.id
+        AND attempt_number=NEW.attempt_count AND governing_operation_id=NEW.governing_operation_id
+        AND scanned_sha256_hex=version_hash AND outcome='clean';
+    IF clean_result_count<>1 THEN RAISE EXCEPTION 'document_storage_clean_scan_required'; END IF;
   END IF;
   IF NEW.state='purged' AND (version_state NOT IN ('redacted','purged') OR
      root_state NOT IN ('redaction_pending','redacted','purge_pending','purged') OR NEW.governing_operation_id<>root_operation) THEN
@@ -388,8 +402,13 @@ BEGIN
   SELECT o.attempt_count,o.governing_operation_id,v.sha256_hex INTO object_attempt,object_operation,version_hash
     FROM document_storage_objects o JOIN document_versions v ON v.workspace_id=o.workspace_id AND v.document_id=o.document_id AND v.content_version=o.content_version
     WHERE o.workspace_id=NEW.workspace_id AND o.id=NEW.storage_object_id;
-  IF NOT FOUND OR NEW.attempt_number>object_attempt OR NEW.scanned_sha256_hex<>version_hash OR NEW.governing_operation_id<>object_operation THEN
+  IF NOT FOUND OR NEW.attempt_number<>object_attempt OR NEW.scanned_sha256_hex<>version_hash OR NEW.governing_operation_id<>object_operation THEN
     RAISE EXCEPTION 'document_scan_result_pairing_invalid';
+  END IF;
+  IF (NEW.outcome='clean' AND (SELECT state FROM document_storage_objects WHERE workspace_id=NEW.workspace_id AND id=NEW.storage_object_id)<>'clean') OR
+     (NEW.outcome='infected' AND (SELECT state FROM document_storage_objects WHERE workspace_id=NEW.workspace_id AND id=NEW.storage_object_id)<>'blocked') OR
+     (NEW.outcome IN ('error','timeout') AND (SELECT state FROM document_storage_objects WHERE workspace_id=NEW.workspace_id AND id=NEW.storage_object_id) NOT IN ('failed','quarantined')) THEN
+    RAISE EXCEPTION 'document_scan_outcome_state_mismatch';
   END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint
@@ -414,5 +433,5 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;--> statement-breakpoint
-CREATE TRIGGER retention_legal_holds_enforce_v1 BEFORE UPDATE OR DELETE ON retention_legal_holds
+CREATE TRIGGER retention_legal_holds_enforce_v1 BEFORE INSERT OR UPDATE OR DELETE ON retention_legal_holds
 FOR EACH ROW EXECUTE FUNCTION retention_legal_holds_enforce_v1();
