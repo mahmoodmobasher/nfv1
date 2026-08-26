@@ -45,11 +45,13 @@ async function createDefinition(db: PoolClient | Pool, actor: Awaited<ReturnType
   return row.id;
 }
 
-async function createOption(db: PoolClient | Pool, actor: Awaited<ReturnType<typeof actorFixture>>, definitionId: string) {
+async function createOption(db: PoolClient | Pool, actor: Awaited<ReturnType<typeof actorFixture>>, definitionId: string,
+  displayOrder = 0) {
   return (await db.query<{ id: string }>(
     `insert into custom_field_options(workspace_id,definition_id,code,label,display_order,governing_operation_id,
-      created_by_membership_id,updated_by_membership_id) values($1,$2,$3,'Option',0,$4,$5,$5) returning id`,
-    [actor.workspaceId, definitionId, `option_${randomUUID().replaceAll("-", "").slice(0, 12)}`, randomUUID(), actor.membershipId],
+      created_by_membership_id,updated_by_membership_id) values($1,$2,$3,'Option',$4,$5,$6,$6) returning id`,
+    [actor.workspaceId, definitionId, `option_${randomUUID().replaceAll("-", "").slice(0, 12)}`, displayOrder,
+      randomUUID(), actor.membershipId],
   )).rows[0].id;
 }
 
@@ -204,6 +206,130 @@ suite("DB-04 Customization persistence", () => {
       await expect(client.query("commit")).rejects.toMatchObject({ code: "P0001" });
       await client.query("rollback");
       expect(Number((await pool.query("select count(*) from custom_field_values where id=$1", [valueId])).rows[0].count)).toBe(0);
+    } finally { client.release(); }
+  });
+
+  it("keeps option links immutable and changes selections atomically with delete and insert", async () => {
+    const actor = await actorFixture(), client = await pool.connect();
+    try {
+      const singleDefinitionId = await createDefinition(client, actor, { fieldType: "single_select", lifecycle: "active" });
+      const singleOptions = [await createOption(client, actor, singleDefinitionId),
+        await createOption(client, actor, singleDefinitionId, 1)];
+      const singleValueId = randomUUID();
+      await client.query("begin");
+      await client.query(
+        `insert into custom_field_values(id,workspace_id,definition_id,target_record_type,target_record_id,field_type,
+         governing_operation_id,created_by_membership_id,updated_by_membership_id)
+         values($1,$2,$3,'crm.lead',$4,'single_select',$5,$6,$6)`,
+        [singleValueId, actor.workspaceId, singleDefinitionId, randomUUID(), randomUUID(), actor.membershipId],
+      );
+      await client.query(
+        `insert into custom_field_value_options(workspace_id,value_id,definition_id,option_id,created_by_membership_id)
+         values($1,$2,$3,$4,$5)`,
+        [actor.workspaceId, singleValueId, singleDefinitionId, singleOptions[0], actor.membershipId],
+      );
+      await client.query("commit");
+
+      const immutableUpdates: Array<[string, unknown]> = [
+        ["workspace_id", randomUUID()], ["value_id", randomUUID()], ["definition_id", randomUUID()],
+        ["option_id", singleOptions[1]], ["created_by_membership_id", randomUUID()],
+        ["created_at", new Date("2025-01-01T00:00:00.000Z")],
+      ];
+      for (const [column, value] of immutableUpdates) await expect(pool.query(
+        `update custom_field_value_options set ${column}=$1 where workspace_id=$2 and value_id=$3 and option_id=$4`,
+        [value, actor.workspaceId, singleValueId, singleOptions[0]],
+      )).rejects.toMatchObject({ code: "P0001" });
+
+      await client.query("begin");
+      await client.query(
+        "delete from custom_field_value_options where workspace_id=$1 and value_id=$2 and option_id=$3",
+        [actor.workspaceId, singleValueId, singleOptions[0]],
+      );
+      await client.query(
+        `insert into custom_field_value_options(workspace_id,value_id,definition_id,option_id,created_by_membership_id)
+         values($1,$2,$3,$4,$5)`,
+        [actor.workspaceId, singleValueId, singleDefinitionId, singleOptions[1], actor.membershipId],
+      );
+      await client.query(
+        `update custom_field_values set version=2,governing_operation_id=$2,updated_by_membership_id=$3,updated_at=now()
+         where workspace_id=$4 and id=$1`, [singleValueId, randomUUID(), actor.membershipId, actor.workspaceId],
+      );
+      await client.query("commit");
+      expect((await pool.query(
+        "select option_id from custom_field_value_options where workspace_id=$1 and value_id=$2",
+        [actor.workspaceId, singleValueId],
+      )).rows.map((row) => row.option_id)).toEqual([singleOptions[1]]);
+
+      const multiDefinitionId = await createDefinition(client, actor, { fieldType: "multi_select", lifecycle: "active" });
+      const multiOptions = [await createOption(client, actor, multiDefinitionId),
+        await createOption(client, actor, multiDefinitionId, 1), await createOption(client, actor, multiDefinitionId, 2)];
+      const multiValueId = randomUUID();
+      await client.query("begin");
+      await client.query(
+        `insert into custom_field_values(id,workspace_id,definition_id,target_record_type,target_record_id,field_type,
+         governing_operation_id,created_by_membership_id,updated_by_membership_id)
+         values($1,$2,$3,'crm.lead',$4,'multi_select',$5,$6,$6)`,
+        [multiValueId, actor.workspaceId, multiDefinitionId, randomUUID(), randomUUID(), actor.membershipId],
+      );
+      for (const optionId of multiOptions.slice(0, 2)) await client.query(
+        `insert into custom_field_value_options(workspace_id,value_id,definition_id,option_id,created_by_membership_id)
+         values($1,$2,$3,$4,$5)`,
+        [actor.workspaceId, multiValueId, multiDefinitionId, optionId, actor.membershipId],
+      );
+      await client.query("commit");
+      await client.query("begin");
+      await client.query(
+        "delete from custom_field_value_options where workspace_id=$1 and value_id=$2 and option_id=$3",
+        [actor.workspaceId, multiValueId, multiOptions[0]],
+      );
+      await client.query(
+        `insert into custom_field_value_options(workspace_id,value_id,definition_id,option_id,created_by_membership_id)
+         values($1,$2,$3,$4,$5)`,
+        [actor.workspaceId, multiValueId, multiDefinitionId, multiOptions[2], actor.membershipId],
+      );
+      await client.query(
+        `update custom_field_values set version=2,governing_operation_id=$2,updated_by_membership_id=$3,updated_at=now()
+         where workspace_id=$4 and id=$1`, [multiValueId, randomUUID(), actor.membershipId, actor.workspaceId],
+      );
+      await client.query("commit");
+      expect((await pool.query(
+        `select option_id from custom_field_value_options where workspace_id=$1 and value_id=$2 order by option_id`,
+        [actor.workspaceId, multiValueId],
+      )).rows.map((row) => row.option_id)).toEqual([multiOptions[1], multiOptions[2]].sort());
+
+      const secondSingleValueId = randomUUID();
+      await client.query("begin");
+      await client.query(
+        `insert into custom_field_values(id,workspace_id,definition_id,target_record_type,target_record_id,field_type,
+         governing_operation_id,created_by_membership_id,updated_by_membership_id)
+         values($1,$2,$3,'crm.lead',$4,'single_select',$5,$6,$6)`,
+        [secondSingleValueId, actor.workspaceId, singleDefinitionId, randomUUID(), randomUUID(), actor.membershipId],
+      );
+      await client.query(
+        `insert into custom_field_value_options(workspace_id,value_id,definition_id,option_id,created_by_membership_id)
+         values($1,$2,$3,$4,$5)`,
+        [actor.workspaceId, secondSingleValueId, singleDefinitionId, singleOptions[0], actor.membershipId],
+      );
+      await client.query("commit");
+
+      await client.query("begin");
+      await client.query("delete from custom_field_value_options where workspace_id=$1 and value_id in ($2,$3)",
+        [actor.workspaceId, singleValueId, secondSingleValueId]);
+      await client.query(
+        `update custom_field_values set version=version+1,governing_operation_id=gen_random_uuid(),
+         updated_by_membership_id=$1,updated_at=now() where workspace_id=$2 and id in ($3,$4)`,
+        [actor.membershipId, actor.workspaceId, singleValueId, secondSingleValueId],
+      );
+      await expect(client.query("commit")).rejects.toMatchObject({ code: "P0001" });
+      await client.query("rollback");
+      expect((await pool.query(
+        `select value_id,option_id from custom_field_value_options where workspace_id=$1 and value_id in ($2,$3)
+         order by value_id`, [actor.workspaceId, singleValueId, secondSingleValueId],
+      )).rows).toHaveLength(2);
+      expect((await pool.query(
+        `select id,version from custom_field_values where workspace_id=$1 and id in ($2,$3) order by id`,
+        [actor.workspaceId, singleValueId, secondSingleValueId],
+      )).rows.map((row) => Number(row.version)).sort((left, right) => left - right)).toEqual([1, 2]);
     } finally { client.release(); }
   });
 

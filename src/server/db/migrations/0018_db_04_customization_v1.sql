@@ -407,6 +407,14 @@ CREATE CONSTRAINT TRIGGER custom_field_value_definition_pairing_v1
 AFTER INSERT OR UPDATE ON custom_field_values DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION custom_field_value_definition_pairing_v1();
 --> statement-breakpoint
+CREATE FUNCTION custom_field_value_options_enforce_v1() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'custom_field_value_option_update_forbidden';
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER custom_field_value_options_enforce_v1 BEFORE UPDATE ON custom_field_value_options
+FOR EACH ROW EXECUTE FUNCTION custom_field_value_options_enforce_v1();
+--> statement-breakpoint
 CREATE FUNCTION custom_field_value_options_pairing_v1() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE target_workspace uuid; target_value uuid; value_type text; value_lifecycle text; option_count integer;
 BEGIN
