@@ -4,7 +4,8 @@ export async function writeActivityCreatedEvent(tx: ModuleTransaction, input: {
   workspaceId: string; activityId: string; activityVersion: number; leadId: string; leadVersion: number;
   kind: string; occurredAt: string; requestId: string; operationId: string;
 }) {
-  if (input.activityVersion !== 1 || !Number.isInteger(input.leadVersion) || input.leadVersion < 1)
+  if (!Number.isInteger(input.activityVersion) || input.activityVersion < 1 ||
+      !Number.isInteger(input.leadVersion) || input.leadVersion < 1)
     throw new Error("invalid_activity_event");
   const payload = { schemaVersion: 1, workspaceId: input.workspaceId, activityId: input.activityId,
     activityVersion: input.activityVersion, recordType: "crm.lead", recordId: input.leadId,

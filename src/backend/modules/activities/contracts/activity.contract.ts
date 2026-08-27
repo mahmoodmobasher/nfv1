@@ -5,6 +5,7 @@ export const ACTIVITY_CREATE_RESULT_V1 = "activity-create-result.v1" as const;
 export const LEAD_ACTIVITY_LIST_V1 = "lead-activity-list.v1" as const;
 export const ACTIVITY_LIST_QUERY_V1 = "activity-list-query.v1" as const;
 export const ACTIVITY_FUTURE_SKEW_MS = 5 * 60 * 1000;
+export const ACTIVITY_SUPPORTED_VERSION = 1 as const;
 
 const uuid = z.string().uuid();
 export const activityKindV1Schema = z.enum(["note", "call", "meeting", "email", "message", "other"]);
@@ -26,7 +27,7 @@ export const activityCreateCommandV1Schema = z.object({
 
 export const activityItemV1Schema = z.object({
   activityId: uuid,
-  version: z.literal(1),
+  version: z.number().int().positive(),
   target: z.object({ recordType: z.literal("crm.lead"), recordId: uuid }).strict(),
   origin: z.literal("manual"),
   kind: activityKindV1Schema,

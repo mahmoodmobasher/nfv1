@@ -1,10 +1,8 @@
 import type { TrustedActor } from "../authorization";
 import type { ModuleTransaction } from "../database";
-import { writeActivityCreatedEvent } from "../outbox";
 
-export async function writeActivityCreatedEvidence(tx: ModuleTransaction, input: {
-  actor: TrustedActor; activityId: string; activityVersion: number; leadId: string; leadVersion: number;
-  kind: string; occurredAt: string; requestId: string; operationId: string;
+export async function writeActivityCreatedAudit(tx: ModuleTransaction, input: {
+  actor: TrustedActor; activityId: string; activityVersion: number; requestId: string; operationId: string;
 }) {
   const metadata = { operation: "activity-create.v1", result_version: input.activityVersion };
   await tx.query(
@@ -14,7 +12,4 @@ export async function writeActivityCreatedEvidence(tx: ModuleTransaction, input:
     [input.actor.workspaceId, input.actor.userId, input.actor.membershipId, input.actor.sessionId, input.activityId,
       input.requestId, input.operationId, JSON.stringify({ version: input.activityVersion }), JSON.stringify(metadata)],
   );
-  await writeActivityCreatedEvent(tx, { workspaceId: input.actor.workspaceId, activityId: input.activityId,
-    activityVersion: input.activityVersion, leadId: input.leadId, leadVersion: input.leadVersion,
-    kind: input.kind, occurredAt: input.occurredAt, requestId: input.requestId, operationId: input.operationId });
 }

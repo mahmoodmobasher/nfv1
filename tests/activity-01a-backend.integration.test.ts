@@ -7,6 +7,7 @@ import { createSession } from "../src/server/security/session";
 import { getServerEnv } from "../src/server/env";
 import { GET as activityGet, POST as activityPost }
   from "../src/app/api/workspaces/[workspaceId]/leads/[leadId]/activities/route";
+import { editLeadOperationalV1 } from "../src/backend/modules/leads";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ??
@@ -70,7 +71,7 @@ suite("ACTIVITY-01A backend", () => {
   });
   afterAll(() => pool.end());
 
-  it("commits one root/reference/Audit/Outbox/safe receipt and replays without duplicates", async () => {
+  it("replays the original result after legitimate Lead version change and conflicts under current disclosure", async () => {
     const f = await fixture(), key = `activity-create-${randomUUID()}`;
     const first = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
       idempotencyKey: key });
@@ -84,13 +85,48 @@ suite("ACTIVITY-01A backend", () => {
     [first.activity.activityId])).rows[0]);
     expect(evidence).not.toContain(command().subject);
     expect(evidence).not.toContain(command().details!);
+    await editLeadOperationalV1(pool, { actor: f.owner, leadId: f.lead.id, command: {
+      contractVersion: "lead-operational-edit.v1", expectedVersion: 1, responsibleMembershipId: f.member.membershipId,
+      responsibleTeamId: null, visibility: "workspace", visibleTeamIds: [],
+    }, idempotencyKey: `lead-edit-${randomUUID()}` });
+    const memberRoleId = (await pool.query<{ role_id: string }>(
+      "select role_id from workspace_memberships where id=$1", [f.member.membershipId])).rows[0].role_id;
+    await pool.query("update workspace_memberships set role_id=$2,version=version+1 where id=$1",
+      [f.owner.membershipId, memberRoleId]);
+    await pool.query("update leads set owner_membership_id=$2,version=version+1 where id=$1",
+      [f.lead.id, f.member.membershipId]);
     const replay = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
       idempotencyKey: key });
-    expect(replay).toMatchObject({ replayed: true, activity: { activityId: first.activity.activityId } });
+    expect(replay).toMatchObject({ replayed: true, leadVersion: 1, requestId: first.requestId,
+      activity: { activityId: first.activity.activityId } });
     await expect(createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
       command: command({ subject: "Changed protected subject" }), idempotencyKey: key }))
       .rejects.toMatchObject({ code: "idempotency_conflict", status: 409 });
     expect(await counts()).toEqual({ roots: 1, refs: 1, audits: 1, outbox: 1, receipts: 1 });
+  });
+
+  it("strictly rejects malformed, cross-Lead, missing-binding, and unsupported-version receipts", async () => {
+    const f = await fixture(), key = `activity-create-${randomUUID()}`;
+    const first = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: key });
+    const original = (await pool.query<{ outcome: unknown }>(`select outcome from idempotency_records
+      where operation='activity-create.v1' and idempotency_key=$1`, [key])).rows[0].outcome;
+    for (const tampered of [
+      { activityId: first.activity.activityId },
+      { ...(original as object), leadId: randomUUID() },
+      { ...(original as object), activityId: randomUUID() },
+      { ...(original as object), activityVersion: 2 },
+    ]) {
+      await pool.query(`update idempotency_records set outcome=$2 where operation='activity-create.v1' and idempotency_key=$1`,
+        [key, JSON.stringify(tampered)]);
+      await expect(createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+        idempotencyKey: key })).rejects.toMatchObject({ code: "activity_unavailable", status: 503 });
+    }
+    await pool.query(`update idempotency_records set outcome=$2 where operation='activity-create.v1' and idempotency_key=$1`,
+      [key, JSON.stringify(original)]);
+    await pool.query("update activity_records set version=2 where id=$1", [first.activity.activityId]);
+    await expect(listLeadActivitiesV1(pool, f.owner, f.lead.id,
+      { queryVersion: "activity-list-query.v1", limit: 20 })).rejects.toMatchObject({ code: "activity_unavailable" });
   });
 
   it("serves strict private/no-store POST and GET route contracts", async () => {
@@ -127,7 +163,7 @@ suite("ACTIVITY-01A backend", () => {
   });
 
   it("rolls back all durable effects at every injected boundary", async () => {
-    for (const failurePoint of ["root_and_reference", "audit", "outbox", "receipt"] as const) {
+    for (const failurePoint of ["after_root_reference", "after_audit", "after_outbox", "after_receipt"] as const) {
       const f = await fixture();
       await expect(createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
         idempotencyKey: `activity-create-${randomUUID()}`, failurePoint })).rejects.toThrow(`injected_activity_failure:${failurePoint}`);
@@ -135,6 +171,44 @@ suite("ACTIVITY-01A backend", () => {
       await pool.query("truncate idempotency_records");
       await pool.query("truncate users cascade");
     }
+  });
+
+  it("fails create and list final fences after Membership suspension without effects or disclosure", async () => {
+    const f = await fixture();
+    await expect(createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: `activity-create-${randomUUID()}`, testOnlyBeforeFinalFence: async tx => {
+        await tx.query("update workspace_memberships set status='suspended' where id=$1", [f.owner.membershipId]);
+      } })).rejects.toMatchObject({ code: "resource_not_found", status: 404 });
+    expect(await counts()).toEqual({ roots: 0, refs: 0, audits: 0, outbox: 0, receipts: 0 });
+    const created = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: `activity-create-${randomUUID()}` });
+    const error = await listLeadActivitiesV1(pool, f.owner, f.lead.id,
+      { queryVersion: "activity-list-query.v1", limit: 20 }, randomUUID(), async tx => {
+        await tx.query("update workspace_memberships set status='suspended' where id=$1", [f.owner.membershipId]);
+      }).catch((value: unknown) => value);
+    expect(error).toMatchObject({ code: "resource_not_found", status: 404 });
+    expect(JSON.stringify(error)).not.toContain(created.activity.subject);
+  });
+
+  it("uses DB transaction time and normalized millisecond precision at skew boundaries", async () => {
+    const f = await fixture(), databaseNow = (await pool.query<{ now: Date }>(
+      `select transaction_timestamp() "now"`)).rows[0].now;
+    const permitted = new Date(databaseNow.getTime() + 299_000).toISOString().replace(".000Z", ".000000Z");
+    const first = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
+      command: command({ occurredAt: permitted }), idempotencyKey: `activity-create-${randomUUID()}` });
+    expect(first.activity.occurredAt).toBe(new Date(permitted).toISOString());
+    const precisionKey = `activity-create-${randomUUID()}`;
+    const precise = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
+      command: command({ occurredAt: "2026-08-27T12:00:00.123456Z", subject: "Precision normalized" }),
+      idempotencyKey: precisionKey });
+    const precisionReplay = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
+      command: command({ occurredAt: "2026-08-27T12:00:00.123Z", subject: "Precision normalized" }),
+      idempotencyKey: precisionKey });
+    expect(precisionReplay).toMatchObject({ replayed: true, activity: { activityId: precise.activity.activityId,
+      occurredAt: "2026-08-27T12:00:00.123Z" } });
+    await expect(createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
+      command: command({ occurredAt: new Date(databaseNow.getTime() + 301_000).toISOString() }),
+      idempotencyKey: `activity-create-${randomUUID()}` })).rejects.toMatchObject({ code: "validation_failed" });
   });
 
   it("serializes concurrent same-key creates into one effect and one replay", async () => {

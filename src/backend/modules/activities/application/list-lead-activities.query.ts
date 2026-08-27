@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { leadActivityTargetParticipant } from "@/backend/modules/leads";
 import type { TrustedActor } from "@/backend/platform/authorization";
-import { runModuleTransaction } from "@/backend/platform/database";
+import { runModuleTransaction, type ModuleTransaction } from "@/backend/platform/database";
 import { ACTIVITY_LIST_QUERY_V1, activityListQueryV1Schema, leadActivityListV1Schema,
   type ActivityListQueryV1 } from "../contracts/activity.contract";
 import { activityRepository, type ActivityRow } from "../persistence/activity.repository";
@@ -40,7 +40,8 @@ export function parseActivityListSearchParams(params: URLSearchParams): unknown 
     cursor: params.get("cursor") ?? undefined };
 }
 export async function listLeadActivitiesV1(pool: Pool, actor: TrustedActor, leadId: string,
-  rawQuery: ActivityListQueryV1, requestId: string = randomUUID(), beforeFinalFence?: () => Promise<void>) {
+  rawQuery: ActivityListQueryV1, requestId: string = randomUUID(),
+  testOnlyBeforeFinalFence?: (tx: ModuleTransaction) => Promise<void>) {
   const queryResult = activityListQueryV1Schema.safeParse(rawQuery);
   if (!queryResult.success) activityFail("validation_failed", 400,
     { fields: queryResult.error.issues.map(issue => String(issue.path[0] ?? "")) });
@@ -52,7 +53,7 @@ export async function listLeadActivitiesV1(pool: Pool, actor: TrustedActor, lead
       const rows = await activityRepository(tx).list({ workspaceId: initial.actor.workspaceId, leadId,
         kind: query.kind, cursor, limit: query.limit });
       const hasMore = rows.length > query.limit, page = rows.slice(0, query.limit), boundary = page.at(-1);
-      await beforeFinalFence?.();
+      await testOnlyBeforeFinalFence?.(tx);
       const final = await target.authorizeView(initial.actor, leadId);
       return leadActivityListV1Schema.parse({ contractVersion: "lead-activity-list.v1",
         lead: { leadId, version: final.lead.version, capabilities: final.capabilities }, items: page.map(activityItem),
