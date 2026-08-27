@@ -4,7 +4,7 @@ Status date: 2026-08-27
 
 ## Runtime and authority
 
-NexaFlow is a Next.js 16.3.1 application backed by PostgreSQL and Drizzle migrations. UAT runs the application, worker, PostgreSQL, Caddy, and Mailpit/approved delivery adapters in an isolated Compose project. Current source authority is `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`; the database ledger has 26 entries through migration 0025.
+NexaFlow is a Next.js 16.3.1 application backed by PostgreSQL and Drizzle migrations. UAT runs the application, worker, PostgreSQL, Caddy, and Mailpit/approved delivery adapters in an isolated Compose project. Repository source authority is `b12495d522d31507ec581db6ac4cd81c321ac59e`; deployed UAT source remains its ancestor `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`. The database ledger has 26 entries through migration 0025.
 
 Workspace, active Membership, Role, Team, record ownership/visibility, and trusted Session Workspace context govern every protected operation. Platform owns authorization, transaction mechanics, Idempotency, Audit, and Outbox. Domain modules remain single writers for their aggregates.
 

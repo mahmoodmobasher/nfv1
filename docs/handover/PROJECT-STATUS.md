@@ -6,7 +6,7 @@ Status date: 2026-08-27
 
 | Area | Exact identity | State |
 | --- | --- | --- |
-| Repository | Verify `main` against `origin/main` | The documentation cleanup commit follows the deployed application revision. |
+| Repository | `b12495d522d31507ec581db6ac4cd81c321ac59e` | Local `main`, `origin/main`, and HEAD verified equal; tracked tree clean at handoff. |
 | Deployed application source | `600a9aa96ec598b38aed557c2c4cb9b62d4afc08` | Must remain an ancestor of the repository documentation HEAD. |
 | UAT | `600a9aa-uat28` | Published and healthy at last deployment check. |
 | UAT image | `sha256:ba38d93379c2bf82987b4ff9ed34a7cfab96beb836dc410b1e95a77b829bbca3` | Exact OCI revision; non-root `10001:10001`. |
@@ -35,6 +35,14 @@ Status date: 2026-08-27
 - Deployment/config/security checks passed for release `600a9aa-uat28`.
 - Authenticated user visual validation remains authoritative for the latest Companies/Contacts directory release.
 
+## Repository work after the deployed UAT source
+
+- `f016caa`: canonical handover refresh.
+- `f207da3`: documentation consolidation and removal of superseded dated records.
+- `f31ea81`: frontend Screen Forms modularization; reusable fields/error/address rendering and strict command construction were separated from the React controller.
+- `b12495d`: Customer Graph application helper split; normalization/command adapters and kind/status-bound keyset cursor handling were separated from the service.
+- These commits are on `main` but are not represented by UAT release `600a9aa-uat28`. They preserve public contracts; do not report them as deployed.
+
 ## Recommended next sequence
 
 1. Product completes authenticated UAT validation of Companies/Contacts and the latest Lead UI fixes.
@@ -43,6 +51,18 @@ Status date: 2026-08-27
 4. Add round-robin routing as a later versioned increment.
 5. Extend Notes/Activities to additional aggregates only through their owner modules.
 6. Perform bounded maintainability decomposition of the large Customer Graph, Leads screen-form, and frontend profile modules without contract drift.
+
+## Specialist handover reconciliation
+
+- Dev1: no portable or unmerged frontend source. Its current worktree branch is a historical ancestor with four untracked screenshot artifacts only. Start new work from exact `main`.
+- Dev2: `codex/crm-activity-01-backend` at `271ca0a` is an obsolete prototype, 44 commits behind at audit. Mine it only as historical evidence; never merge or cherry-pick it.
+- Dev3: no DDL is required for `ACTIVITY-01A`; DB-01/DB-01A is integrated and its activity tables are empty in UAT. Do not create migration 0026 without a new database requirement.
+- Architecture: next exact-SHA review is the future Activities-owned backend candidate based on `b12495d`.
+- Graphics: next review is the future `ACTIVITY-01A` frontend candidate. Authenticated user validation of current Companies/Contacts and Lead interactions remains outstanding.
+
+## Stale or rejected integration heads
+
+Do not integrate by branch name or reuse these candidates: `271ca0a` / `78002a4` Activities prototype line; DB-08A `5534f4d`; DB-01A `5b421a9`; Screen Forms DB `b207812`; directory frontend `4b2520a`; Lead frontends `8aa2041`, `01ec128`, and `02f1a89`. Their accepted replacements are already in `main` ancestry where applicable.
 
 ## Holds
 
