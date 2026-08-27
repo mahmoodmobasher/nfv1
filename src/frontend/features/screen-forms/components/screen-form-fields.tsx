@@ -1,4 +1,4 @@
-import { FieldMessage } from "@/frontend/design-system";
+import { FieldMessage, FormGrid } from "@/frontend/design-system";
 
 export type ScreenKind = "company" | "contact" | "lead";
 export type ScreenFormErrors = Record<string, string>;
@@ -291,18 +291,14 @@ export function AddressFields({
   errors,
   defaults = {},
   collapsible = false,
+  embedded = false,
 }: {
   errors: ScreenFormErrors;
   defaults?: Record<string, string | null>;
   collapsible?: boolean;
+  embedded?: boolean;
 }) {
-  return (
-    <section aria-labelledby="address-heading">
-      <SectionHeading
-        id="address-heading"
-        title="Address Information"
-        help="Add the current business mailing address."
-      />
+  const fields = (
       <OptionalSection
         enabled={collapsible}
         open={Boolean(
@@ -314,7 +310,7 @@ export function AddressFields({
         )}
         summary="Address fields — optional"
       >
-        <div className="form-grid">
+        <FormGrid>
           <Input
             id="street"
             label="Street"
@@ -352,8 +348,18 @@ export function AddressFields({
             help="Use a two-letter country code, for example CA."
             data-error={errors.country}
           />
-        </div>
+        </FormGrid>
       </OptionalSection>
+  );
+  if (embedded) return fields;
+  return (
+    <section aria-labelledby="address-heading">
+      <SectionHeading
+        id="address-heading"
+        title="Address Information"
+        help="Add the current business mailing address."
+      />
+      {fields}
     </section>
   );
 }

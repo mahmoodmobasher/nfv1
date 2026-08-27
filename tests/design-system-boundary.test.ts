@@ -201,7 +201,8 @@ describe("design-system document boundary", () => {
     expect(leads).toContain("<WorkflowSummaryGrid>");
     expect(forms).toContain("<FormWorkbench");
     expect(forms).toContain("<SectionNav");
-    expect(components).toContain(".ds-table tbody tr:nth-child(even),.cg-directory-table tbody tr:nth-child(even)");
+    expect(components).toContain(".ds-table tbody tr:nth-child(even)");
+    expect(components).not.toContain(".cg-directory-table");
     expect(components).toContain(".ds-stage-column--new");
     expect(deals).not.toContain("<StageColumn");
     expect(deals).toContain("deal-board__stage ds-stage-column");

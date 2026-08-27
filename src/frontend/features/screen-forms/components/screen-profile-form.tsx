@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { Button, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, Panel, ProductPageHeader, SectionNav } from "@/frontend/design-system";
+import { Button, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, ProductPageHeader, SectionNav } from "@/frontend/design-system";
 import type { ScreenFormOption } from "./quick-create-company";
 import { LeadSourceFields } from "./lead-source-fields";
 import { OptionChecks, OptionSelect } from "./screen-form-options";
@@ -40,11 +40,12 @@ const plural = (kind: ScreenKind) =>
 const noun = (kind: ScreenKind) => kind[0].toUpperCase() + kind.slice(1);
 const endpoint = (workspaceId: string, suffix: string) =>
   `/api/workspaces/${workspaceId}/${suffix}`;
-function AssignmentSection({ lead, children }: { lead: boolean; children: ReactNode }) {
-  return lead ? <FormSection id="assignment-heading" number="04" title="Responsibility & visibility" description="Use only current server-authorized owners, Teams, and visibility." tone="access">{children}</FormSection> : <section aria-labelledby="assignment-heading"><h2 id="assignment-heading">Responsibility and visibility</h2>{children}</section>;
+function AssignmentSection({ kind, children }: { kind: ScreenKind; children: ReactNode }) {
+  const number = kind === "company" ? "03" : kind === "contact" ? "06" : "04";
+  return <FormSection id="assignment-heading" number={number} title="Responsibility & visibility" description="Use only current server-authorized owners, Teams, and visibility." tone="access">{children}</FormSection>;
 }
-function ScreenFormActions({ lead, children }: { lead: boolean; children: ReactNode }) {
-  return lead ? <FormActions>{children}</FormActions> : <div className="ds-page-actions">{children}</div>;
+function ScreenFormActions({ children }: { children: ReactNode }) {
+  return <FormActions>{children}</FormActions>;
 }
 const authorityCodes = new Set([
   "authentication_required",
@@ -586,29 +587,16 @@ export function ScreenProfileForm({
 
   return (
     <>
-      {kind === "lead" ? (
-        <ProductPageHeader
-          context={`Leads / ${editing ? "Edit" : "New"}`}
-          title={editing ? "Edit lead" : "Add lead"}
-          description={<p>Required fields are identified in text. Protected choices come only from current server authority.</p>}
-        />
-      ) : <header className="product-page-header">
-        <div>
-          <p className="eyebrow">
-            {noun(kind)} / {editing ? "Edit" : "New"}
-          </p>
-          <h1>{editing ? `Edit ${noun(kind)}` : `Add ${noun(kind)}`}</h1>
-          <p>
-            Required fields are identified in text. Protected choices come only
-            from current server authority.
-          </p>
-        </div>
-      </header>}
+      <ProductPageHeader
+        context={`${plural(kind)[0].toUpperCase()}${plural(kind).slice(1)} / ${editing ? "Edit" : "New"}`}
+        marker={kind === "company" ? "CO" : kind === "contact" ? "CT" : "LD"}
+        title={editing ? `Edit ${noun(kind).toLowerCase()}` : `Add ${noun(kind).toLowerCase()}`}
+        description={<p>Required fields are identified in text. Protected choices come only from current server authority.</p>}
+      />
       <FormWorkbench label={`${editing ? "Edit" : "Add"} ${noun(kind)}`}>
-      <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-contact-heading",label:"Contact"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
-      <Panel title={kind === "lead" ? undefined : `${noun(kind)} information`} className={kind === "lead" ? "lead-profile-shell" : undefined}>
+      <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-contact-heading",label:"Contact & address"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#address-heading",label:"Address"},{href:"#notes-heading",label:"Notes"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
         <form
-          className="ds-form screen-profile-form"
+          className={`ds-form screen-profile-form${kind === "lead" ? " lead-profile-shell" : ""}`}
           noValidate
           onSubmit={submit}
           aria-busy={busy}
@@ -626,17 +614,16 @@ export function ScreenProfileForm({
           )}
           {kind === "company" && (
             <>
-              <section aria-labelledby="company-profile-heading">
-                <h2 id="company-profile-heading">Company profile</h2>
-                <Input
-                  id="companyName"
-                  label="Company name"
-                  required
-                  autoComplete="organization"
-                  defaultValue={company?.base.name}
-                  data-error={errors.companyName}
-                />
-                <div className="form-grid">
+              <FormSection id="company-profile-heading" number="01" title="Company profile" description="Capture the organization’s current identity and business profile." tone="overview">
+                <FormGrid>
+                  <Input
+                    id="companyName"
+                    label="Company name"
+                    required
+                    autoComplete="organization"
+                    defaultValue={company?.base.name}
+                    data-error={errors.companyName}
+                  />
                   <Input
                     id="domain"
                     label="Domain"
@@ -713,28 +700,28 @@ export function ScreenProfileForm({
                     error={errors.parentCompanyId}
                     onAuthorityLoss={clearProtectedState}
                   />
-                </div>
-              </section>
-              <section aria-labelledby="company-contact-heading">
-                <h2 id="company-contact-heading">Contact and address</h2>
-                <Input
-                  id="phone"
-                  label="Phone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  defaultValue={channel?.phone ?? ""}
-                  data-error={errors.phone}
-                />
-                <AddressFields errors={errors} defaults={addr ?? {}} />
-              </section>
+                </FormGrid>
+              </FormSection>
+              <FormSection id="company-contact-heading" number="02" title="Contact & address" description="Add the organization’s current contact and mailing details." tone="relationship">
+                <FormGrid>
+                  <Input
+                    id="phone"
+                    label="Phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    defaultValue={channel?.phone ?? ""}
+                    data-error={errors.phone}
+                  />
+                </FormGrid>
+                <AddressFields errors={errors} defaults={addr ?? {}} embedded />
+              </FormSection>
             </>
           )}
           {kind === "contact" && (
             <>
-              <section aria-labelledby="basic-heading">
-                <h2 id="basic-heading">Basic details</h2>
-                <div className="form-grid">
+              <FormSection id="basic-heading" number="01" title="Contact overview" description="Capture the person’s current identity and Company relationship." tone="overview">
+                <FormGrid>
                   <Input
                     id="salutation"
                     label="Salutation"
@@ -796,11 +783,10 @@ export function ScreenProfileForm({
                     <option value="contractor">Contractor</option>
                     <option value="other">Other</option>
                   </Select>
-                </div>
-              </section>
-              <section aria-labelledby="channels-heading">
-                <h2 id="channels-heading">Contact channels</h2>
-                <div className="form-grid">
+                </FormGrid>
+              </FormSection>
+              <FormSection id="channels-heading" number="02" title="Contact channels" description="Add current ways to reach this Contact." tone="overview">
+                <FormGrid>
                   <Input
                     id="primaryEmail"
                     label="Primary email"
@@ -843,10 +829,10 @@ export function ScreenProfileForm({
                     defaultValue={channel?.linkedinUrl ?? ""}
                     data-error={errors.linkedinUrl}
                   />
-                </div>
-              </section>
-              <section aria-labelledby="lifecycle-heading">
-                <h2 id="lifecycle-heading">Lifecycle and assignment</h2>
+                </FormGrid>
+              </FormSection>
+              <FormSection id="lifecycle-heading" number="03" title="Lifecycle" description="Choose the Contact’s current lifecycle state before saving." tone="relationship">
+                <FormGrid>
                 <Select
                   id="lifecycleStage"
                   label="Lifecycle stage"
@@ -869,10 +855,12 @@ export function ScreenProfileForm({
                     </option>
                   ))}
                 </Select>
-              </section>
-              <AddressFields errors={errors} defaults={addr ?? {}} />
-              <section aria-labelledby="notes-heading">
-                <h2 id="notes-heading">Internal notes</h2>
+                </FormGrid>
+              </FormSection>
+              <FormSection id="address-heading" number="04" title="Address" description="Add the current business mailing address." tone="relationship">
+                <AddressFields errors={errors} defaults={addr ?? {}} embedded />
+              </FormSection>
+              <FormSection id="notes-heading" number="05" title="Internal notes" description="Optionally record a separate Notes-owned entry after the Contact saves." tone="activity">
                 <label className="field" htmlFor="internalNote">
                   <span>
                     Add internal note <small>optional, separate save</small>
@@ -889,7 +877,7 @@ export function ScreenProfileForm({
                     request and can be retried independently.
                   </FieldMessage>
                 </label>
-              </section>
+              </FormSection>
             </>
           )}
           {kind === "lead" && (
@@ -1107,7 +1095,7 @@ export function ScreenProfileForm({
               </FormSection>
             </>
           )}
-          <AssignmentSection lead={kind === "lead"}>
+          <AssignmentSection kind={kind}>
             <OptionalSection enabled={kind === "lead"} open={Boolean(errors.responsibleMembershipId || errors.responsibleTeamId || errors.visibility || errors.visibleTeamIds)} summary="Responsibility and visibility fields — optional">
             <OptionSelect
               workspaceId={workspaceId}
@@ -1209,7 +1197,7 @@ export function ScreenProfileForm({
               </Button>
             </div>
           )}
-          <ScreenFormActions lead={kind === "lead"}>
+          <ScreenFormActions>
             <Link
               className="secondary link-button"
               href={editing ? `${basePath}/${recordId}` : basePath}
@@ -1221,7 +1209,6 @@ export function ScreenProfileForm({
             </Button>
           </ScreenFormActions>
         </form>
-      </Panel>
       </FormWorkbench>
     </>
   );
