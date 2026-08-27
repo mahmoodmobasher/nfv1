@@ -244,4 +244,15 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
     expect(formSurface).not.toContain("href={`#_form`}");
     expect(form).toContain('id="visibility"');
   });
+
+  it("keeps legacy Contact lifecycle explicit and limits safe references to canonical generic failures", () => {
+    expect(form).toContain('defaultValue={contact?.base.lifecycleStage ?? ""}');
+    expect(form).toContain('<option value="">Choose a lifecycle stage</option>');
+    expect(command).toContain('errors.lifecycleStage = "Choose a lifecycle stage."');
+    expect(form).toContain('error.code === "screen_form_unavailable"');
+    expect(form).toContain('error.code === "unexpected_error"');
+    expect(form).toContain("setSafeReference(failure.data.requestId)");
+    expect(form).toContain("setSafeReference(parsed.data.requestId)");
+    expect(form.match(/setSafeReference\(""\)/g)?.length).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -88,6 +88,7 @@ export function ScreenProfileForm({
     [errors, setErrors] = useState<Errors>({}),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
+    [safeReference, setSafeReference] = useState(""),
     [stale, setStale] = useState(false),
     [selectionConflict, setSelectionConflict] = useState<
       NonNullable<ScreenFormsErrorEnvelopeV1["error"]["selection"]> | null
@@ -115,6 +116,7 @@ export function ScreenProfileForm({
     setDetail(null);
     setErrors({});
     setNotice("");
+    setSafeReference("");
     setStale(false);
     setSelectionConflict(null);
     setUnresolvedOptions(new Set());
@@ -136,6 +138,7 @@ export function ScreenProfileForm({
     setDenied(false);
     setLoadError(false);
     setDetail(null);
+    setSafeReference("");
     try {
       const url = editing
           ? endpoint(workspaceId, profileRoute)
@@ -148,6 +151,12 @@ export function ScreenProfileForm({
           clearProtectedState();
           return;
         }
+        if (
+          parsed.success &&
+          (parsed.data.error.code === "screen_form_unavailable" ||
+            parsed.data.error.code === "unexpected_error")
+        )
+          setSafeReference(parsed.data.requestId);
         throw new Error();
       }
       if (editing) {
@@ -211,6 +220,7 @@ export function ScreenProfileForm({
       <div className="alert error" role="alert" tabIndex={-1} autoFocus>
         <h1>Form temporarily unavailable</h1>
         <p>No protected fields or options are shown.</p>
+        {safeReference && <p>Reference: {safeReference}</p>}
         <Button onClick={() => void load()}>Try again</Button>
       </div>
     );
@@ -462,6 +472,7 @@ export function ScreenProfileForm({
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSafeReference("");
     const command = buildScreenFormCommand({
       kind,
       editing,
@@ -500,6 +511,11 @@ export function ScreenProfileForm({
         const failure = screenFormsErrorEnvelopeV1Schema.safeParse(payload);
         if (!failure.success) throw new Error();
         const error = failure.data.error;
+        if (
+          error.code === "screen_form_unavailable" ||
+          error.code === "unexpected_error"
+        )
+          setSafeReference(failure.data.requestId);
         if (error.reconciliation.action === "clear_protected_state") {
           clearProtectedState();
           return;
@@ -525,10 +541,13 @@ export function ScreenProfileForm({
         }
         if (error.reconciliation.action === "new_request")
           request.current = { body: "", key: crypto.randomUUID() };
+        const fieldErrors = Object.fromEntries(
+          (error.fields ?? []).map((path) => [fieldId(path), error.message]),
+        );
         setErrors(
-          Object.fromEntries(
-            (error.fields ?? []).map((path) => [fieldId(path), error.message]),
-          ),
+          Object.keys(fieldErrors).length
+            ? fieldErrors
+            : { _form: error.message },
         );
         setNotice(
           quickCompanyCommittedRef.current && kind === "lead"
@@ -587,6 +606,7 @@ export function ScreenProfileForm({
             errors={errors}
             summary={summary}
             linkedFields={linkedFields(kind)}
+            reference={safeReference || undefined}
           />
           {notice && (
             <p className="alert info" role="status">
@@ -820,9 +840,10 @@ export function ScreenProfileForm({
                   id="lifecycleStage"
                   label="Lifecycle stage"
                   required
-                  defaultValue={contact?.base.lifecycleStage ?? "lead"}
+                  defaultValue={contact?.base.lifecycleStage ?? ""}
                   error={errors.lifecycleStage}
                 >
+                  <option value="">Choose a lifecycle stage</option>
                   {[
                     ["lead", "Lead"],
                     ["marketing_qualified", "Marketing qualified"],

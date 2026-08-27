@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  contactScreenEditCommandV2Schema,
   leadScreenCreateCommandV2Schema,
   leadIdentityReviewOutcomeV1Schema,
   screenProfileResultV1Schema,
@@ -7,6 +8,7 @@ import {
   screenFormsErrorEnvelopeV1Schema,
   screenFormSelectedOptionQueryV1Schema,
   screenFormSelectedOptionV1Schema,
+  screenProfileDetailV1Schema,
 } from "../src/frontend/features/screen-forms/contracts/screen-forms.contracts";
 import {
   contactInternalNoteAddCommandV1Schema,
@@ -44,6 +46,34 @@ describe("SCREEN-FORMS revised frontend transport parity", () => {
   it("binds Notes writes to a positive Contact version", () => {
     expect(contactInternalNoteAddCommandV1Schema.safeParse({ contractVersion: "contact-internal-note-add.v1", expectedContactVersion: 2, body: "Follow up next week." }).success).toBe(true);
     expect(contactInternalNoteAddCommandV1Schema.safeParse({ contractVersion: "contact-internal-note-add.v1", expectedContactVersion: 0, body: "Follow up." }).success).toBe(false);
+  });
+
+  it("accepts legacy-null Contact lifecycle only on reads and never on writes", () => {
+    const detail = {
+      contractVersion: "screen-profile-detail.v1",
+      kind: "contact",
+      recordId: id,
+      version: 2,
+      base: { salutation: null, firstName: "Ada", lastName: "Lovelace", jobTitle: null, department: null, lifecycleStage: null },
+      categories: {
+        channels: { disclosure: "full", value: { primaryEmail: "ada@example.test", secondaryEmail: null, directPhone: null, mobilePhone: null, linkedinUrl: null } },
+        address: { disclosure: "full", value: { street: null, city: null, stateProvince: null, postalCode: null, country: null } },
+        notes: { disclosure: "full", value: { listRoute: `/api/workspaces/${id}/contacts/${id}/notes` } },
+        hierarchy: { disclosure: "full", value: { company: null } },
+      },
+      assignment: { disclosure: "full", value: { responsibleMembershipId: null, responsibleMembershipVersion: null, responsibleTeamId: null, responsibleTeamVersion: null, visibility: "workspace", visibleTeams: [] } },
+      capabilities: { canEdit: true, canManageAssignment: true, canWriteSensitiveProfile: true },
+      requestId: id,
+    };
+    expect(screenProfileDetailV1Schema.safeParse(detail).success).toBe(true);
+    expect(contactScreenEditCommandV2Schema.safeParse({
+      contractVersion: "contact-screen-edit.v2",
+      expectedVersion: 2,
+      profile: { salutation: null, firstName: "Ada", lastName: "Lovelace", jobTitle: null, department: null,
+        primaryEmail: "ada@example.test", secondaryEmail: null, directPhone: null, mobilePhone: null, linkedinUrl: null,
+        lifecycleStage: null, company: null, address: { street: null, city: null, stateProvince: null, postalCode: null, country: null } },
+      assignment,
+    }).success).toBe(false);
   });
 
   it("keeps Notes list queries strict and stale reconciliation owned", () => {

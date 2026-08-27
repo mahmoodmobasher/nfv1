@@ -39,10 +39,12 @@ export function ErrorSummary({
   errors,
   summary,
   linkedFields,
+  reference,
 }: {
   errors: ScreenFormErrors;
   summary: React.RefObject<HTMLDivElement | null>;
   linkedFields: ReadonlySet<string>;
+  reference?: string;
 }) {
   if (!Object.keys(errors).length) return null;
   return (
@@ -76,6 +78,7 @@ export function ErrorSummary({
           ),
         )}
       </ul>
+      {reference && <p className="helper">Reference: {reference}</p>}
     </div>
   );
 }

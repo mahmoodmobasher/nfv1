@@ -182,6 +182,25 @@ function leadProfileDetail({
   };
 }
 
+function contactProfileDetail(contactId: string) {
+  return {
+    contractVersion: "screen-profile-detail.v1",
+    kind: "contact",
+    recordId: contactId,
+    version: 2,
+    capabilities: { canEdit: true, canManageAssignment: true, canWriteSensitiveProfile: true },
+    base: { salutation: null, firstName: "Legacy", lastName: "Contact", jobTitle: null, department: null, lifecycleStage: null },
+    categories: {
+      channels: { disclosure: "full", value: { primaryEmail: "legacy@example.test", secondaryEmail: null, directPhone: null, mobilePhone: null, linkedinUrl: null } },
+      address: { disclosure: "full", value: { street: null, city: null, stateProvince: null, postalCode: null, country: null } },
+      notes: { disclosure: "full", value: { listRoute: `/api/workspaces/10000000-0000-4000-8000-000000000001/contacts/${contactId}/notes` } },
+      hierarchy: { disclosure: "full", value: { company: null } },
+    },
+    assignment: { disclosure: "full", value: { responsibleMembershipId: null, responsibleMembershipVersion: null, responsibleTeamId: null, responsibleTeamVersion: null, visibility: "workspace", visibleTeams: [] } },
+    requestId: randomUUID(),
+  };
+}
+
 test.afterAll(async () => database.end());
 
 for (const entry of [
@@ -242,6 +261,98 @@ test("direct new authority denial never mounts protected fields", async ({
     page.getByRole("alert").filter({ hasText: "form unavailable" }),
   ).toContainText("Current authority no longer permits this form");
   await expect(page.getByLabel(/Primary email/)).toHaveCount(0);
+});
+
+test("Add Contact blocks duplicate channels and missing lifecycle with keyboard-linked recovery", async ({ page }) => {
+  const workspaceId = await fixture(page);
+  await mockAuthority(page, workspaceId);
+  let posts = 0;
+  await page.route("**/api/workspaces/*/contacts", (route) => {
+    posts += 1;
+    return route.abort();
+  });
+  await page.goto("/crm/contacts/new");
+  await page.getByLabel(/^First name required$/).fill("Create");
+  await page.getByLabel(/^Last name required$/).fill("Contact");
+  await page.getByLabel(/^Primary email required$/).fill("CREATE@example.test");
+  await page.getByLabel(/^Secondary email/).fill(" create@example.test ");
+  await page.getByLabel(/^Direct phone/).fill("+14165550123");
+  await page.getByLabel(/^Mobile/).fill(" +14165550123 ");
+  await page.getByRole("button", { name: "Save Contact" }).click();
+
+  const summary = page.getByRole("alert").filter({ hasText: "Please correct the following" });
+  await expect(summary).toBeFocused();
+  await expect(summary.locator('a[href="#primaryEmail"]')).toBeVisible();
+  await expect(summary.locator('a[href="#secondaryEmail"]')).toBeVisible();
+  await expect(summary.locator('a[href="#directPhone"]')).toBeVisible();
+  await expect(summary.locator('a[href="#mobilePhone"]')).toBeVisible();
+  const lifecycleLink = summary.locator('a[href="#lifecycleStage"]');
+  await lifecycleLink.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#lifecycleStage")).toBeFocused();
+  expect(posts).toBe(0);
+});
+
+test("Contact duplicate channels and legacy-null lifecycle retain the draft with linked focus and safe references", async ({ page }) => {
+  const workspaceId = await fixture(page), contactId = randomUUID(), safeRequestId = randomUUID();
+  await mockAuthority(page, workspaceId);
+  await page.route("**/api/auth/csrf", (route) => route.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify({ token: "csrf-test-token" }),
+  }));
+  let patchAttempts = 0, patchBody: Record<string, unknown> | null = null;
+  await page.route(`**/api/workspaces/*/contacts/${contactId}/profile`, (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: contactProfileDetail(contactId) }) });
+    patchAttempts += 1;
+    patchBody = route.request().postDataJSON() as Record<string, unknown>;
+    return route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { code: "unexpected_error", message: "The request could not be completed.", retryable: true,
+          reconciliation: { required: true, action: "retry_same_request" }, zeroPartialEffects: true },
+        requestId: safeRequestId,
+      }),
+    });
+  });
+
+  await page.goto(`/crm/contacts/${contactId}/edit`);
+  const lifecycle = page.locator("#lifecycleStage");
+  await expect(lifecycle).toHaveAttribute("aria-required", "true");
+  await expect(lifecycle).toHaveValue("");
+  await page.getByLabel(/^Secondary email/).fill(" LEGACY@EXAMPLE.TEST ");
+  await page.getByLabel(/^Direct phone/).fill("+14165550123");
+  await page.getByLabel(/^Mobile/).fill(" +14165550123 ");
+  await page.getByRole("button", { name: "Save Contact" }).click();
+
+  const summary = page.getByRole("alert").filter({ hasText: "Please correct the following" });
+  await expect(summary).toBeFocused();
+  await expect(summary.getByRole("link", { name: "Choose a lifecycle stage." })).toBeVisible();
+  await expect(summary.getByRole("link", { name: "Primary and secondary email must be different." })).toHaveCount(2);
+  await expect(summary.getByRole("link", { name: "Direct and mobile phone must be different." })).toHaveCount(2);
+  expect(patchAttempts).toBe(0);
+  await summary.locator('a[href="#secondaryEmail"]').click();
+  await expect(page.getByLabel(/^Secondary email/)).toBeFocused();
+  await expect(page.getByLabel(/^Secondary email/)).toHaveValue("LEGACY@EXAMPLE.TEST");
+
+  await page.getByLabel(/^Secondary email/).fill("other@example.test");
+  await page.getByLabel(/^Mobile/).fill("+14165550124");
+  await lifecycle.selectOption("customer");
+  await page.getByRole("button", { name: "Save Contact" }).click();
+  await expect(summary).toBeFocused();
+  await expect(summary).toContainText("The request could not be completed.");
+  await expect(page.getByText(`Reference: ${safeRequestId}`)).toBeVisible();
+  await expect(page.getByLabel(/^First name required$/)).toHaveValue("Legacy");
+  await expect(page.getByLabel(/^Secondary email/)).toHaveValue("other@example.test");
+  await expect(page.getByLabel(/^Direct phone/)).toHaveValue("+14165550123");
+  await expect(page.getByLabel(/^Mobile/)).toHaveValue("+14165550124");
+  await expect(lifecycle).toHaveValue("customer");
+  expect(patchAttempts).toBe(1);
+  expect(patchBody).toMatchObject({
+    contractVersion: "contact-screen-edit.v2",
+    expectedVersion: 2,
+    profile: { lifecycleStage: "customer" },
+  });
 });
 
 test("filled submission authority loss clears protected form state and focuses the safe alert", async ({
@@ -563,6 +674,7 @@ test("Contact Notes authority loss remains terminal after the Contact commits", 
   await page
     .getByLabel(/^Primary email required$/)
     .fill("protected.contact@example.test");
+  await page.locator("#lifecycleStage").selectOption("lead");
   await page
     .getByLabel(/Add internal note/)
     .fill("Sensitive internal note body");

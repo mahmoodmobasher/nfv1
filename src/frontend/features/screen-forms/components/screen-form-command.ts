@@ -225,7 +225,26 @@ export function buildScreenFormCommand({
           ? leadScreenEditCommandV2Schema
           : leadScreenCreateCommandV2Schema;
   const parsed = schema.safeParse(command);
-  return parsed.success
+  const errors: ScreenFormErrors = parsed.success
+    ? {}
+    : validationIssues(parsed.error);
+  if (kind === "contact") {
+    const primaryEmail = value(data, "primaryEmail").toLowerCase(),
+      secondaryEmail = nullable(data, "secondaryEmail")?.toLowerCase() ?? null,
+      directPhone = nullable(data, "directPhone"),
+      mobilePhone = nullable(data, "mobilePhone");
+    if (!value(data, "lifecycleStage"))
+      errors.lifecycleStage = "Choose a lifecycle stage.";
+    if (secondaryEmail && primaryEmail === secondaryEmail) {
+      errors.primaryEmail = "Primary and secondary email must be different.";
+      errors.secondaryEmail = "Primary and secondary email must be different.";
+    }
+    if (directPhone && mobilePhone && directPhone === mobilePhone) {
+      errors.directPhone = "Direct and mobile phone must be different.";
+      errors.mobilePhone = "Direct and mobile phone must be different.";
+    }
+  }
+  return parsed.success && !Object.keys(errors).length
     ? { success: true, data: parsed.data }
-    : { success: false, errors: validationIssues(parsed.error) };
+    : { success: false, errors };
 }
