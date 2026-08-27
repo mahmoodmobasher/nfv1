@@ -62,6 +62,24 @@ async function counts() {
     (select count(*)::int from outbox_messages where topic='crm.activity.created.v1') outbox,
     (select count(*)::int from idempotency_records where operation='activity-create.v1') receipts`)).rows[0];
 }
+async function removeLeadDisclosureWithActiveMembership(f: Awaited<ReturnType<typeof fixture>>) {
+  const memberRoleId = (await pool.query<{ role_id: string }>(
+    "select role_id from workspace_memberships where id=$1", [f.member.membershipId])).rows[0].role_id;
+  const hiddenTeam = (await pool.query<{ id: string }>(`insert into teams(workspace_id,name,name_normalized,status,
+    created_by_membership_id) values($1,$2,$3,'active',$4) returning id`,
+  [f.workspace.id, `Hidden ${randomUUID()}`, `hidden-${randomUUID()}`, f.member.membershipId])).rows[0];
+  await pool.query("update workspace_memberships set role_id=$2,version=version+1 where id=$1",
+    [f.owner.membershipId, memberRoleId]);
+  await pool.query(`update leads set owner_membership_id=$2,responsible_team_id=$3,visibility='teams',
+    version=version+1 where workspace_id=$1 and id=$4`,
+  [f.workspace.id, f.member.membershipId, hiddenTeam.id, f.lead.id]);
+  await pool.query("delete from lead_visible_teams where workspace_id=$1 and lead_id=$2", [f.workspace.id, f.lead.id]);
+  await pool.query("insert into lead_visible_teams(workspace_id,lead_id,team_id) values($1,$2,$3)",
+    [f.workspace.id, f.lead.id, hiddenTeam.id]);
+  expect((await pool.query("select status from workspace_memberships where id=$1",
+    [f.owner.membershipId])).rows[0].status).toBe("active");
+  return hiddenTeam.id;
+}
 
 suite("ACTIVITY-01A backend", () => {
   beforeAll(() => pool.query("select 1"));
@@ -156,6 +174,42 @@ suite("ACTIVITY-01A backend", () => {
     expect(error).toMatchObject({ code: "resource_not_found", status: 404 });
     expect(JSON.stringify(error)).not.toContain("idempotency_conflict");
     expect(JSON.stringify(error)).not.toContain("Changed protected subject");
+    expect(await counts()).toEqual(before);
+  });
+
+  it("masks malformed receipt state after active-Membership Lead visibility loss", async () => {
+    const f = await fixture(), key = `activity-create-${randomUUID()}`;
+    const first = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: key });
+    const hiddenTeamId = await removeLeadDisclosureWithActiveMembership(f);
+    const tamperMarker = `tampered-${randomUUID()}`;
+    await pool.query(`update idempotency_records set outcome=$2
+      where operation='activity-create.v1' and idempotency_key=$1`,
+    [key, JSON.stringify({ activityId: tamperMarker, leadId: f.lead.id, bindingId: hiddenTeamId })]);
+    const before = await counts();
+    const error = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: key }).catch((value: unknown) => value);
+    const serialized = JSON.stringify(error);
+    expect(error).toMatchObject({ code: "resource_not_found", status: 404 });
+    for (const protectedValue of ["activity_unavailable", "idempotency_conflict", command().subject,
+      command().details!, first.requestId, first.activity.activityId, f.lead.id, hiddenTeamId, tamperMarker])
+      expect(serialized).not.toContain(protectedValue);
+    expect(await counts()).toEqual(before);
+  });
+
+  it("masks changed-hash reuse after active-Membership Lead visibility loss", async () => {
+    const f = await fixture(), key = `activity-create-${randomUUID()}`;
+    const first = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: key });
+    const hiddenTeamId = await removeLeadDisclosureWithActiveMembership(f), changedSubject = "Changed protected subject";
+    const before = await counts();
+    const error = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
+      command: command({ subject: changedSubject }), idempotencyKey: key }).catch((value: unknown) => value);
+    const serialized = JSON.stringify(error);
+    expect(error).toMatchObject({ code: "resource_not_found", status: 404 });
+    for (const protectedValue of ["activity_unavailable", "idempotency_conflict", changedSubject, command().details!,
+      first.requestId, first.activity.activityId, f.lead.id, hiddenTeamId])
+      expect(serialized).not.toContain(protectedValue);
     expect(await counts()).toEqual(before);
   });
 
