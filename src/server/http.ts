@@ -13,6 +13,29 @@ export function mutationGuard(request: Request): NextResponse | null {
   try { assertTrustedMutation(request, getServerEnv().APP_ORIGIN); return null; }
   catch { return NextResponse.json({ ok: false, code: "request_rejected", message: "The request could not be accepted." }, { status: 403 }); }
 }
+const trustedMutationBody = Symbol("trustedMutationBody");
+export type TrustedMutationBody = {
+  readonly request: Request;
+  readonly body: unknown;
+  readonly [trustedMutationBody]: true;
+};
+export async function readTrustedMutationBody(
+  request: Request,
+): Promise<NextResponse | TrustedMutationBody> {
+  const blocked = mutationGuard(request);
+  if (blocked) return blocked;
+  return {
+    request,
+    body: await request.json().catch(() => null),
+    [trustedMutationBody]: true,
+  };
+}
+export function isTrustedMutationBody(
+  request: Request,
+  candidate: TrustedMutationBody | undefined,
+): candidate is TrustedMutationBody {
+  return candidate?.request === request && candidate[trustedMutationBody] === true;
+}
 export type RequestRiskContext = { networkKey: string };
 export function requestRiskContext(request: Request): RequestRiskContext {
   const env = getServerEnv();

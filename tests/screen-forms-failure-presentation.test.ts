@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { POST as createContactRoute } from "../src/app/api/workspaces/[workspaceId]/contacts/route";
 import {
   contactScreenCreateCommandV2Schema,
   screenFormsErrorEnvelopeV1Schema,
@@ -8,6 +9,7 @@ import {
   parseScreenCommand,
   screenFormsFailure,
 } from "../src/backend/modules/screen-forms/presentation/screen-forms.route";
+import { getServerEnv } from "../src/server/env";
 
 const requestId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
@@ -58,6 +60,53 @@ describe("Screen Forms failure presentation", () => {
     expect(line).not.toContain(protectedContactId);
   });
 
+  it("omits syntactically valid but unapproved database metadata", async () => {
+    process.env.NEXAFLOW_REVISION = "abcdef1234567890";
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    screenFormsFailure(
+      Object.assign(new Error("secret@example.test"), {
+        code: "ZZ999",
+        constraint: "contact_secret_value_uq",
+        detail: "secret@example.test",
+      }),
+      requestId,
+      {
+        request: new Request(
+          `https://app.example.test/api/workspaces/${workspaceId}/contacts`,
+          { method: "POST" },
+        ),
+        body: { contractVersion: "not-approved-secret" },
+      },
+    );
+    const record = JSON.parse(String(logged.mock.calls[0][0]));
+    expect(record).toMatchObject({
+      code: "unexpected_error",
+      operation: "post",
+    });
+    expect(record).not.toHaveProperty("sqlState");
+    expect(record).not.toHaveProperty("constraint");
+    expect(JSON.stringify(record)).not.toContain("secret");
+  });
+
+  it.each([
+    ["untrusted origin", { origin: "https://attacker.example" }],
+    ["invalid CSRF", { origin: getServerEnv().APP_ORIGIN }],
+  ])("runs the mutation guard before body work for %s", async (_name, headers) => {
+    const request = new Request(
+      `https://app.example.test/api/workspaces/${workspaceId}/contacts`,
+      { method: "POST", headers },
+    );
+    const readBody = vi.spyOn(request, "json");
+    const cloneBody = vi.spyOn(request, "clone");
+    const response = await createContactRoute(request, {
+      params: Promise.resolve({ workspaceId }),
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "request_rejected" });
+    expect(readBody).not.toHaveBeenCalled();
+    expect(cloneBody).not.toHaveBeenCalled();
+  });
+
   it("keeps screen and legacy Contact create presenters explicitly separated", () => {
     const route = readFileSync(
       "src/app/api/workspaces/[workspaceId]/contacts/route.ts",
@@ -68,6 +117,9 @@ describe("Screen Forms failure presentation", () => {
     expect(route).toContain("return graphRoute(");
     expect(route).toContain("parseScreenCommand(contactScreenCreateCommandV2Schema");
     expect(route).toContain("parsed(contactCreateCommandV1Schema");
+    expect(route).toContain("readTrustedMutationBody(request)");
+    expect(route).not.toContain("request.json()");
+    expect(route).not.toContain("request.clone()");
   });
 
   it("presents duplicate Contact channels as linked validation fields", async () => {

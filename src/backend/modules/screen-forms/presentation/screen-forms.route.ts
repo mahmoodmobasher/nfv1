@@ -1,4 +1,9 @@
-import { localDatabase, mutationGuard } from "@/server/http";
+import {
+  isTrustedMutationBody,
+  localDatabase,
+  mutationGuard,
+  type TrustedMutationBody,
+} from "@/server/http";
 import { tenant } from "@/server/tenant-admin/http";
 import { screenFormsErrorEnvelopeV1Schema } from "../contracts/screen-forms.contract";
 
@@ -33,8 +38,13 @@ const SCREEN_OPERATIONS = new Set([
   "contact-screen-create.v2", "contact-screen-edit.v2",
   "lead-screen-create.v2", "lead-screen-edit.v2",
 ]);
-const SAFE_CONSTRAINT = /^[a-z][a-z0-9_]{0,62}$/;
 const SAFE_REVISION = /^[0-9a-f]{7,64}$/i;
+const APPROVED_SQL_STATES = new Set([
+  "23503", "23505", "23514", "40001", "40P01",
+]);
+const APPROVED_CONSTRAINTS = new Map([
+  ["contact_identity_points_active_value_uq", "23505"],
+]);
 
 function routeTemplate(request: Request) {
   try {
@@ -59,13 +69,18 @@ function operationFrom(request: Request, body: unknown) {
 function databaseFailure(error: unknown) {
   if (!error || typeof error !== "object") return {};
   const candidate = error as { code?: unknown; constraint?: unknown };
+  const sqlState =
+    typeof candidate.code === "string" && APPROVED_SQL_STATES.has(candidate.code)
+      ? candidate.code
+      : null;
+  const constraint =
+    typeof candidate.constraint === "string" &&
+    APPROVED_CONSTRAINTS.get(candidate.constraint) === sqlState
+      ? candidate.constraint
+      : null;
   return {
-    ...(typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)
-      ? { sqlState: candidate.code }
-      : {}),
-    ...(typeof candidate.constraint === "string" && SAFE_CONSTRAINT.test(candidate.constraint)
-      ? { constraint: candidate.constraint }
-      : {}),
+    ...(sqlState ? { sqlState } : {}),
+    ...(constraint ? { constraint } : {}),
   };
 }
 
@@ -151,19 +166,21 @@ export async function screenFormsRoute(
   }) => Promise<unknown>,
   status = 200,
   mutation = false,
+  prepared?: TrustedMutationBody,
 ) {
+  const trusted = isTrustedMutationBody(request, prepared);
   const requestId = crypto.randomUUID();
-  if (mutation && mutationGuard(request))
+  if (mutation && !trusted && mutationGuard(request))
     return screenFormsFailure(
       { code: "permission_required", status: 403 },
       requestId,
       { request, body: null },
     );
   const { pool } = localDatabase();
-  let body: unknown = null;
+  let body: unknown = trusted ? prepared.body : null;
   try {
     const actor = await tenant(pool, request, workspaceId);
-    body = mutation ? await request.json().catch(() => null) : null;
+    if (!trusted) body = mutation ? await request.json().catch(() => null) : null;
     return screenFormsJson(await work({
       pool,
       actor,
