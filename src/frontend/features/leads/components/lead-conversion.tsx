@@ -16,6 +16,7 @@ import {
   type LeadConversionResultV1,
 } from "../contracts/lead-conversion.contracts";
 import { LeadReadOnlyDetail } from "./lead-presentation";
+import { LeadActivityPanel } from "./lead-activity";
 
 type Draft = { companyId: string; contactId: string; name: string; value: string; currencyCode: "USD" | "CAD"; expectedCloseOn: string };
 type FieldErrors = Record<string, string>;
@@ -203,5 +204,5 @@ function LeadConversionPanel({ workspaceId, leadId, onAuthorityLoss }: { workspa
 export function LeadDetailWithConversion({ lead, workspaceId, stages = [] }: { lead: LeadSummaryItem; workspaceId: string; stages?: LeadPipelineStage[] }) {
   const [authorityError, setAuthorityError] = useState<LeadConversionError | null>(null);
   if (authorityError) return <SafeConversionState authentication={authorityError.code === "authentication_required"}/>;
-  return <><LeadReadOnlyDetail lead={lead} workspaceId={workspaceId} stages={stages}/><LeadConversionPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={setAuthorityError}/></>;
+  return <><LeadReadOnlyDetail lead={lead} workspaceId={workspaceId} stages={stages}/><LeadActivityPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={error => setAuthorityError({ code: error.code, message: "The Lead is unavailable.", retryable: false, reconciliation: { required: true, action: "clear_conversion_state" }, guarantees: { zeroPartialEffects: true } })}/><LeadConversionPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={setAuthorityError}/></>;
 }

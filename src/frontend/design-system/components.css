@@ -157,6 +157,26 @@
 .lead-operational-edit .check { display: flex; min-height: 44px; align-items: center; gap: var(--nf-space-2); }
 .lead-operational-edit .check input { width: 20px; min-width: 20px; height: 20px; }
 .lead-stage-unavailable { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
+.lead-activity { margin-top: var(--nf-space-5); }
+.lead-activity-capability { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
+.lead-activity-layout { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); gap: var(--nf-space-5); align-items: start; }
+.lead-activity-form,.lead-activity-timeline { min-width: 0; }
+.lead-activity-form>section { padding-top: 0; border-top: 0; }
+.lead-activity-form h3,.lead-activity-timeline h3,.lead-activity-timeline p { margin: 0; }
+.lead-activity-timeline { display: grid; gap: var(--nf-space-3); }
+.lead-activity-timeline__header { display: flex; align-items: end; justify-content: space-between; gap: var(--nf-space-3); }
+.lead-activity-timeline__header .field { min-width: min(180px,100%); margin: 0; }
+.lead-activity-timeline__header select { width: 100%; min-height: 44px; padding: 9px var(--nf-space-3); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-text-strong); }
+.lead-activity-list { display: grid; gap: var(--nf-space-3); margin: 0; padding: 0; list-style: none; overflow-anchor: none; }
+.lead-activity-card { display: grid; min-width: 0; gap: var(--nf-space-2); padding: var(--nf-space-4); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-secondary); overflow-wrap: anywhere; }
+.lead-activity-card__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nf-space-2); color: var(--nx-text-muted); font-size: var(--nf-text-micro); }
+.lead-activity-card h3,.lead-activity-card p,.lead-activity-card small { margin: 0; }
+.lead-activity-card small { color: var(--nx-text-muted); }
+.lead-activity-card__facts { display: flex; flex-wrap: wrap; gap: var(--nf-space-2) var(--nf-space-4); margin: 0; }
+.lead-activity-card__facts>div { display: flex; gap: var(--nf-space-1); }
+.lead-activity-card__facts dt { color: var(--nx-text-muted); font-size: var(--nf-text-micro); font-weight: 600; }
+.lead-activity-card__facts dd { margin: 0; font-size: var(--nf-text-micro); }
+.lead-activity-load-older { display: flex; justify-content: center; min-height: 44px; overflow-anchor: none; }
 
 @media (max-width: 520px) {
   .ds-panel__header { align-items: stretch; flex-direction: column; }
@@ -170,6 +190,9 @@
   .ds-page-actions,.ds-page-actions>* { width: 100%; }
   .deal-board { grid-template-columns: 1fr; }
   .lead-management-dialog { width: calc(100vw - 24px); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: var(--nf-space-4); }
+  .lead-activity-layout { grid-template-columns: 1fr; }
+  .lead-activity-timeline__header { align-items: stretch; flex-direction: column; }
+  .lead-activity-timeline__header .field,.lead-activity-load-older,.lead-activity-load-older .ds-action { width: 100%; }
 }
 @media (max-width: 700px) {
   .ds-lead-list .ds-table th[scope="row"] a,.ds-lead-card h3 a { display: flex; min-width: 44px; min-height: 44px; align-items: center; }
@@ -189,9 +212,9 @@
   .cg-directory-pagination,.cg-directory-pagination>div,.cg-directory-pagination .ds-action { width: 100%; }
 }
 @media (forced-colors: active) {
-  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.deal-board__stage,.lead-management-dialog,.lead-operational-edit fieldset,.cg-directory-icon,.cg-directory-tools,.cg-directory-table-wrap,.cg-directory-table tr,.cg-list-row-feedback { border: 1px solid CanvasText; }
+  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.deal-board__stage,.lead-management-dialog,.lead-operational-edit fieldset,.lead-activity-card,.cg-directory-icon,.cg-directory-tools,.cg-directory-table-wrap,.cg-directory-table tr,.cg-list-row-feedback { border: 1px solid CanvasText; }
   .ds-badge { forced-color-adjust: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ds-action,.ds-view-tabs a,.lead-management-dialog { transition: none; }
+  .ds-action,.ds-view-tabs a,.lead-management-dialog,.lead-activity-card { transition: none; }
 }
