@@ -15,16 +15,19 @@ export function mutationGuard(request: Request): NextResponse | null {
 }
 const trustedMutationBody = Symbol("trustedMutationBody");
 export type TrustedMutationBody = {
+  readonly accepted: true;
   readonly request: Request;
   readonly body: unknown;
   readonly [trustedMutationBody]: true;
 };
+export type MutationGuardDenial = { readonly accepted: false };
 export async function readTrustedMutationBody(
   request: Request,
-): Promise<NextResponse | TrustedMutationBody> {
+): Promise<MutationGuardDenial | TrustedMutationBody> {
   const blocked = mutationGuard(request);
-  if (blocked) return blocked;
+  if (blocked) return { accepted: false };
   return {
+    accepted: true,
     request,
     body: await request.json().catch(() => null),
     [trustedMutationBody]: true,

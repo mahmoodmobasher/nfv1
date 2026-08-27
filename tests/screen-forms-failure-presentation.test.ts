@@ -10,6 +10,7 @@ import {
   screenFormsFailure,
 } from "../src/backend/modules/screen-forms/presentation/screen-forms.route";
 import { getServerEnv } from "../src/server/env";
+import { isTrustedMutationBody, readTrustedMutationBody } from "../src/server/http";
 
 const requestId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
@@ -102,9 +103,44 @@ describe("Screen Forms failure presentation", () => {
       params: Promise.resolve({ workspaceId }),
     });
     expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({ code: "request_rejected" });
+    expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
+    expect(response.headers.get("pragma")).toBe("no-cache");
+    expect(response.headers.get("vary")).toBe("cookie");
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "permission_required",
+        reconciliation: { required: false, action: "none" },
+      },
+      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
     expect(readBody).not.toHaveBeenCalled();
     expect(cloneBody).not.toHaveBeenCalled();
+  });
+
+  it("binds the single parsed body token to the accepted Request", async () => {
+    const csrf = "contact-guard-token";
+    const request = new Request(
+      `${getServerEnv().APP_ORIGIN}/api/workspaces/${workspaceId}/contacts`,
+      {
+        method: "POST",
+        headers: {
+          origin: getServerEnv().APP_ORIGIN,
+          cookie: `nexaflow_csrf=${csrf}`,
+          "x-csrf-token": csrf,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ contractVersion: "contact-screen-create.v2" }),
+      },
+    );
+    const readBody = vi.spyOn(request, "json");
+    const cloneBody = vi.spyOn(request, "clone");
+    const prepared = await readTrustedMutationBody(request);
+    expect(prepared.accepted).toBe(true);
+    if (!prepared.accepted) throw new Error("trusted mutation was denied");
+    expect(readBody).toHaveBeenCalledOnce();
+    expect(cloneBody).not.toHaveBeenCalled();
+    expect(isTrustedMutationBody(request, prepared)).toBe(true);
+    expect(isTrustedMutationBody(new Request(request.url), prepared)).toBe(false);
   });
 
   it("keeps screen and legacy Contact create presenters explicitly separated", () => {
