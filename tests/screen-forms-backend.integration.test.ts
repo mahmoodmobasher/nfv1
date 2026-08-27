@@ -14,6 +14,8 @@ import {
   createContact,
 } from "../src/backend/modules/customer-graph";
 import { getWorkspaceNavigationCapabilitiesV1 } from "../src/backend/modules/navigation";
+import { getIdentityReviewCandidatesV1, resolveLeadIdentityReviewV1, submitLeadInquiryV1 }
+  from "../src/backend/modules/leads";
 import { createSession } from "../src/server/security/session";
 import { getServerEnv } from "../src/server/env";
 
@@ -180,6 +182,44 @@ function command(
     },
     assignment,
   };
+}
+
+async function canonicalResolvedLead(
+  f: Awaited<ReturnType<typeof fixture>>,
+  contactAction: "create" | "link" | "dismiss",
+) {
+  const email = `canonical-${contactAction}-${randomUUID()}@example.test`;
+  let linkedContactId: string | null = null;
+  if (contactAction === "link") {
+    const contact = await createContact(pool, { actor: f.actor, key: `canonical-contact-${randomUUID()}`,
+      requestId: randomUUID(), command: { contractVersion: "contact-create.v1", firstName: "Canonical",
+        lastName: "Contact", email, phone: null,
+        affiliation: { companyId: f.company.id, roleCode: "decision_maker" },
+        responsibleMembershipId: f.actor.membershipId, responsibleTeamId: null,
+        visibility: "workspace", visibleTeamIds: [] } });
+    linkedContactId = contact.contactId;
+  }
+  const held = await submitLeadInquiryV1(pool, { actor: f.actor, idempotencyKey: `canonical-lead-${randomUUID()}`,
+    command: { contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual",
+      person: { displayName: "Canonical Contact", firstName: "Canonical", lastName: "Contact", email },
+      organization: { name: "Explicit Company" },
+      inquiry: { receivedAt: "2026-08-27T12:00:00.000Z" },
+      source: { sourceCategory: "manual", sourceMedium: "unknown", sourceDetail: {}, campaignContext: {},
+        attributionContractVersion: "p1a-attribution-v1" },
+      requestedAssignment: { responsibleMembershipId: f.actor.membershipId } } });
+  const review = await getIdentityReviewCandidatesV1(pool, f.actor, held.leadId);
+  const companyCandidate = review.candidates.find(candidate => candidate.targetType === "company")!;
+  const contactCandidate = review.candidates.find(candidate => candidate.targetType === "contact");
+  const contact = contactAction === "link" ? { action: "link" as const, candidateId: contactCandidate!.candidateId,
+    targetId: linkedContactId!, expectedTargetVersion: contactCandidate!.targetVersion } : { action: contactAction };
+  const resolved = await resolveLeadIdentityReviewV1(pool, { actor: f.actor, leadId: held.leadId,
+    idempotencyKey: `canonical-resolution-${randomUUID()}`, command: {
+      contractVersion: "lead-identity-review-decision.v1", outcome: "resolve",
+      expectedLeadVersion: review.leadVersion, expectedReviewVersion: review.reviewVersion,
+      expectedIntakeVersion: review.intakeVersion, contact,
+      company: { action: "link", candidateId: companyCandidate.candidateId, targetId: f.company.id,
+        expectedTargetVersion: companyCandidate.targetVersion } } });
+  return { leadId: held.leadId, reviewId: review.reviewId, contactId: resolved.contactId };
 }
 
 suite("SCREEN-FORMS-01 backend", () => {
@@ -962,6 +1002,38 @@ suite("SCREEN-FORMS-01 backend", () => {
     await expect(getScreenProfileV1(
       pool, third.actor, "lead", mismatched.recordId, randomUUID(),
     )).rejects.toMatchObject({ code: "authority_conflict" });
+  });
+
+  it.each(["create", "link", "dismiss"] as const)(
+    "opens a canonical resolved Lead with Contact %s lineage",
+    async contactAction => {
+      const f = await fixture(), resolved = await canonicalResolvedLead(f, contactAction);
+      const profile = await getScreenProfileV1(pool, f.actor, "lead", resolved.leadId, randomUUID());
+      expect(profile).toMatchObject({ kind: "lead", recordId: resolved.leadId,
+        identityReview: { companyDimension: "resolved", contactDimension: "resolved" } });
+    },
+  );
+
+  it("fails canonical resolved Lead presentation closed on Contact and candidate lineage mismatch", async () => {
+    const first = await fixture(), contactMismatch = await canonicalResolvedLead(first, "create");
+    await pool.query("update leads set contact_id=null where workspace_id=$1 and id=$2",
+      [first.actor.workspaceId, contactMismatch.leadId]);
+    await expect(getScreenProfileV1(pool, first.actor, "lead", contactMismatch.leadId, randomUUID()))
+      .rejects.toMatchObject({ code: "authority_conflict" });
+
+    const second = await fixture(), candidateMismatch = await canonicalResolvedLead(second, "link");
+    const corruption = await pool.connect();
+    try {
+      await corruption.query("set session_replication_role=replica");
+      await corruption.query(`update lead_identity_candidates set target_version=target_version+1
+        where workspace_id=$1 and review_id=$2 and contact_id=$3`,
+      [second.actor.workspaceId, candidateMismatch.reviewId, candidateMismatch.contactId]);
+    } finally {
+      await corruption.query("set session_replication_role=origin");
+      corruption.release();
+    }
+    await expect(getScreenProfileV1(pool, second.actor, "lead", candidateMismatch.leadId, randomUUID()))
+      .rejects.toMatchObject({ code: "authority_conflict" });
   });
 
   it("rolls back all Lead effects when the selected Company version is stale", async () => {

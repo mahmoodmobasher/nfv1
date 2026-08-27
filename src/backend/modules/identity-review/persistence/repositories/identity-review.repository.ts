@@ -10,6 +10,8 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
       leadId: string,
       leadReviewStatus: string,
       leadCompanyId: string | null,
+      leadContactId: string | null,
+      leadNormalizationVersion: string,
       lock = false,
     ) {
       if (lock) {
@@ -28,18 +30,33 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
         await tx.query<{
           reviews: number;
           resolvedReviews: number;
-          resolvedCompanyHeads: number;
+          resolvedHeads: number;
           pendingReviews: number;
           contactOnlyPendingReviews: number;
         }>(
           `select
              count(distinct r.id)::int reviews,
              count(distinct r.id) filter(where r.state='resolved')::int "resolvedReviews",
-             count(distinct h.intake_id) filter(where r.state='resolved' and d.governing_outcome='resolve'
-               and d.company_action='link' and d.company_id is not null and d.company_candidate_id is not null
-               and cc.company_id=d.company_id and cc.company_id=$3::uuid
-               and cc.target_version=d.company_target_version
-               and d.contact_action='dismiss' and d.contact_id is null)::int "resolvedCompanyHeads",
+             count(distinct h.decision_id) filter(where r.state='resolved' and d.governing_outcome='resolve'
+               and d.normalization_version=$5
+               and ((d.company_action='dismiss' and d.company_id is null and d.company_candidate_id is null
+                     and d.company_target_version is null and $3::uuid is null)
+                 or (d.company_action='create' and d.company_id=$3::uuid and d.company_id is not null
+                     and d.company_candidate_id is null and d.company_target_version is not null)
+                 or (d.company_action='link' and d.company_id=$3::uuid and d.company_id is not null
+                     and d.company_candidate_id is not null and d.company_target_version is not null
+                     and cc.company_id=d.company_id and cc.contact_id is null
+                     and cc.target_version=d.company_target_version
+                     and cc.normalization_version=d.normalization_version))
+               and ((d.contact_action='dismiss' and d.contact_id is null and d.contact_candidate_id is null
+                     and d.contact_target_version is null and $4::uuid is null)
+                 or (d.contact_action='create' and d.contact_id=$4::uuid and d.contact_id is not null
+                     and d.contact_candidate_id is null and d.contact_target_version is not null)
+                 or (d.contact_action='link' and d.contact_id=$4::uuid and d.contact_id is not null
+                     and d.contact_candidate_id is not null and d.contact_target_version is not null
+                     and ct.contact_id=d.contact_id and ct.company_id is null
+                     and ct.target_version=d.contact_target_version
+                     and ct.normalization_version=d.normalization_version)))::int "resolvedHeads",
              count(distinct r.id) filter(where r.state='pending')::int "pendingReviews",
              count(distinct r.id) filter(where r.state='pending'
                and exists(select 1 from lead_identity_candidates c where c.workspace_id=r.workspace_id and c.review_id=r.id and c.contact_id is not null)
@@ -48,14 +65,15 @@ export function identityReviewTransactionParticipant(tx: ModuleTransaction) {
            left join lead_identity_decisions d on d.workspace_id=r.workspace_id and d.review_id=r.id
            left join lead_identity_decision_heads h on h.workspace_id=d.workspace_id and h.intake_id=d.intake_id and h.decision_id=d.id
            left join lead_identity_candidates cc on cc.workspace_id=d.workspace_id and cc.review_id=d.review_id and cc.id=d.company_candidate_id
+           left join lead_identity_candidates ct on ct.workspace_id=d.workspace_id and ct.review_id=d.review_id and ct.id=d.contact_candidate_id
            where r.workspace_id=$1 and r.lead_id=$2`,
-          [workspaceId, leadId, leadCompanyId],
+          [workspaceId, leadId, leadCompanyId, leadContactId, leadNormalizationVersion],
         )
       ).rows[0];
       if (
         !facts ||
         facts.resolvedReviews !== 1 ||
-        facts.resolvedCompanyHeads !== 1 ||
+        facts.resolvedHeads !== 1 ||
         facts.pendingReviews < 0 ||
         facts.pendingReviews > 1 ||
         facts.contactOnlyPendingReviews !== facts.pendingReviews ||

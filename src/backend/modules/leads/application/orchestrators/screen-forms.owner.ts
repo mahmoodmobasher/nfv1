@@ -505,7 +505,8 @@ export async function getScreenProfileV1(
     if (!stage) fail("resource_not_found", 404);
     const identityReview = await identityReviewTransactionParticipant(
       tx,
-    ).screenReviewSummary(finalActor.workspaceId, id, String(fresh.identity_review_status), fresh.company_id as string | null, true);
+    ).screenReviewSummary(finalActor.workspaceId, id, String(fresh.identity_review_status),
+      fresh.company_id as string | null, fresh.contact_id as string | null, String(fresh.normalization_version), true);
     if (!identityReview) fail("authority_conflict", 409);
     const full = manager(finalActor),
       assignment = full
@@ -773,6 +774,8 @@ export async function createLeadScreenV2(
           row.id,
           row.reviewStatus,
           company.id,
+          null,
+          "p1a-identity-v2",
           true,
         );
         if (!identityReview) fail("authority_conflict", 409);
@@ -822,8 +825,11 @@ export async function editLeadScreenV2(
       async (operationId) => {
         const p = input.command.profile,
           old = (
-            await tx.query<{ version: number; companyId: string | null; reviewStatus: string }>(
-              `select version,company_id "companyId",identity_review_status "reviewStatus" from leads where workspace_id=$1 and id=$2 for update`,
+            await tx.query<{ version: number; companyId: string | null; contactId: string | null;
+              reviewStatus: string; normalizationVersion: string }>(
+              `select version,company_id "companyId",contact_id "contactId",identity_review_status "reviewStatus"
+                 ,normalization_version "normalizationVersion"
+                 from leads where workspace_id=$1 and id=$2 for update`,
               [actor.workspaceId, input.leadId],
             )
           ).rows[0];
@@ -922,7 +928,8 @@ export async function editLeadScreenV2(
         if (!manager(final)) fail("resource_not_found", 404);
         const identityReview = await identityReviewTransactionParticipant(
           tx,
-        ).screenReviewSummary(final.workspaceId, input.leadId, old.reviewStatus, old.companyId, true);
+        ).screenReviewSummary(final.workspaceId, input.leadId, old.reviewStatus, old.companyId, old.contactId,
+          old.normalizationVersion, true);
         if (!identityReview) fail("authority_conflict", 409);
         await evidence(tx, {
           actor: final,
