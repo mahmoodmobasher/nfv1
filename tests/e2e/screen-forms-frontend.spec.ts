@@ -251,6 +251,34 @@ for (const entry of [
     ).toBe(true);
   });
 
+test("Company and Contact choice labels provide shared 44px targets at desktop and 320px", async ({ page }) => {
+  const workspaceId = await fixture(page);
+  await mockAuthority(page, workspaceId);
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 320, height: 720 }]) {
+    await page.setViewportSize(viewport);
+    for (const path of ["/crm/companies/new", "/crm/contacts/new"]) {
+      await page.goto(path);
+      const label = page.locator('label.check:has(input[name="visibility"][value="workspace"])');
+      const input = label.locator('input[type="radio"]');
+      await expect(label).toBeVisible();
+      await expect(input).toBeVisible();
+      const labelBox = await label.boundingBox();
+      const inputBox = await input.boundingBox();
+      expect(labelBox, `${path} ${viewport.width}px label box`).not.toBeNull();
+      expect(inputBox, `${path} ${viewport.width}px input box`).not.toBeNull();
+      expect(labelBox!.height).toBeGreaterThanOrEqual(44);
+      expect(labelBox!.width).toBeGreaterThanOrEqual(44);
+      expect(inputBox!.height).toBeGreaterThanOrEqual(16);
+      expect(inputBox!.height).toBeLessThan(44);
+      expect(inputBox!.width).toBeGreaterThanOrEqual(16);
+      expect(inputBox!.width).toBeLessThan(44);
+      await label.click();
+      await expect(input).toBeChecked();
+      expect(await page.locator("body").evaluate((node) => node.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+  }
+});
+
 test("direct new authority denial never mounts protected fields", async ({
   page,
 }) => {

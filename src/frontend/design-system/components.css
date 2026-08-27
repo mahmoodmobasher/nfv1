@@ -94,6 +94,9 @@
 .ds-form .field textarea { min-height: 88px; resize: vertical; }
 .ds-form .field input:focus,.ds-form .field select:focus,.ds-form .field textarea:focus { border-color: var(--nx-focus); box-shadow: var(--nx-focus-ring); }
 .ds-form .field [aria-invalid="true"] { border-color: var(--nx-danger); background: var(--nx-danger-surface); }
+.check { display: flex; min-block-size: var(--nf-control-min); align-items: center; gap: var(--nf-space-2); cursor: pointer; }
+.check input:is([type="checkbox"],[type="radio"]) { flex: 0 0 auto; }
+.check:has(input:disabled) { cursor: default; }
 .ds-form details,.ds-readonly { padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-secondary); }
 .ds-form summary { min-height: 44px; display: flex; align-items: center; color: var(--nx-text-strong); font-weight: 600; cursor: pointer; }
 .ds-readonly { display: grid; gap: var(--nf-space-1); }
@@ -227,7 +230,6 @@
 .lead-operational-edit .ds-feedback { margin-bottom: var(--nf-space-4); }
 .lead-operational-edit fieldset { display: grid; min-width: 0; gap: var(--nf-space-2); padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); }
 .lead-operational-edit legend { padding-inline: var(--nf-space-1); color: var(--nx-text-strong); font-weight: 600; }
-.lead-operational-edit .check { display: flex; min-height: 44px; align-items: center; gap: var(--nf-space-2); }
 .lead-operational-edit .check input { width: 20px; min-width: 20px; height: 20px; }
 .lead-stage-unavailable { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
 .lead-activity { margin-top: var(--nf-space-5); }
