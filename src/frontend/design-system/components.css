@@ -117,7 +117,7 @@
 .ds-lead-card .ds-lead-actions { margin-top: var(--nf-space-1); }
 .ds-lead-card .ds-action { flex: 1; min-height: 38px; padding: var(--nf-space-1-5) var(--nf-space-2); }
 
-.lead-management-dialog { width: min(520px,calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: var(--nf-space-5); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-overlay); color: var(--nx-text-strong); box-shadow: var(--nx-overlay-shadow); }
+.lead-management-dialog { position: fixed; inset: 50% auto auto 50%; box-sizing: border-box; width: min(520px,calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); margin: 0; overflow: auto; overscroll-behavior: contain; padding: var(--nf-space-5); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-overlay); color: var(--nx-text-strong); box-shadow: var(--nx-overlay-shadow); transform: translate(-50%,-50%); }
 .lead-management-dialog::backdrop { background: var(--nx-blanket); }
 .lead-management-dialog h2 { margin: 0; }
 .lead-management-dialog>p { color: var(--nx-text); }
@@ -141,6 +141,7 @@
   .ds-fact-list>div { grid-template-columns: 1fr; gap: var(--nf-space-1); }
   .ds-page-actions,.ds-page-actions>* { width: 100%; }
   .deal-board { grid-template-columns: 1fr; }
+  .lead-management-dialog { width: calc(100vw - 24px); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: var(--nf-space-4); }
 }
 @media (max-width: 700px) {
   .ds-lead-list .ds-table th[scope="row"] a,.ds-lead-card h3 a { display: flex; min-width: 44px; min-height: 44px; align-items: center; }

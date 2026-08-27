@@ -525,8 +525,18 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .screen-disclosure>summary { display: flex; min-height: 44px; align-items: center; cursor: pointer; color: var(--nx-link); font-weight: 700; }
 .screen-disclosure[open]>summary { margin-bottom: var(--nf-space-4); }
 .screen-profile-form .required-marker { margin-left: 4px; color: var(--nx-danger); font-size: inherit; font-weight: 600; }
-.screen-option-field { display: grid; min-width: 0; grid-template-columns: minmax(0,1fr) auto; gap: var(--nf-space-2); align-items: end; }
-.screen-option-field>.field:nth-of-type(2),.screen-option-field>p { grid-column: 1/-1; }
+.screen-option-field,.screen-option-selection { display: grid; min-width: 0; gap: var(--nf-space-2); }
+.screen-option-search { display: grid; min-width: 0; grid-template-columns: minmax(0,1fr) auto; gap: var(--nf-space-2); align-items: end; }
+.screen-option-search>.field { min-width: 0; margin-block: 0; }
+.screen-option-search>.ds-action { align-self: end; margin: 0; }
+.lead-primary-grid { grid-template-areas: "first last" "company-search job" "company-select salutation"; align-items: start; }
+.lead-primary-grid>.field:has(#firstName) { grid-area: first; }
+.lead-primary-grid>.field:has(#lastName) { grid-area: last; }
+.lead-primary-grid>.field:has(#jobTitle) { grid-area: job; }
+.lead-primary-grid>.field:has(#salutation) { grid-area: salutation; }
+.lead-primary-grid>.lead-company-option { display: contents; }
+.lead-primary-grid>.lead-company-option>.screen-option-search { grid-area: company-search; }
+.lead-primary-grid>.lead-company-option>.screen-option-selection { grid-area: company-select; }
 .company-empty-state { grid-column: 1/-1; display: grid; gap: var(--nf-space-3); padding: var(--nf-space-4); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); }
 .company-empty-state h3,.company-empty-state p { margin: 0; }
 .company-empty-actions { display: flex; flex-wrap: wrap; gap: var(--nf-space-3); align-items: center; }
@@ -539,8 +549,10 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .screen-profile-form .form-grid>.field:has(#street) { grid-column: 1/-1; }
 @media (max-width: 640px) {
   .screen-profile-form>section { padding: var(--nf-space-4); }
-  .screen-profile-form .form-grid,.screen-option-field { grid-template-columns: minmax(0,1fr); }
-  .screen-option-field>* { grid-column: 1; }
+  .screen-profile-form .form-grid { grid-template-columns: minmax(0,1fr); }
+  .lead-primary-grid { grid-template-areas: "first" "last" "company-search" "company-select" "job" "salutation"; }
+  .screen-option-search { grid-template-columns: minmax(0,1fr); }
+  .screen-option-search>* { width: 100%; }
   .company-empty-actions { align-items: stretch; flex-direction: column; }
   .company-empty-actions>* { width: 100%; }
   .screen-profile-form .ds-page-actions { flex-direction: column; }

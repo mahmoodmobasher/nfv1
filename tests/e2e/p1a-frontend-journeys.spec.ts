@@ -643,3 +643,41 @@ test("Move stage focuses no-change and authority-loss response states while pres
   await expect(authority).toContainText("Lead no longer available");
   await expect(authority).toBeFocused();
 });
+
+test("Move stage stays viewport-centered with Cancel-first focus at narrow and scrolled positions", async ({ page }, testInfo) => {
+  const fixture = await browserFixture(page);
+  const created = await submitLeadInquiryV1(database, { actor: fixture.actor, idempotencyKey: randomUUID(), command: {
+    contractVersion: "lead-inquiry-intake.v1", intakeChannel: "manual",
+    person: { displayName: "Centered Dialog Lead", email: `centered-${randomUUID()}@example.test` },
+    inquiry: { receivedAt: "2026-08-26T12:00:00.000Z" },
+    source: { sourceCategory: "manual", sourceMedium: "unknown", sourceDetail: {}, campaignContext: {}, attributionContractVersion: "p1a-attribution-v1" },
+  } });
+  await database.query(
+    `insert into pipeline_stages(workspace_id,name,position,status) values($1,'Working',1,'active')`,
+    [fixture.workspaceId],
+  );
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto(`/crm/leads/${created.leadId}`);
+  const trigger = page.getByRole("button", { name: /Move stage for Centered Dialog Lead/ });
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await trigger.click();
+  const dialog = page.getByRole("dialog"), cancel = dialog.getByRole("button", { name: "Cancel" });
+  await expect(cancel).toBeFocused();
+  const box = await dialog.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(8);
+  expect(box!.y).toBeGreaterThanOrEqual(8);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(312);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(712);
+  expect(Math.abs(box!.x + box!.width / 2 - 160)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: testInfo.outputPath("move-stage-centered-scrolled-320.png") });
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await expect(cancel).toBeFocused();
+  await cancel.click();
+  await expect(trigger).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

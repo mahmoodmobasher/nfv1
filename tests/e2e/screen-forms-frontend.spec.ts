@@ -139,6 +139,49 @@ async function mockAuthority(page: Page, workspaceId: string, allowed = true) {
   });
 }
 
+function leadProfileDetail({
+  leadId,
+  companyId,
+  stageId,
+  stageUpdatedAt,
+}: {
+  leadId: string;
+  companyId: string;
+  stageId: string;
+  stageUpdatedAt: string;
+}) {
+  return {
+    contractVersion: "screen-profile-detail.v1",
+    kind: "lead",
+    recordId: leadId,
+    version: 1,
+    capabilities: { canEdit: true, canManageAssignment: true, canWriteSensitiveProfile: true },
+    base: {
+      salutation: null,
+      firstName: "Ada",
+      lastName: "Lovelace",
+      jobTitle: null,
+      source: "manual",
+      sourcePlatform: null,
+      stageId,
+      stageUpdatedAt,
+      rating: null,
+      industry: null,
+      employeeCount: null,
+    },
+    identityReview: { companyDimension: "resolved", contactDimension: "resolved" },
+    categories: {
+      channels: { disclosure: "full", value: { primaryEmail: "ada@example.test", secondaryEmail: null, officePhone: null, mobilePhone: null, fax: null, website: null, twitterHandle: null } },
+      address: { disclosure: "full", value: { street: null, city: null, stateProvince: null, postalCode: null, country: null } },
+      revenue: { disclosure: "full", value: null },
+      consent: { disclosure: "full", value: null },
+      hierarchy: { disclosure: "full", value: { company: { id: companyId, label: "Analytical Engines", version: 1 } } },
+    },
+    assignment: { disclosure: "full", value: { responsibleMembershipId: null, responsibleMembershipVersion: null, responsibleTeamId: null, responsibleTeamVersion: null, visibility: "workspace", visibleTeams: [] } },
+    requestId: randomUUID(),
+  };
+}
+
 test.afterAll(async () => database.end());
 
 for (const entry of [
@@ -717,4 +760,183 @@ test("fresh Workspace quick-creates an exact Company selection and then saves th
   expect(
     await page.locator("body").evaluate((node) => node.scrollWidth <= innerWidth),
   ).toBe(true);
+});
+
+for (const selectedOutcome of ["unchanged", "changed"] as const)
+  test(`selected stage retry ${selectedOutcome} blocks mutation until authority reconciliation`, async ({ page }) => {
+    const workspaceId = await fixture(page),
+      leadId = randomUUID(),
+      companyId = randomUUID(),
+      stageId = randomUUID(),
+      submittedAt = "2026-08-26T12:00:00.000Z",
+      currentAt = selectedOutcome === "changed" ? "2026-08-27T12:00:00.000Z" : submittedAt;
+    await mockAuthority(page, workspaceId);
+    await page.route(`**/api/workspaces/*/leads/${leadId}/profile`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: leadProfileDetail({ leadId, companyId, stageId, stageUpdatedAt: submittedAt }) }),
+      }),
+    );
+    let stageChecks = 0,
+      mutations = 0,
+      submittedBody = "";
+    await page.route("**/api/workspaces/*/screen-form-options/selected?*", (route) => {
+      const url = new URL(route.request().url()),
+        optionKind = url.searchParams.get("optionKind"),
+        id = url.searchParams.get("id")!;
+      if (optionKind === "lead_stage" && stageChecks++ === 0)
+        return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+      const target = optionKind === "lead_stage"
+        ? { kind: "updated_at", updatedAt: url.searchParams.get("target")! }
+        : { kind: "version", version: Number(url.searchParams.get("target")) };
+      const currentTarget = optionKind === "lead_stage"
+        ? { kind: "updated_at", updatedAt: currentAt }
+        : target;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: {
+          contractVersion: "screen-form-selected-option.v1",
+          kind: "lead",
+          optionKind,
+          selected: {
+            submitted: { id, target },
+            outcome: optionKind === "lead_stage" ? selectedOutcome : "unchanged",
+            current: { id, label: optionKind === "lead_stage" ? "Not contacted" : "Analytical Engines", target: currentTarget },
+          },
+          requestId: randomUUID(),
+        } }),
+      });
+    });
+    await page.route("**/api/auth/csrf", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "csrf-test-token" }) }),
+    );
+    await page.route(`**/api/workspaces/*/leads/${leadId}/profile`, async (route) => {
+      if (route.request().method() === "GET") return route.fallback();
+      mutations += 1;
+      submittedBody = route.request().postData() ?? "";
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: { contractVersion: "screen-profile-result.v1", kind: "lead", recordId: leadId, version: 2, replayed: false, identityReview: { companyDimension: "resolved", contactDimension: "resolved" }, requestId: randomUUID() } }),
+      });
+    });
+
+    await page.goto(`/crm/leads/${leadId}/edit`);
+    const retry = page.getByRole("button", { name: "Retry checking status" });
+    await expect(retry).toBeFocused();
+    await page.getByLabel(/Job title/).fill("Mathematician");
+    const save = page.getByRole("button", { name: "Save Lead" });
+    await expect(save).toBeDisabled();
+    await expect(retry).toBeVisible();
+    expect(mutations).toBe(0);
+    await retry.click();
+    await expect(page.getByLabel(/Job title/)).toHaveValue("Mathematician");
+    if (selectedOutcome === "changed") {
+      await expect(save).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Use current status" })).toBeVisible();
+      expect(mutations).toBe(0);
+      await page.getByRole("button", { name: "Use current status" }).click();
+    }
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect.poll(() => mutations).toBe(1);
+    expect(JSON.parse(submittedBody).profile.stageUpdatedAt).toBe(currentAt);
+  });
+
+test("submit reconciliation failure focuses targeted retry and preserves the draft until changed-token confirmation", async ({ page }) => {
+  const workspaceId = await fixture(page),
+    leadId = randomUUID(),
+    companyId = randomUUID(),
+    stageId = randomUUID(),
+    submittedAt = "2026-08-26T12:00:00.000Z",
+    currentAt = "2026-08-27T12:00:00.000Z";
+  await mockAuthority(page, workspaceId);
+  await page.route(`**/api/workspaces/*/leads/${leadId}/profile`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: leadProfileDetail({ leadId, companyId, stageId, stageUpdatedAt: submittedAt }) }),
+    }),
+  );
+  let stageChecks = 0,
+    mutations = 0;
+  await page.route("**/api/workspaces/*/screen-form-options/selected?*", (route) => {
+    const url = new URL(route.request().url()),
+      optionKind = url.searchParams.get("optionKind"),
+      id = url.searchParams.get("id")!,
+      target = optionKind === "lead_stage"
+        ? { kind: "updated_at", updatedAt: url.searchParams.get("target")! }
+        : { kind: "version", version: Number(url.searchParams.get("target")) };
+    if (optionKind === "lead_stage" && stageChecks++ === 1)
+      return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+    const changed = optionKind === "lead_stage" && stageChecks > 2;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: {
+        contractVersion: "screen-form-selected-option.v1",
+        kind: "lead",
+        optionKind,
+        selected: {
+          submitted: { id, target },
+          outcome: changed ? "changed" : "unchanged",
+          current: {
+            id,
+            label: optionKind === "lead_stage" ? "Not contacted" : "Analytical Engines",
+            target: changed ? { kind: "updated_at", updatedAt: currentAt } : target,
+          },
+        },
+        requestId: randomUUID(),
+      } }),
+    });
+  });
+  await page.route("**/api/auth/csrf", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "csrf-test-token" }) }),
+  );
+  await page.route(`**/api/workspaces/*/leads/${leadId}/profile`, async (route) => {
+    if (route.request().method() === "GET") return route.fallback();
+    mutations += 1;
+    return route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: {
+          code: "selection_unavailable",
+          message: "Status changed.",
+          retryable: false,
+          reconciliation: { required: true, action: "refetch_bootstrap" },
+          fields: ["profile.stageId"],
+          selection: {
+            field: "profile.stageId",
+            optionKind: "lead_stage",
+            submitted: { id: stageId, target: { kind: "updated_at", updatedAt: submittedAt } },
+            outcome: "changed",
+            currentTarget: { kind: "updated_at", updatedAt: currentAt },
+          },
+          zeroPartialEffects: true,
+        },
+        requestId: randomUUID(),
+      }),
+    });
+  });
+
+  await page.goto(`/crm/leads/${leadId}/edit`);
+  const save = page.getByRole("button", { name: "Save Lead" });
+  await expect(save).toBeEnabled();
+  await page.getByLabel(/Job title/).fill("Mathematician");
+  await save.click();
+  await expect.poll(() => mutations).toBe(1);
+  const retry = page.getByRole("button", { name: "Retry checking status" });
+  await expect(retry).toBeFocused();
+  await expect(page.getByLabel(/Job title/)).toHaveValue("Mathematician");
+  await expect(save).toBeDisabled();
+  await retry.click();
+  await expect(page.locator("#stageId-status")).toBeFocused();
+  await expect(page.getByRole("button", { name: "Use current status" })).toBeVisible();
+  await page.getByRole("button", { name: "Use current status" }).click();
+  await expect(page.locator("#stageId")).toBeFocused();
+  await expect(save).toBeEnabled();
+  expect(mutations).toBe(1);
 });

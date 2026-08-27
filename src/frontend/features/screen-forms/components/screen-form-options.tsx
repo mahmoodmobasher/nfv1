@@ -99,8 +99,10 @@ export function OptionSelect({
   onAuthorityLoss,
   onCompanyCreated,
   canCreateCompany = false,
+  leadCompanyLayout = false,
   reconciliation,
   onReconciled,
+  onResolutionStateChange,
 }: {
   workspaceId: string;
   kind: ScreenKind;
@@ -114,8 +116,10 @@ export function OptionSelect({
   onAuthorityLoss: () => void;
   onCompanyCreated?: (replayed: boolean) => void;
   canCreateCompany?: boolean;
+  leadCompanyLayout?: boolean;
   reconciliation?: SelectionReconciliation;
   onReconciled?: () => void;
+  onResolutionStateChange?: (unresolved: boolean) => void;
 }) {
   const [query, setQuery] = useState(""),
     [items, setItems] = useState<Option[]>(initial ? [initial] : []),
@@ -126,9 +130,15 @@ export function OptionSelect({
     [loading, setLoading] = useState(false),
     [message, setMessage] = useState(""),
     [replacement, setReplacement] = useState<Option | null>(null),
-    select = useRef<HTMLSelectElement>(null);
+    [checkFailed, setCheckFailed] = useState(false),
+    select = useRef<HTMLSelectElement>(null),
+    status = useRef<HTMLParagraphElement>(null),
+    retry = useRef<HTMLButtonElement>(null),
+    initialCheckStarted = useRef(false);
   async function loadSelected(item: Pick<Option, "id" | "target">) {
     let authorityCleared = false;
+    onResolutionStateChange?.(true);
+    setCheckFailed(false);
     setLoading(true);
     const params = selectedOptionParams({
       kind,
@@ -167,7 +177,8 @@ export function OptionSelect({
         setSelectedIdentity(reconciled.selectedIdentity);
         setReplacement(reconciled.replacement);
         setMessage(`${label} is no longer available. Choose another option.`);
-        onReconciled?.();
+        onResolutionStateChange?.(false);
+        requestAnimationFrame(() => status.current?.focus());
         return;
       }
       setItems((current) => mergeOptions(current, [selected.current]));
@@ -175,12 +186,15 @@ export function OptionSelect({
         setSelectedIdentity(reconciled.selectedIdentity);
         setReplacement(reconciled.replacement);
         setMessage(`${label} is current.`);
+        onResolutionStateChange?.(false);
         onReconciled?.();
       } else {
         setReplacement(reconciled.replacement);
         setMessage(`${label} changed. Review and confirm the current option.`);
+        requestAnimationFrame(() => status.current?.focus());
       }
     } catch {
+      setCheckFailed(true);
       setMessage(
         "The selected option could not be checked. No selection was changed.",
       );
@@ -250,7 +264,10 @@ export function OptionSelect({
     void load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (kind === "lead" && initial) void loadSelected(initial);
+    if (kind === "lead" && initial && !initialCheckStarted.current) {
+      initialCheckStarted.current = true;
+      void loadSelected(initial);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (kind !== "lead" || !reconciliation) return;
@@ -258,31 +275,39 @@ export function OptionSelect({
       setSelectedIdentity("");
       setReplacement(null);
       setMessage(`${label} is no longer available. Choose another option.`);
-      onReconciled?.();
+      onResolutionStateChange?.(false);
+      requestAnimationFrame(() => status.current?.focus());
       return;
     }
     void loadSelected(reconciliation.submitted);
   }, [reconciliation]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (checkFailed) retry.current?.focus();
+  }, [checkFailed]);
   const selectedOption = items.find(
     (item) => optionIdentity(item) === selectedIdentity,
-  );
+    ),
+    retryItem = reconciliation?.submitted ?? initial ?? null;
   const companyRecovery = kind === "lead" && optionKind === "company" && !loading && items.length === 0;
   return (
-    <div className="screen-option-field">
-      <label className="field" htmlFor={`${id}-search`}>
-        <span>Search {label.toLowerCase()}</span>
-        <input
-          id={`${id}-search`}
-          type="search"
-          maxLength={100}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
-      <Button type="button" onClick={() => void load()} disabled={loading}>
-        {loading ? "Searching…" : "Search"}
-      </Button>
-      <label className="field" htmlFor={id}>
+    <div className={`screen-option-field${leadCompanyLayout ? " lead-company-option" : ""}`}>
+      <div className="screen-option-search">
+        <label className="field" htmlFor={`${id}-search`}>
+          <span>Search {label.toLowerCase()}</span>
+          <input
+            id={`${id}-search`}
+            type="search"
+            maxLength={100}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <Button type="button" onClick={() => void load()} disabled={loading}>
+          {loading ? "Searching…" : "Search"}
+        </Button>
+      </div>
+      <div className="screen-option-selection">
+        <label className="field" htmlFor={id}>
         <span>
           {label}
           {required ? (
@@ -297,11 +322,12 @@ export function OptionSelect({
           required={required}
           aria-required={required || undefined}
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-error` : undefined}
+          aria-describedby={[error ? `${id}-error` : "", message ? `${id}-status` : ""].filter(Boolean).join(" ") || undefined}
           value={selectedIdentity}
           onChange={(event) => {
             setSelectedIdentity(event.target.value);
             setReplacement(null);
+            onResolutionStateChange?.(false);
             if (event.target.value) onReconciled?.();
           }}
         >
@@ -324,8 +350,8 @@ export function OptionSelect({
             {error}
           </FieldMessage>
         )}
-      </label>
-      {companyRecovery && (
+        </label>
+        {companyRecovery && (
         <div className="company-empty-state" aria-describedby={`${id}-empty-copy ${id}-status`}>
           <h3>Create a Company first</h3>
           <p id={`${id}-empty-copy`}>
@@ -366,8 +392,8 @@ export function OptionSelect({
             Refresh companies
           </Button>
         </div>
-      )}
-      {cursor && (
+        )}
+        {cursor && (
         <Button
           type="button"
           onClick={() => void load(true)}
@@ -375,26 +401,39 @@ export function OptionSelect({
         >
           Load more
         </Button>
-      )}
-      {replacement && (
+        )}
+        {replacement && (
         <Button
           type="button"
           onClick={() => {
             setSelectedIdentity(optionIdentity(replacement));
             setReplacement(null);
             setMessage(`${label} was reconfirmed.`);
+            onResolutionStateChange?.(false);
             onReconciled?.();
             requestAnimationFrame(() => select.current?.focus());
           }}
         >
           Use current {label.toLowerCase()}
         </Button>
-      )}
-      {message && (
-        <p id={`${id}-status`} className="helper" role="status" aria-live="polite">
+        )}
+        {checkFailed && retryItem && (
+          <button
+            ref={retry}
+            className="ds-action ds-action--secondary"
+            type="button"
+            onClick={() => void loadSelected(retryItem)}
+            disabled={loading}
+          >
+            Retry checking {label.toLowerCase()}
+          </button>
+        )}
+        {message && (
+        <p ref={status} id={`${id}-status`} className="helper" role="status" aria-live="polite" tabIndex={-1}>
           {message}
         </p>
-      )}
+        )}
+      </div>
     </div>
   );
 }

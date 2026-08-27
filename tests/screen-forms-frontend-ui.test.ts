@@ -19,6 +19,7 @@ const leadOwner = readFileSync(
   "src/backend/modules/leads/application/orchestrators/screen-forms.owner.ts",
   "utf8",
 );
+const styles = readFileSync("src/app/globals.css", "utf8");
 
 describe("SCREEN-FORMS-01 frontend boundary", () => {
   it("canonicalizes selected authority locks by owner and ID before acquisition", () => {
@@ -157,6 +158,26 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
     );
     expect(options).toContain("Use current {label.toLowerCase()}");
     expect(options).toContain('setSelectedIdentity("")');
+  });
+
+  it("uses explicit Lead Company search and selection rows without changing other option fields", () => {
+    expect(form).toContain('className="form-grid lead-primary-grid"');
+    expect(form).toContain("leadCompanyLayout");
+    expect(options).toContain('className="screen-option-search"');
+    expect(options).toContain('className="screen-option-selection"');
+    expect(styles).toContain('grid-template-areas: "first last" "company-search job" "company-select salutation"');
+    expect(styles).toContain('grid-template-areas: "first" "last" "company-search" "company-select" "job" "salutation"');
+  });
+
+  it("blocks initial targeted reconciliation and exposes a truthful selected-endpoint retry", () => {
+    expect(options).toContain("onResolutionStateChange?.(true)");
+    expect(options).toContain("onResolutionStateChange?.(false)");
+    expect(options).toContain("Retry checking {label.toLowerCase()}");
+    expect(options).toContain("void loadSelected(retryItem)");
+    expect(options).toContain("if (checkFailed) retry.current?.focus()");
+    expect(options).toContain("initialCheckStarted.current = true");
+    expect(form).toContain("unresolvedOptions.size > 0");
+    expect(form).toContain('setOptionResolution("stageId", unresolved)');
   });
 
   it("gates protected mounting and clears state on authority loss", () => {

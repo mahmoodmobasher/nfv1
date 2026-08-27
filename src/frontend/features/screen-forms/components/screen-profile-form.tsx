@@ -437,6 +437,9 @@ export function ScreenProfileForm({
     [selectionConflict, setSelectionConflict] = useState<
       NonNullable<ScreenFormsErrorEnvelopeV1["error"]["selection"]> | null
     >(null),
+    [unresolvedOptions, setUnresolvedOptions] = useState<Set<string>>(
+      () => new Set(),
+    ),
     [result, setResult] = useState<ReturnType<
       typeof screenProfileResultV1Schema.parse
     > | null>(null),
@@ -459,6 +462,7 @@ export function ScreenProfileForm({
     setNotice("");
     setStale(false);
     setSelectionConflict(null);
+    setUnresolvedOptions(new Set());
     setResult(null);
     setNoteBody("");
     setNoteFailed(false);
@@ -706,6 +710,13 @@ export function ScreenProfileForm({
           : String(lead.categories.consent.value.promotionalEmailOptOut)
         : "";
   const described = (id: string) => (errors[id] ? `${id}-error` : undefined);
+  const setOptionResolution = (id: string, unresolved: boolean) =>
+    setUnresolvedOptions((current) => {
+      const next = new Set(current);
+      if (unresolved) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   async function refetchContactForNote(contactId: string) {
     try {
       const response = await fetch(
@@ -806,7 +817,9 @@ export function ScreenProfileForm({
     }
     const member = parseTarget(value(data, "responsibleMembershipId")),
       team = parseTarget(value(data, "responsibleTeamId")),
-      visible = selected(data, "visibleTeamIds").map(parseTarget),
+      visible = selected(data, "visibleTeamIds").map((entry) =>
+        parseTarget(entry),
+      ),
       assignment = {
         responsibleMembershipId: member.id || null,
         responsibleMembershipVersion: member.id ? Number(member.target) : null,
@@ -1134,6 +1147,7 @@ export function ScreenProfileForm({
                     optionKind="parent_company"
                     id="parentCompanyId"
                     label="Parent Company"
+                    onResolutionStateChange={(unresolved) => setOptionResolution("parentCompanyId", unresolved)}
                     initial={parentOption}
                     excludeRecordId={recordId}
                     error={errors.parentCompanyId}
@@ -1202,6 +1216,7 @@ export function ScreenProfileForm({
                     optionKind="company"
                     id="companyId"
                     label="Company"
+                    onResolutionStateChange={(unresolved) => setOptionResolution("companyId", unresolved)}
                     initial={companyOption}
                     error={errors.companyId}
                     onAuthorityLoss={clearProtectedState}
@@ -1320,7 +1335,7 @@ export function ScreenProfileForm({
             <>
               <section aria-labelledby="lead-essentials-heading">
                 <SectionHeading id="lead-essentials-heading" title="Primary Information" help="Start with the Lead’s identity and existing Company." />
-                <div className="form-grid">
+                <div className="form-grid lead-primary-grid">
                   <Input
                     id="firstName"
                     label="First name"
@@ -1344,6 +1359,7 @@ export function ScreenProfileForm({
                     id="companyId"
                     label="Company"
                     required
+                    onResolutionStateChange={(unresolved) => setOptionResolution("companyId", unresolved)}
                     initial={companyOption}
                     reconciliation={selectionConflict?.field === "profile.company" ? selectionConflict : undefined}
                     onReconciled={() => {
@@ -1357,6 +1373,7 @@ export function ScreenProfileForm({
                     error={errors.companyId}
                     onAuthorityLoss={clearProtectedState}
                     canCreateCompany={canCreateCompany}
+                    leadCompanyLayout
                     onCompanyCreated={() => {
                       quickCompanyCommittedRef.current = true;
                       setErrors((current) => {
@@ -1468,6 +1485,7 @@ export function ScreenProfileForm({
                     id="stageId"
                     label="Status"
                     required
+                    onResolutionStateChange={(unresolved) => setOptionResolution("stageId", unresolved)}
                     initial={stageOption}
                     reconciliation={selectionConflict?.field === "profile.stageId" ? selectionConflict : undefined}
                     onReconciled={() => {
@@ -1544,6 +1562,7 @@ export function ScreenProfileForm({
               optionKind="assignment_membership"
               id="responsibleMembershipId"
               label="Assigned owner"
+              onResolutionStateChange={(unresolved) => setOptionResolution("responsibleMembershipId", unresolved)}
               initial={membershipOption}
               reconciliation={selectionConflict?.field === "assignment.responsibleMembershipId" ? selectionConflict : undefined}
               onReconciled={() => {
@@ -1563,6 +1582,7 @@ export function ScreenProfileForm({
               optionKind="assignment_team"
               id="responsibleTeamId"
               label="Responsible Team"
+              onResolutionStateChange={(unresolved) => setOptionResolution("responsibleTeamId", unresolved)}
               initial={teamOption}
               reconciliation={selectionConflict?.field === "assignment.responsibleTeamId" ? selectionConflict : undefined}
               onReconciled={() => {
@@ -1643,7 +1663,7 @@ export function ScreenProfileForm({
             >
               Cancel
             </Link>
-             <Button variant="primary" disabled={busy || stale || selectionConflict !== null}>
+            <Button variant="primary" disabled={busy || stale || selectionConflict !== null || unresolvedOptions.size > 0}>
               {busy ? "Saving…" : `Save ${noun(kind)}`}
             </Button>
           </div>

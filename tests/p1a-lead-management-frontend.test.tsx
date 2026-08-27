@@ -1,4 +1,5 @@
 import React from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,6 +26,17 @@ const edit: LeadOperationalEditView = {
 };
 
 describe("P1A Lead management frontend", () => {
+  it("centers the shared native dialog and keeps Cancel first for stage movement", () => {
+    const component = readFileSync("src/frontend/features/leads/components/lead-management.tsx", "utf8"),
+      styles = readFileSync("src/frontend/design-system/components.css", "utf8");
+    expect(component).toContain('querySelector<HTMLElement>("[data-dialog-cancel]")');
+    expect(component.indexOf("data-dialog-cancel")).toBeLessThan(component.indexOf("Choose a target stage"));
+    expect(styles).toContain("position: fixed");
+    expect(styles).toContain("transform: translate(-50%,-50%)");
+    expect(styles).toContain("max-height: calc(100dvh - 32px)");
+    expect(styles).toContain("overscroll-behavior: contain");
+  });
+
   it("renders only the frozen operational fields in the dedicated editor", () => {
     const html = renderToStaticMarkup(<LeadOperationalEditForm workspaceId="70000000-0000-4000-8000-000000000071" initial={edit}/>);
     expect(html).toContain('id="responsibleMembershipId"');
