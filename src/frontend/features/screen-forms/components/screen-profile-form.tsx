@@ -41,7 +41,7 @@ const noun = (kind: ScreenKind) => kind[0].toUpperCase() + kind.slice(1);
 const endpoint = (workspaceId: string, suffix: string) =>
   `/api/workspaces/${workspaceId}/${suffix}`;
 function AssignmentSection({ kind, children }: { kind: ScreenKind; children: ReactNode }) {
-  const number = kind === "company" ? "03" : kind === "contact" ? "06" : "04";
+  const number = kind === "company" ? "04" : kind === "contact" ? "07" : "04";
   return <FormSection id="assignment-heading" number={number} title="Responsibility & visibility" description="Use only current server-authorized owners, Teams, and visibility." tone="access">{children}</FormSection>;
 }
 function ScreenFormActions({ children }: { children: ReactNode }) {
@@ -594,7 +594,7 @@ export function ScreenProfileForm({
         description={<p>Required fields are identified in text. Protected choices come only from current server authority.</p>}
       />
       <FormWorkbench label={`${editing ? "Edit" : "Add"} ${noun(kind)}`}>
-      <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-contact-heading",label:"Contact & address"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#address-heading",label:"Address"},{href:"#notes-heading",label:"Notes"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
+      <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-hierarchy-heading",label:"Hierarchy"},{href:"#company-contact-heading",label:"Contact & address"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#affiliation-heading",label:"Company affiliation"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#address-heading",label:"Address"},{href:"#notes-heading",label:"Notes"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
         <form
           className={`ds-form screen-profile-form${kind === "lead" ? " lead-profile-shell" : ""}`}
           noValidate
@@ -688,6 +688,10 @@ export function ScreenProfileForm({
                     <option>USD</option>
                     <option>CAD</option>
                   </Select>
+                </FormGrid>
+              </FormSection>
+              <FormSection id="company-hierarchy-heading" number="02" title="Company hierarchy" description="Place this Company within its current authorized parent relationship." tone="relationship">
+                <FormGrid>
                   <OptionSelect
                     workspaceId={workspaceId}
                     kind="company"
@@ -702,7 +706,7 @@ export function ScreenProfileForm({
                   />
                 </FormGrid>
               </FormSection>
-              <FormSection id="company-contact-heading" number="02" title="Contact & address" description="Add the organization’s current contact and mailing details." tone="relationship">
+              <FormSection id="company-contact-heading" number="03" title="Contact & address" description="Add the organization’s current contact and mailing details." tone="overview">
                 <FormGrid>
                   <Input
                     id="phone"
@@ -757,6 +761,10 @@ export function ScreenProfileForm({
                     defaultValue={contact?.base.department ?? ""}
                     data-error={errors.department}
                   />
+                </FormGrid>
+              </FormSection>
+              <FormSection id="affiliation-heading" number="02" title="Company affiliation" description="Connect this Contact to the current authorized Company relationship." tone="relationship">
+                <FormGrid>
                   <OptionSelect
                     workspaceId={workspaceId}
                     kind="contact"
@@ -785,7 +793,7 @@ export function ScreenProfileForm({
                   </Select>
                 </FormGrid>
               </FormSection>
-              <FormSection id="channels-heading" number="02" title="Contact channels" description="Add current ways to reach this Contact." tone="overview">
+              <FormSection id="channels-heading" number="03" title="Contact channels" description="Add current ways to reach this Contact." tone="overview">
                 <FormGrid>
                   <Input
                     id="primaryEmail"
@@ -831,7 +839,7 @@ export function ScreenProfileForm({
                   />
                 </FormGrid>
               </FormSection>
-              <FormSection id="lifecycle-heading" number="03" title="Lifecycle" description="Choose the Contact’s current lifecycle state before saving." tone="relationship">
+              <FormSection id="lifecycle-heading" number="04" title="Lifecycle" description="Choose the Contact’s current lifecycle state before saving." tone="overview">
                 <FormGrid>
                 <Select
                   id="lifecycleStage"
@@ -857,10 +865,10 @@ export function ScreenProfileForm({
                 </Select>
                 </FormGrid>
               </FormSection>
-              <FormSection id="address-heading" number="04" title="Address" description="Add the current business mailing address." tone="relationship">
+              <FormSection id="address-heading" number="05" title="Address" description="Add the current business mailing address." tone="overview">
                 <AddressFields errors={errors} defaults={addr ?? {}} embedded />
               </FormSection>
-              <FormSection id="notes-heading" number="05" title="Internal notes" description="Optionally record a separate Notes-owned entry after the Contact saves." tone="activity">
+              <FormSection id="notes-heading" number="06" title="Internal notes" description="Optionally record a separate Notes-owned entry after the Contact saves." tone="activity">
                 <label className="field" htmlFor="internalNote">
                   <span>
                     Add internal note <small>optional, separate save</small>
