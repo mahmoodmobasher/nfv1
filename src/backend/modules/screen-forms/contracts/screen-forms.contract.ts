@@ -276,9 +276,30 @@ export const screenFormBootstrapV1Schema = z
   })
   .strict();
 export const screenFormOptionKindV1Schema=z.enum(["company","parent_company","assignment_membership","assignment_team","lead_stage"]);
-export const screenFormOptionsQueryV1Schema=z.object({kind:z.enum(["company","contact","lead"]),optionKind:screenFormOptionKindV1Schema,query:z.string().trim().max(100).default(""),cursor:z.string().max(1024).optional(),limit:z.number().int().min(1).max(50).default(25),excludeRecordId:uuid.optional()}).strict().superRefine((value,context)=>{const allowed={company:["parent_company","assignment_membership","assignment_team"],contact:["company","assignment_membership","assignment_team"],lead:["company","assignment_membership","assignment_team","lead_stage"]} as const;if(!(allowed[value.kind] as readonly string[]).includes(value.optionKind))context.addIssue({code:"custom",message:"option_kind_not_available",path:["optionKind"]});if(value.excludeRecordId&&!(value.kind==="company"&&value.optionKind==="parent_company"))context.addIssue({code:"custom",message:"exclude_record_not_available",path:["excludeRecordId"]});});
 const optionTarget=z.discriminatedUnion("kind",[z.object({kind:z.literal("version"),version}).strict(),z.object({kind:z.literal("updated_at"),updatedAt:z.string().datetime({offset:true})}).strict()]);
-export const screenFormOptionsV1Schema=z.object({contractVersion:z.literal("screen-form-options.v1"),kind:z.enum(["company","contact","lead"]),optionKind:screenFormOptionKindV1Schema,items:z.array(z.object({id:uuid,label:clean(200),target:optionTarget}).strict()).max(50),nextCursor:z.string().max(1024).nullable(),requestId:uuid}).strict();
+const optionItem = z.object({id:uuid,label:clean(200),target:optionTarget}).strict();
+const sameOptionTarget = (left:z.infer<typeof optionTarget>,right:z.infer<typeof optionTarget>) =>
+  left.kind === right.kind && (left.kind === "version" ? left.version === (right as {kind:"version";version:number}).version : left.updatedAt === (right as {kind:"updated_at";updatedAt:string}).updatedAt);
+const optionKindAllowed = (kind:"company"|"contact"|"lead",optionKind:z.infer<typeof screenFormOptionKindV1Schema>) => {
+  const allowed={company:["parent_company","assignment_membership","assignment_team"],contact:["company","assignment_membership","assignment_team"],lead:["company","assignment_membership","assignment_team","lead_stage"]} as const;
+  return (allowed[kind] as readonly string[]).includes(optionKind);
+};
+const optionTargetAllowed = (optionKind:z.infer<typeof screenFormOptionKindV1Schema>,target:z.infer<typeof optionTarget>) =>
+  (optionKind === "lead_stage") === (target.kind === "updated_at");
+export const screenFormOptionsQueryV1Schema=z.object({kind:z.enum(["company","contact","lead"]),optionKind:screenFormOptionKindV1Schema,query:z.string().trim().max(100).default(""),cursor:z.string().max(1024).optional(),limit:z.number().int().min(1).max(50).default(25),excludeRecordId:uuid.optional()}).strict().superRefine((value,context)=>{if(!optionKindAllowed(value.kind,value.optionKind))context.addIssue({code:"custom",message:"option_kind_not_available",path:["optionKind"]});if(value.excludeRecordId&&!(value.kind==="company"&&value.optionKind==="parent_company"))context.addIssue({code:"custom",message:"exclude_record_not_available",path:["excludeRecordId"]});});
+const selectedOptionOutcome = z.discriminatedUnion("outcome",[
+  z.object({submitted:z.object({id:uuid,target:optionTarget}).strict(),outcome:z.literal("unchanged"),current:optionItem}).strict().superRefine((value,context)=>{if(value.current.id!==value.submitted.id||!sameOptionTarget(value.current.target,value.submitted.target))context.addIssue({code:"custom",message:"unchanged_selected_option_mismatch",path:["current"]});}),
+  z.object({submitted:z.object({id:uuid,target:optionTarget}).strict(),outcome:z.literal("changed"),current:optionItem}).strict().superRefine((value,context)=>{if(value.current.id!==value.submitted.id||sameOptionTarget(value.current.target,value.submitted.target))context.addIssue({code:"custom",message:"changed_selected_option_mismatch",path:["current"]});}),
+  z.object({submitted:z.object({id:uuid,target:optionTarget}).strict(),outcome:z.literal("unavailable")}).strict(),
+]);
+export const screenFormOptionsV1Schema=z.object({contractVersion:z.literal("screen-form-options.v1"),kind:z.enum(["company","contact","lead"]),optionKind:screenFormOptionKindV1Schema,items:z.array(optionItem).max(50),nextCursor:z.string().max(1024).nullable(),requestId:uuid}).strict();
+export const screenFormSelectedOptionQueryV1Schema=z.object({kind:z.enum(["company","contact","lead"]),optionKind:screenFormOptionKindV1Schema,id:uuid,target:optionTarget,excludeRecordId:uuid.optional()}).strict().superRefine((value,context)=>{if(!optionKindAllowed(value.kind,value.optionKind))context.addIssue({code:"custom",message:"option_kind_not_available",path:["optionKind"]});if(!optionTargetAllowed(value.optionKind,value.target))context.addIssue({code:"custom",message:"option_target_kind_mismatch",path:["target"]});if(value.excludeRecordId&&!(value.kind==="company"&&value.optionKind==="parent_company"))context.addIssue({code:"custom",message:"exclude_record_not_available",path:["excludeRecordId"]});});
+export const screenFormSelectedOptionV1Schema=z.object({contractVersion:z.literal("screen-form-selected-option.v1"),kind:z.enum(["company","contact","lead"]),optionKind:screenFormOptionKindV1Schema,selected:selectedOptionOutcome,requestId:uuid}).strict().superRefine((value,context)=>{if(!optionKindAllowed(value.kind,value.optionKind))context.addIssue({code:"custom",message:"option_kind_not_available",path:["optionKind"]});if(!optionTargetAllowed(value.optionKind,value.selected.submitted.target))context.addIssue({code:"custom",message:"option_target_kind_mismatch",path:["selected","submitted","target"]});});
+export const screenFormSelectionFieldV1Schema=z.enum(["profile.company","profile.parentCompanyId","profile.stageId","assignment.responsibleMembershipId","assignment.responsibleTeamId","assignment.visibleTeamIds"]);
+const selectionConflict = z.discriminatedUnion("outcome",[
+  z.object({field:screenFormSelectionFieldV1Schema,optionKind:screenFormOptionKindV1Schema,submitted:z.object({id:uuid,target:optionTarget}).strict(),outcome:z.literal("changed"),currentTarget:optionTarget}).strict().superRefine((value,context)=>{if(sameOptionTarget(value.submitted.target,value.currentTarget))context.addIssue({code:"custom",message:"changed_selection_target_must_differ",path:["currentTarget"]});}),
+  z.object({field:screenFormSelectionFieldV1Schema,optionKind:screenFormOptionKindV1Schema,submitted:z.object({id:uuid,target:optionTarget}).strict(),outcome:z.literal("unavailable")}).strict(),
+]);
 const detailBase = {
   contractVersion: z.literal("screen-profile-detail.v1"),
   recordId: uuid,
@@ -335,7 +356,7 @@ export const screenProfileDetailV1Schema = z.discriminatedUnion("kind", [
     .object({
       ...detailBase,
       kind: z.literal("lead"),
-      base:z.object({salutation:nullable(20),firstName:clean(100),lastName:clean(100),jobTitle:nullable(160),source:z.enum(["website","referral","outbound","event","partner","social_media","import","manual","other"]),sourcePlatform:leadSourcePlatformV2Schema.nullable(),stageId:uuid,rating:z.enum(["hot","warm","cold"]).nullable(),industry:nullable(120),employeeCount:z.number().int().min(0).max(2147483647).nullable()}).strict(),
+      base:z.object({salutation:nullable(20),firstName:clean(100),lastName:clean(100),jobTitle:nullable(160),source:z.enum(["website","referral","outbound","event","partner","social_media","import","manual","other"]),sourcePlatform:leadSourcePlatformV2Schema.nullable(),stageId:uuid,stageUpdatedAt:z.string().datetime({offset:true}),rating:z.enum(["hot","warm","cold"]).nullable(),industry:nullable(120),employeeCount:z.number().int().min(0).max(2147483647).nullable()}).strict(),
       identityReview:z.object({companyDimension:z.literal("resolved"),contactDimension:z.enum(["resolved","pending"])}).strict(),
       categories:z.object({channels:z.union([full(leadChannels),masked(maskedLeadChannels),withheld]),address:z.union([full(addressValue),masked(maskedAddress),withheld]),revenue:revenueEnvelope,consent:z.union([full(z.object({promotionalEmailOptOut:z.boolean(),recordedAt:z.string().datetime({offset:true}),source:z.enum(["manual","import","integration"])}).strict().nullable()),masked(z.object({display:maskedText}).strict()),withheld]),hierarchy:z.union([full(leadHierarchy),masked(maskedHierarchy),withheld])}).strict(),
       assignment:assignmentEnvelope,
@@ -394,6 +415,7 @@ export const screenFormsErrorEnvelopeV1Schema = z
           })
           .strict(),
         fields: z.array(z.string().max(80)).max(32).optional(),
+        selection: selectionConflict.optional(),
         zeroPartialEffects: z.literal(true),
       })
       .strict(),
@@ -425,6 +447,18 @@ export const screenFormsErrorEnvelopeV1Schema = z
         message: "invalid_screen_form_reconciliation",
         path: ["error"],
       });
+    if (value.error.code === "selection_unavailable") {
+      if (!value.error.selection || !value.error.fields?.includes(value.error.selection.field))
+        context.addIssue({code:"custom",message:"selection_reconciliation_required",path:["error","selection"]});
+      if (value.error.selection) {
+        const expectedOptionKind = {"profile.company":"company","profile.parentCompanyId":"parent_company","profile.stageId":"lead_stage","assignment.responsibleMembershipId":"assignment_membership","assignment.responsibleTeamId":"assignment_team","assignment.visibleTeamIds":"assignment_team"} as const;
+        if (value.error.selection.optionKind !== expectedOptionKind[value.error.selection.field]) context.addIssue({code:"custom",message:"selection_field_kind_mismatch",path:["error","selection","optionKind"]});
+        if (!optionTargetAllowed(value.error.selection.optionKind,value.error.selection.submitted.target)) context.addIssue({code:"custom",message:"option_target_kind_mismatch",path:["error","selection","submitted","target"]});
+        if (value.error.selection.outcome === "changed" && value.error.selection.currentTarget.kind !== value.error.selection.submitted.target.kind) context.addIssue({code:"custom",message:"changed_selection_target_kind_mismatch",path:["error","selection","currentTarget"]});
+      }
+    } else if (value.error.selection) {
+      context.addIssue({code:"custom",message:"selection_reconciliation_not_available",path:["error","selection"]});
+    }
   });
 
 export type CompanyScreenCreateCommandV2 = z.infer<
@@ -446,3 +480,7 @@ export type LeadScreenEditCommandV2 = z.infer<
   typeof leadScreenEditCommandV2Schema
 >;
 export type ScreenFormOptionsQueryV1 = z.infer<typeof screenFormOptionsQueryV1Schema>;
+export type ScreenFormOptionsV1 = z.infer<typeof screenFormOptionsV1Schema>;
+export type ScreenFormSelectedOptionQueryV1 = z.infer<typeof screenFormSelectedOptionQueryV1Schema>;
+export type ScreenFormSelectedOptionV1 = z.infer<typeof screenFormSelectedOptionV1Schema>;
+export type ScreenFormsErrorEnvelopeV1 = z.infer<typeof screenFormsErrorEnvelopeV1Schema>;

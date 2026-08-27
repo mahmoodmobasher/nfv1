@@ -5,6 +5,8 @@ import {
   revalidateActiveActor,
   workspaceAuthorityParticipant,
   listAuthorityScreenOptions,
+  readAuthorityScreenOptionTarget,
+  readAuthorityScreenOption,
   assertScreenAssignmentTargetVersions,
   readLeadScreenAssignmentFacts,
   type TrustedActor,
@@ -20,20 +22,27 @@ import {
   evaluateAndLockScreenContactCandidates,
   getCustomerGraphScreenProfileV1,
   listCustomerGraphScreenOptions,
+  readCustomerGraphScreenCompanyOption,
   lockExplicitScreenCompany,
 } from "@/backend/modules/customer-graph";
 import { identityReviewTransactionParticipant } from "@/backend/modules/identity-review";
 import { writeLeadScreenAudit } from "@/backend/platform/audit";
 import { writeLeadScreenEvent } from "@/backend/platform/outbox";
-import { listLeadStageScreenOptions } from "../queries/screen-form-options.participant";
+import {
+  listLeadStageScreenOptions,
+  readLeadStageScreenOption,
+  readLeadStageScreenOptionTarget,
+} from "../queries/screen-form-options.participant";
 import {
   screenFormBootstrapV1Schema,
   screenProfileDetailV1Schema,
   screenProfileResultV1Schema,
   screenFormOptionsV1Schema,
+  screenFormSelectedOptionV1Schema,
   type LeadScreenCreateCommandV2,
   type LeadScreenEditCommandV2,
   type ScreenFormOptionsQueryV1,
+  type ScreenFormSelectedOptionQueryV1,
 } from "@/backend/modules/screen-forms/contracts/screen-forms.contract";
 
 type Kind = "company" | "contact" | "lead";
@@ -42,6 +51,159 @@ const manager = (actor: TrustedActor) =>
 const fail = (code: string, status: number): never => {
   throw Object.assign(new Error(code), { code, status });
 };
+type OptionTarget =
+  | { kind: "version"; version: number }
+  | { kind: "updated_at"; updatedAt: string };
+function selectionFailure(input: {
+  field: string;
+  optionKind: "company" | "lead_stage" | "assignment_membership" | "assignment_team";
+  id: string;
+  submittedTarget: OptionTarget;
+  currentTarget: OptionTarget | null;
+}): never {
+  const outcome = input.currentTarget ? "changed" : "unavailable";
+  throw Object.assign(new Error("selection_unavailable"), {
+    code: "selection_unavailable",
+    status: 409,
+    fields: [input.field],
+    selection: {
+      field: input.field,
+      optionKind: input.optionKind,
+      submitted: { id: input.id, target: input.submittedTarget },
+      outcome,
+      ...(input.currentTarget ? { currentTarget: input.currentTarget } : {}),
+    },
+  });
+}
+const sameTarget = (left: OptionTarget, right: OptionTarget) =>
+  left.kind === right.kind &&
+  (left.kind === "version"
+    ? right.kind === "version" && left.version === right.version
+    : right.kind === "updated_at" && left.updatedAt === right.updatedAt);
+
+async function reconcileLeadSelections(
+  tx: PoolClient,
+  actor: TrustedActor,
+  command: LeadScreenCreateCommandV2 | LeadScreenEditCommandV2,
+) {
+  const company = await readCustomerGraphScreenCompanyOption(
+    tx,
+    actor,
+    command.profile.company.companyId,
+  );
+  const companyTarget = {
+    kind: "version" as const,
+    version: command.profile.company.companyVersion,
+  };
+  if (!company || !sameTarget(companyTarget, company.target))
+    selectionFailure({
+      field: "profile.company",
+      optionKind: "company",
+      id: command.profile.company.companyId,
+      submittedTarget: companyTarget,
+      currentTarget: company?.target ?? null,
+    });
+
+  const stageTarget = {
+      kind: "updated_at" as const,
+      updatedAt: command.profile.stageUpdatedAt,
+    },
+    currentStageTarget = await readLeadStageScreenOptionTarget(
+      tx,
+      actor,
+      command.profile.stageId,
+    );
+  if (!currentStageTarget || !sameTarget(stageTarget, currentStageTarget))
+    selectionFailure({
+      field: "profile.stageId",
+      optionKind: "lead_stage",
+      id: command.profile.stageId,
+      submittedTarget: stageTarget,
+      currentTarget: currentStageTarget,
+    });
+
+  const assignmentTargets: Array<{
+    field: string;
+    optionKind: "assignment_membership" | "assignment_team";
+    id: string;
+    target: OptionTarget;
+  }> = [
+    ...(command.assignment.responsibleMembershipId &&
+    command.assignment.responsibleMembershipVersion !== null
+      ? [{
+      field: "assignment.responsibleMembershipId",
+      optionKind: "assignment_membership" as const,
+      id: command.assignment.responsibleMembershipId,
+      target: {
+        kind: "version" as const,
+        version: command.assignment.responsibleMembershipVersion,
+      },
+    }]
+      : []),
+    ...(command.assignment.responsibleTeamId &&
+    command.assignment.responsibleTeamVersion !== null
+      ? [{
+      field: "assignment.responsibleTeamId",
+      optionKind: "assignment_team" as const,
+      id: command.assignment.responsibleTeamId,
+      target: {
+        kind: "version" as const,
+        version: command.assignment.responsibleTeamVersion,
+      },
+    }]
+      : []),
+    ...command.assignment.visibleTeamIds.map((id) => ({
+      field: "assignment.visibleTeamIds",
+      optionKind: "assignment_team" as const,
+      id,
+      target: {
+        kind: "version" as const,
+        version: command.assignment.visibleTeamVersions[id],
+      },
+    })),
+  ];
+  const lockGroups = new Map<
+    string,
+    {
+      optionKind: "assignment_membership" | "assignment_team";
+      id: string;
+      selections: typeof assignmentTargets;
+    }
+  >();
+  for (const selected of assignmentTargets) {
+    const key = `${selected.optionKind}:${selected.id}`,
+      group = lockGroups.get(key);
+    if (group) group.selections.push(selected);
+    else
+      lockGroups.set(key, {
+        optionKind: selected.optionKind,
+        id: selected.id,
+        selections: [selected],
+      });
+  }
+  const orderedGroups = [...lockGroups.values()].sort(
+    (left, right) =>
+      left.optionKind.localeCompare(right.optionKind) ||
+      left.id.localeCompare(right.id),
+  );
+  for (const group of orderedGroups) {
+    const currentTarget = await readAuthorityScreenOptionTarget(tx, actor, {
+      optionKind: group.optionKind,
+      id: group.id,
+    });
+    for (const selected of [...group.selections].sort((left, right) =>
+      left.field.localeCompare(right.field),
+    ))
+      if (!currentTarget || !sameTarget(selected.target, currentTarget))
+        selectionFailure({
+          field: selected.field,
+          optionKind: selected.optionKind,
+          id: selected.id,
+          submittedTarget: selected.target,
+          currentTarget,
+        });
+  }
+}
 const normalize = (value: string) =>
   value.trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
 const phone = (value: string | null) =>
@@ -151,6 +313,53 @@ export async function listScreenFormOptionsV1(
               id: last.id,
             })
           : null,
+      requestId,
+    });
+  });
+}
+
+export async function getScreenFormSelectedOptionV1(
+  pool: Pool,
+  actor: TrustedActor,
+  query: ScreenFormSelectedOptionQueryV1,
+  requestId: string,
+) {
+  return runModuleTransaction(pool, async (tx) => {
+    const current = await lookupActiveActor(tx, actor);
+    if (!manager(current) || query.kind !== "lead")
+      fail("resource_not_found", 404);
+    const selected =
+      query.optionKind === "company"
+        ? await readCustomerGraphScreenCompanyOption(tx, current, query.id)
+        : query.optionKind === "lead_stage"
+          ? await readLeadStageScreenOption(tx, current, query.id)
+          : query.optionKind === "assignment_membership" ||
+              query.optionKind === "assignment_team"
+            ? await readAuthorityScreenOption(tx, current, {
+                optionKind: query.optionKind,
+                id: query.id,
+              })
+            : null;
+    const finalActor = await revalidateActiveActor(tx, current);
+    if (!manager(finalActor)) fail("resource_not_found", 404);
+    const outcome = !selected
+      ? { submitted: { id: query.id, target: query.target }, outcome: "unavailable" as const }
+      : sameTarget(query.target, selected.target)
+        ? {
+            submitted: { id: query.id, target: query.target },
+            outcome: "unchanged" as const,
+            current: selected,
+          }
+        : {
+            submitted: { id: query.id, target: query.target },
+            outcome: "changed" as const,
+            current: selected,
+          };
+    return screenFormSelectedOptionV1Schema.parse({
+      contractVersion: "screen-form-selected-option.v1",
+      kind: query.kind,
+      optionKind: query.optionKind,
+      selected: outcome,
       requestId,
     });
   });
@@ -339,6 +548,7 @@ export async function getScreenProfileV1(
         source: fresh.source,
         sourcePlatform: fresh.source_platform ?? null,
         stageId: fresh.stage_id,
+        stageUpdatedAt: new Date(stage.updatedAt).toISOString(),
         rating: fresh.rating ?? null,
         industry: fresh.industry ?? null,
         employeeCount: fresh.employee_count ?? null,
@@ -437,8 +647,9 @@ export async function createLeadScreenV2(
       input.key,
       input.command,
       async (operationId) => {
-        const p = input.command.profile,
-          teams = await assignment(tx, actor, input.command.assignment),
+        const p = input.command.profile;
+        await reconcileLeadSelections(tx, actor, input.command);
+        const teams = await assignment(tx, actor, input.command.assignment),
           company = await lockExplicitScreenCompany(tx, actor, {
             companyId: p.company.companyId,
             expectedVersion: p.company.companyVersion,
@@ -458,11 +669,7 @@ export async function createLeadScreenV2(
               [actor.workspaceId, p.stageId],
             )
           ).rows[0];
-        if (
-          !stage ||
-          new Date(stage.updatedAt).toISOString() !== p.stageUpdatedAt
-        )
-          fail("selection_unavailable", 409);
+        if (!stage) fail("authority_conflict", 409);
         const revenue = p.annualRevenue
             ? [p.annualRevenue.amountMinor, p.annualRevenue.currencyCode, 2]
             : [null, null, null],
@@ -624,7 +831,17 @@ export async function editLeadScreenV2(
         if (old.version !== input.command.expectedVersion)
           fail("stale_version", 409);
         if (old.companyId !== p.company.companyId)
-          fail("selection_unavailable", 409);
+          selectionFailure({
+            field: "profile.company",
+            optionKind: "company",
+            id: p.company.companyId,
+            submittedTarget: {
+              kind: "version",
+              version: p.company.companyVersion,
+            },
+            currentTarget: null,
+          });
+        await reconcileLeadSelections(tx, actor, input.command);
         const teams = await assignment(tx, actor, input.command.assignment),
           company = await lockExplicitScreenCompany(tx, actor, {
             companyId: p.company.companyId,
@@ -637,12 +854,7 @@ export async function editLeadScreenV2(
               [actor.workspaceId, p.stageId],
             )
           ).rows[0];
-        if (
-          !company ||
-          !stage ||
-          new Date(stage.updatedAt).toISOString() !== p.stageUpdatedAt
-        )
-          fail("selection_unavailable", 409);
+        if (!company || !stage) fail("authority_conflict", 409);
         const revenue = p.annualRevenue
             ? [p.annualRevenue.amountMinor, p.annualRevenue.currencyCode, 2]
             : [null, null, null],

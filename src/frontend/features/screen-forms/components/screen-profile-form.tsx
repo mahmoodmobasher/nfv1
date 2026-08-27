@@ -23,6 +23,7 @@ import {
   screenFormsErrorEnvelopeV1Schema,
   screenProfileDetailV1Schema,
   screenProfileResultV1Schema,
+  type ScreenFormsErrorEnvelopeV1,
 } from "../contracts/screen-forms.contracts";
 import {
   CONTACT_INTERNAL_NOTE_ADD_V1,
@@ -101,6 +102,7 @@ function fieldId(path: string) {
         companyVersion: "companyId",
         parentCompanyVersion: "parentCompanyId",
         stageUpdatedAt: "stageId",
+        company: "companyId",
         sourcePlatform: "sourcePlatform",
       } as Record<string, string>
     )[last] ?? last
@@ -432,6 +434,9 @@ export function ScreenProfileForm({
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
     [stale, setStale] = useState(false),
+    [selectionConflict, setSelectionConflict] = useState<
+      NonNullable<ScreenFormsErrorEnvelopeV1["error"]["selection"]> | null
+    >(null),
     [result, setResult] = useState<ReturnType<
       typeof screenProfileResultV1Schema.parse
     > | null>(null),
@@ -453,6 +458,7 @@ export function ScreenProfileForm({
     setErrors({});
     setNotice("");
     setStale(false);
+    setSelectionConflict(null);
     setResult(null);
     setNoteBody("");
     setNoteFailed(false);
@@ -683,6 +689,16 @@ export function ScreenProfileForm({
       label: "Current authorized Team",
       target: { kind: "version" as const, version: item.version },
     })),
+    stageOption = lead
+      ? {
+          id: lead.base.stageId,
+          label: "Current status",
+          target: {
+            kind: "updated_at" as const,
+            updatedAt: lead.base.stageUpdatedAt,
+          },
+        }
+      : null,
     consentValue =
       lead && lead.categories.consent.disclosure === "full"
         ? lead.categories.consent.value === null
@@ -956,9 +972,14 @@ export function ScreenProfileForm({
           return;
         }
         if (error.reconciliation.action === "refetch_bootstrap") {
-          setStale(true);
+          if (!error.selection) throw new Error();
+          setSelectionConflict(error.selection);
+          const affected = fieldId(error.selection.field);
+          setErrors({ [affected]: error.message });
           setNotice(
-            "A selected option changed. Reload current options and reconfirm your choices.",
+            error.selection.outcome === "changed"
+              ? "A selected option changed. Review and reconfirm only the highlighted field."
+              : "A selected option is unavailable. Choose a replacement for the highlighted field.",
           );
           return;
         }
@@ -1324,6 +1345,15 @@ export function ScreenProfileForm({
                     label="Company"
                     required
                     initial={companyOption}
+                    reconciliation={selectionConflict?.field === "profile.company" ? selectionConflict : undefined}
+                    onReconciled={() => {
+                      setSelectionConflict(null);
+                      setErrors((current) => {
+                        const next = { ...current };
+                        delete next.companyId;
+                        return next;
+                      });
+                    }}
                     error={errors.companyId}
                     onAuthorityLoss={clearProtectedState}
                     canCreateCompany={canCreateCompany}
@@ -1438,7 +1468,16 @@ export function ScreenProfileForm({
                     id="stageId"
                     label="Status"
                     required
-                    initialId={lead?.base.stageId}
+                    initial={stageOption}
+                    reconciliation={selectionConflict?.field === "profile.stageId" ? selectionConflict : undefined}
+                    onReconciled={() => {
+                      setSelectionConflict(null);
+                      setErrors((current) => {
+                        const next = { ...current };
+                        delete next.stageId;
+                        return next;
+                      });
+                    }}
                     error={errors.stageId}
                     onAuthorityLoss={clearProtectedState}
                   />
@@ -1506,6 +1545,15 @@ export function ScreenProfileForm({
               id="responsibleMembershipId"
               label="Assigned owner"
               initial={membershipOption}
+              reconciliation={selectionConflict?.field === "assignment.responsibleMembershipId" ? selectionConflict : undefined}
+              onReconciled={() => {
+                setSelectionConflict(null);
+                setErrors((current) => {
+                  const next = { ...current };
+                  delete next.responsibleMembershipId;
+                  return next;
+                });
+              }}
               error={errors.responsibleMembershipId}
               onAuthorityLoss={clearProtectedState}
             />
@@ -1516,6 +1564,15 @@ export function ScreenProfileForm({
               id="responsibleTeamId"
               label="Responsible Team"
               initial={teamOption}
+              reconciliation={selectionConflict?.field === "assignment.responsibleTeamId" ? selectionConflict : undefined}
+              onReconciled={() => {
+                setSelectionConflict(null);
+                setErrors((current) => {
+                  const next = { ...current };
+                  delete next.responsibleTeamId;
+                  return next;
+                });
+              }}
               error={errors.responsibleTeamId}
               onAuthorityLoss={clearProtectedState}
             />
@@ -1557,6 +1614,15 @@ export function ScreenProfileForm({
               workspaceId={workspaceId}
               kind={kind}
               initial={visibleTeamOptions}
+              reconciliation={selectionConflict?.field === "assignment.visibleTeamIds" ? selectionConflict : undefined}
+              onReconciled={() => {
+                setSelectionConflict(null);
+                setErrors((current) => {
+                  const next = { ...current };
+                  delete next.visibleTeamIds;
+                  return next;
+                });
+              }}
               error={errors.visibleTeamIds}
               onAuthorityLoss={clearProtectedState}
             />
@@ -1577,7 +1643,7 @@ export function ScreenProfileForm({
             >
               Cancel
             </Link>
-            <Button variant="primary" disabled={busy || stale}>
+             <Button variant="primary" disabled={busy || stale || selectionConflict !== null}>
               {busy ? "Saving…" : `Save ${noun(kind)}`}
             </Button>
           </div>

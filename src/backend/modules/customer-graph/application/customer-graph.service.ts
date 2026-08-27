@@ -1399,6 +1399,26 @@ export async function listCustomerGraphScreenOptions(
   }));
 }
 
+export async function readCustomerGraphScreenCompanyOption(
+  tx: PoolClient,
+  actor: TrustedActor,
+  companyId: string,
+) {
+  const row = (
+    await tx.query<{ id: string; label: string; version: number }>(
+      `select id,display_name label,version from companies where workspace_id=$1 and id=$2 and status='active' for no key update`,
+      [actor.workspaceId, companyId],
+    )
+  ).rows[0];
+  return row
+    ? {
+        id: row.id,
+        label: row.label,
+        target: { kind: "version" as const, version: row.version },
+      }
+    : null;
+}
+
 export async function lockExplicitScreenCompany(
   tx: PoolClient,
   actor: TrustedActor,

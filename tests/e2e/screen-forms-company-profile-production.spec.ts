@@ -124,6 +124,26 @@ test("the production bundle returns strict Company and Contact screen results an
   });
   expect(leadReplay.status()).toBe(201);
   expect((await leadReplay.json()).data).toMatchObject({ recordId: leadResult.recordId, version: 1, replayed: true });
+  const selectedStageQuery = new URLSearchParams({
+    kind: "lead",
+    optionKind: "lead_stage",
+    id: stage.id,
+    targetKind: "updated_at",
+    target: new Date(stage.updatedAt).toISOString(),
+  });
+  const selectedStage = await request.get(
+    `/api/workspaces/${workspace.id}/screen-form-options/selected?${selectedStageQuery}`,
+    { headers: { cookie } },
+  );
+  expect(selectedStage.status()).toBe(200);
+  expect((await selectedStage.json()).data).toMatchObject({
+    contractVersion: "screen-form-selected-option.v1",
+    kind: "lead",
+    optionKind: "lead_stage",
+    selected: { outcome: "unchanged", submitted: { id: stage.id }, current: { id: stage.id } },
+  });
+  expect(selectedStage.headers()["cache-control"]).toContain("private, no-store");
+  expect(selectedStage.headers().vary?.toLowerCase()).toContain("cookie");
   const attribution = (await database.query(
     `select l.original_source_platform "leadPlatform",i.source_platform "intakePlatform"
      from leads l join lead_intakes i on i.workspace_id=l.workspace_id and i.lead_id=l.id

@@ -28,7 +28,7 @@ export type { LeadDetailViewV1, LeadSummariesViewV1, LeadSummaryFiltersV1,
 export { parsePersonPhoneV2, optionalPersonPhoneV2, PersonPhoneValidationError,
   PHONE_NORMALIZATION_VERSION } from "./domain/person-phone.domain";
 export {listLeadStageScreenOptions} from "./application/queries/screen-form-options.participant";
-export {getScreenFormBootstrapV1,listScreenFormOptionsV1,getScreenProfileV1,createLeadScreenV2,editLeadScreenV2} from "./application/orchestrators/screen-forms.owner";
+export {getScreenFormBootstrapV1,listScreenFormOptionsV1,getScreenFormSelectedOptionV1,getScreenProfileV1,createLeadScreenV2,editLeadScreenV2} from "./application/orchestrators/screen-forms.owner";
 
 export { LEAD_CONVERSION_PREVIEW_QUERY, LEAD_CONVERT_TO_DEAL_OPERATION, LeadConversionError,
   leadConvertToDealCommandV1Schema, leadConversionPreviewV1Schema, leadConversionResultV1Schema,

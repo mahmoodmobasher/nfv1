@@ -4,9 +4,11 @@ import {
   contactScreenCreateCommandV2Schema,
   leadScreenCreateCommandV2Schema,
   screenFormBootstrapV1Schema,
+  screenFormSelectedOptionQueryV1Schema,
+  screenFormSelectedOptionV1Schema,
   screenFormsErrorEnvelopeV1Schema,
   screenProfileResultV1Schema,
-} from "../src/backend/modules/screen-forms";
+} from "../src/backend/modules/screen-forms/contracts/screen-forms.contract";
 
 const id = () => crypto.randomUUID();
 const address = { street: null, city: null, stateProvince: null, postalCode: null, country: null };
@@ -199,5 +201,26 @@ describe("SCREEN-FORMS-01 strict transport", () => {
       ...failure,
       error: { ...failure.error, zeroPartialEffects: false },
     }).success).toBe(false);
+  });
+
+  it("reconciles one selected option independently of the search page and label", () => {
+    const stageId=id(), submitted={id:stageId,target:{kind:"updated_at" as const,updatedAt:"2026-08-26T12:00:00.000Z"}};
+    expect(screenFormSelectedOptionQueryV1Schema.parse({kind:"lead",optionKind:"lead_stage",...submitted})).toEqual({kind:"lead",optionKind:"lead_stage",...submitted});
+    const unchanged={contractVersion:"screen-form-selected-option.v1" as const,kind:"lead" as const,optionKind:"lead_stage" as const,selected:{submitted,outcome:"unchanged" as const,current:{id:stageId,label:"Replacement label",target:submitted.target}},requestId:id()};
+    expect(screenFormSelectedOptionV1Schema.parse(unchanged)).toEqual(unchanged);
+    expect(screenFormSelectedOptionV1Schema.safeParse({...unchanged,selected:{...unchanged.selected,current:{...unchanged.selected.current,target:{kind:"updated_at",updatedAt:"2026-08-26T12:01:00.000Z"}}}}).success).toBe(false);
+    expect(screenFormSelectedOptionQueryV1Schema.safeParse({kind:"lead",optionKind:"lead_stage",id:stageId,target:{kind:"version",version:1}}).success).toBe(false);
+  });
+
+  it("requires field-specific changed or unavailable selection reconciliation", () => {
+    const submitted={id:id(),target:{kind:"version" as const,version:1}};
+    const base={error:{code:"selection_unavailable" as const,message:"The selected Company changed.",retryable:false,reconciliation:{required:true,action:"refetch_bootstrap" as const},fields:["profile.company"],zeroPartialEffects:true as const},requestId:id()};
+    const changed={...base,error:{...base.error,selection:{field:"profile.company" as const,optionKind:"company" as const,submitted,outcome:"changed" as const,currentTarget:{kind:"version" as const,version:2}}}};
+    expect(screenFormsErrorEnvelopeV1Schema.parse(changed)).toEqual(changed);
+    const unavailable={...base,error:{...base.error,selection:{field:"profile.company" as const,optionKind:"company" as const,submitted,outcome:"unavailable" as const}}};
+    expect(screenFormsErrorEnvelopeV1Schema.parse(unavailable)).toEqual(unavailable);
+    expect(screenFormsErrorEnvelopeV1Schema.safeParse(base).success).toBe(false);
+    expect(screenFormsErrorEnvelopeV1Schema.safeParse({...unavailable,error:{...unavailable.error,selection:{...unavailable.error.selection,currentTarget:{kind:"version",version:2}}}}).success).toBe(false);
+    expect(screenFormsErrorEnvelopeV1Schema.safeParse({...changed,error:{...changed.error,fields:["profile.stageId"]}}).success).toBe(false);
   });
 });

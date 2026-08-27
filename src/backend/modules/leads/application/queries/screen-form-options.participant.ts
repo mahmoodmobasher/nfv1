@@ -31,3 +31,45 @@ export async function listLeadStageScreenOptions(
     },
   }));
 }
+
+export async function readLeadStageScreenOptionTarget(
+  tx: PoolClient,
+  actor: TrustedActor,
+  stageId: string,
+) {
+  const row = (
+    await tx.query<{ updatedAt: string }>(
+      `select updated_at::text "updatedAt" from pipeline_stages where workspace_id=$1 and id=$2 and status='active' for no key update`,
+      [actor.workspaceId, stageId],
+    )
+  ).rows[0];
+  return row
+    ? {
+        kind: "updated_at" as const,
+        updatedAt: new Date(row.updatedAt).toISOString(),
+      }
+    : null;
+}
+
+export async function readLeadStageScreenOption(
+  tx: PoolClient,
+  actor: TrustedActor,
+  stageId: string,
+) {
+  const row = (
+    await tx.query<{ id: string; label: string; updatedAt: string }>(
+      `select id,name label,updated_at::text "updatedAt" from pipeline_stages where workspace_id=$1 and id=$2 and status='active' for no key update`,
+      [actor.workspaceId, stageId],
+    )
+  ).rows[0];
+  return row
+    ? {
+        id: row.id,
+        label: row.label,
+        target: {
+          kind: "updated_at" as const,
+          updatedAt: new Date(row.updatedAt).toISOString(),
+        },
+      }
+    : null;
+}

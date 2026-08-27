@@ -5,6 +5,7 @@ import {
   createLeadScreenV2,
   editLeadScreenV2,
   getScreenFormBootstrapV1,
+  getScreenFormSelectedOptionV1,
   getScreenProfileV1,
   listScreenFormOptionsV1,
 } from "../src/backend/modules/screen-forms";
@@ -472,6 +473,136 @@ suite("SCREEN-FORMS-01 backend", () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  it("reconciles a current Lead stage independently of the first option page and ignores label presentation", async () => {
+    const f = await fixture();
+    const inserted = (
+      await pool.query<{ id: string; updatedAt: Date }>(
+        `insert into pipeline_stages(workspace_id,name,position)
+         select $1,'ZZ Stage '||lpad(value::text,2,'0'),100+value from generate_series(1,30) value
+         returning id,updated_at "updatedAt"`,
+        [f.actor.workspaceId],
+      )
+    ).rows;
+    const selected = inserted.at(-1)!;
+    const firstPage = await listScreenFormOptionsV1(
+      pool,
+      f.actor,
+      { kind: "lead", optionKind: "lead_stage", query: "", limit: 25 },
+      randomUUID(),
+    );
+    expect(firstPage.items).toHaveLength(25);
+    expect(firstPage.items.some((item) => item.id === selected.id)).toBe(false);
+    const current = await getScreenFormSelectedOptionV1(
+      pool,
+      f.actor,
+      {
+        kind: "lead",
+        optionKind: "lead_stage",
+        id: selected.id,
+        target: { kind: "updated_at", updatedAt: selected.updatedAt.toISOString() },
+      },
+      randomUUID(),
+    );
+    expect(current.selected).toMatchObject({
+      outcome: "unchanged",
+      submitted: { id: selected.id },
+      current: { id: selected.id, label: "ZZ Stage 30" },
+    });
+  });
+
+  it("returns changed or unavailable selected targets without cross-Workspace disclosure", async () => {
+    const f = await fixture(), foreign = await fixture();
+    await pool.query(
+      `update companies set version=version+1,updated_at=now() where workspace_id=$1 and id=$2`,
+      [f.actor.workspaceId, f.company.id],
+    );
+    const changed = await getScreenFormSelectedOptionV1(
+      pool,
+      f.actor,
+      { kind: "lead", optionKind: "company", id: f.company.id,
+        target: { kind: "version", version: f.company.version } },
+      randomUUID(),
+    );
+    expect(changed.selected).toMatchObject({
+      outcome: "changed",
+      submitted: { id: f.company.id, target: { kind: "version", version: 1 } },
+      current: { id: f.company.id, target: { kind: "version", version: 2 } },
+    });
+    const unavailable = await getScreenFormSelectedOptionV1(
+      pool,
+      f.actor,
+      { kind: "lead", optionKind: "company", id: foreign.company.id,
+        target: { kind: "version", version: foreign.company.version } },
+      randomUUID(),
+    );
+    expect(unavailable.selected).toEqual({
+      outcome: "unavailable",
+      submitted: { id: foreign.company.id, target: { kind: "version", version: 1 } },
+    });
+    expect(JSON.stringify(unavailable)).not.toContain("Explicit Company");
+  });
+
+  it("locks reversed visible-Team selections in canonical order without deadlock", async () => {
+    const f = await fixture(), operationId = randomUUID();
+    const secondCompany = (
+      await pool.query<{ id: string; version: number }>(
+        `insert into companies(workspace_id,display_name,name_normalized,normalization_version,status,visibility,
+         governing_operation_id,created_by_membership_id,updated_by_membership_id,authority_contract_version)
+         values($1,'Second Explicit Company','second explicit company','customer-graph-v1','active','workspace',$2,$3,$3,'customer-graph-v1')
+         returning id,version`,
+        [f.actor.workspaceId, operationId, f.actor.membershipId],
+      )
+    ).rows[0];
+    const teams = (
+      await pool.query<{ id: string; version: number }>(
+        `insert into teams(workspace_id,name,name_normalized,status,created_by_membership_id)
+         values($1,'Canonical Team A','canonical team a','active',$2),
+               ($1,'Canonical Team B','canonical team b','active',$2)
+         returning id,version`,
+        [f.actor.workspaceId, f.actor.membershipId],
+      )
+    ).rows.sort((left, right) => left.id.localeCompare(right.id));
+    const versions = Object.fromEntries(teams.map((team) => [team.id, team.version]));
+    const firstBase = command(f, `canonical-first-${randomUUID()}@example.test`),
+      secondBase = command(f, `canonical-second-${randomUUID()}@example.test`),
+      first = {
+        ...firstBase,
+        assignment: {
+          ...assignment,
+          visibility: "teams" as const,
+          visibleTeamIds: [teams[1].id, teams[0].id],
+          visibleTeamVersions: versions,
+        },
+      },
+      second = {
+        ...secondBase,
+        profile: {
+          ...secondBase.profile,
+          company: {
+            snapshotName: "Second Explicit Company",
+            companyId: secondCompany.id,
+            companyVersion: secondCompany.version,
+          },
+          stageId: f.stages[1].id,
+          stageUpdatedAt: f.stages[1].updatedAt.toISOString(),
+        },
+        assignment: {
+          ...assignment,
+          visibility: "teams" as const,
+          visibleTeamIds: [teams[0].id, teams[1].id],
+          visibleTeamVersions: versions,
+        },
+      };
+    const outcomes = await Promise.all([
+      createLeadScreenV2(pool, { actor: f.actor, command: first,
+        key: `canonical-first-${randomUUID()}`, requestId: randomUUID() }),
+      createLeadScreenV2(pool, { actor: f.actor, command: second,
+        key: `canonical-second-${randomUUID()}`, requestId: randomUUID() }),
+    ]);
+    expect(outcomes).toHaveLength(2);
+    expect(new Set(outcomes.map((outcome) => outcome.recordId)).size).toBe(2);
+  });
+
   it("supports a fresh Workspace Company quick-create, option refresh, explicit Lead selection, and independent failure", async () => {
     const f = await fixture();
     await pool.query(`delete from companies where workspace_id=$1`, [f.actor.workspaceId]);
@@ -504,7 +635,10 @@ suite("SCREEN-FORMS-01 backend", () => {
     expect((await pool.query(`select count(*)::int count from leads where workspace_id=$1 and id=$2`,[f.actor.workspaceId,createdLead.recordId])).rows[0].count).toBe(1);
     await expect(createLeadScreenV2(pool,{actor:f.actor,key:`quick-lead-fail-${randomUUID()}`,requestId:randomUUID(),command:{
       ...command(selected),profile:{...command(selected).profile,primaryEmail:`failed-${randomUUID()}@example.test`,company:{snapshotName:"Quick Company",companyId:created.companyId,companyVersion:created.version+1}},
-    }})).rejects.toMatchObject({code:"resource_not_found"});
+    }})).rejects.toMatchObject({code:"selection_unavailable",fields:["profile.company"],selection:{
+      field:"profile.company",optionKind:"company",submitted:{id:created.companyId,target:{kind:"version",version:created.version+1}},
+      outcome:"changed",currentTarget:{kind:"version",version:created.version},
+    }});
     expect((await pool.query(`select count(*)::int count from companies where workspace_id=$1 and id=$2`,[f.actor.workspaceId,created.companyId])).rows[0].count).toBe(1);
   });
 
@@ -844,7 +978,20 @@ suite("SCREEN-FORMS-01 backend", () => {
         key: `screen-stale-${randomUUID()}`,
         requestId: randomUUID(),
       }),
-    ).rejects.toMatchObject({ code: "resource_not_found" });
+    ).rejects.toMatchObject({
+      code: "selection_unavailable",
+      fields: ["profile.company"],
+      selection: {
+        field: "profile.company",
+        optionKind: "company",
+        submitted: {
+          id: f.company.id,
+          target: { kind: "version", version: 1 },
+        },
+        outcome: "changed",
+        currentTarget: { kind: "version", version: 2 },
+      },
+    });
     expect(
       (
         await pool.query(

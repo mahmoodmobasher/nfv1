@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  mergeOptions,
+  optionIdentity,
+  reconcileOptionIdentity,
+  selectedOptionParams,
+} from "../src/frontend/features/screen-forms/components/screen-form-options";
 
 const form = readFileSync(
   "src/frontend/features/screen-forms/components/screen-profile-form.tsx",
@@ -9,8 +15,21 @@ const options = readFileSync(
   "src/frontend/features/screen-forms/components/screen-form-options.tsx",
   "utf8",
 );
+const leadOwner = readFileSync(
+  "src/backend/modules/leads/application/orchestrators/screen-forms.owner.ts",
+  "utf8",
+);
 
 describe("SCREEN-FORMS-01 frontend boundary", () => {
+  it("canonicalizes selected authority locks by owner and ID before acquisition", () => {
+    expect(leadOwner).toContain("const lockGroups = new Map");
+    expect(leadOwner).toContain("`${selected.optionKind}:${selected.id}`");
+    expect(leadOwner).toContain("left.optionKind.localeCompare(right.optionKind)");
+    expect(leadOwner).toContain("left.id.localeCompare(right.id)");
+    expect(leadOwner.indexOf("const orderedGroups")).toBeLessThan(
+      leadOwner.indexOf("for (const group of orderedGroups)"),
+    );
+  });
   it("covers every approved screenshot field without donor-only behavior", () => {
     for (const label of [
       "Company name",
@@ -57,8 +76,87 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
     expect(options).toContain('endpoint(workspaceId, "screen-form-options")');
     expect(options).toContain("screenFormOptionsV1Schema.safeParse");
     expect(form).toContain("selectedCompany.label");
-    expect(form).toContain("initialId={lead?.base.stageId}");
+    expect(form).toContain("updatedAt: lead.base.stageUpdatedAt");
+    expect(form).toContain('initial={stageOption}');
+    expect(options).toContain('screen-form-options/selected');
     expect(form).toContain("visibleTeamVersions");
+  });
+
+  it("treats labels as replaceable presentation, not selection authority", () => {
+    const original = {
+        id: "10000000-0000-4000-8000-000000000001",
+        label: "Current status",
+        target: {
+          kind: "updated_at" as const,
+          updatedAt: "2026-08-26T12:00:00.000Z",
+        },
+      },
+      refreshed = { ...original, label: "Not contacted" };
+    expect(optionIdentity(original)).toBe(optionIdentity(refreshed));
+    expect(mergeOptions([original], [refreshed])).toEqual([refreshed]);
+    expect(options).toContain('type="hidden"');
+    expect(options).toContain("selectedOption ? optionValue(selectedOption)");
+  });
+
+  it("requires reconfirmation only for a changed token and clears only unavailable selections", () => {
+    const old = {
+        id: "10000000-0000-4000-8000-000000000001",
+        label: "Not contacted",
+        target: {
+          kind: "updated_at" as const,
+          updatedAt: "2026-08-26T12:00:00.000Z",
+        },
+      },
+      changed = {
+        ...old,
+        label: "Contact attempted",
+        target: {
+          kind: "updated_at" as const,
+          updatedAt: "2026-08-27T12:00:00.000Z",
+        },
+      },
+      identity = optionIdentity(old);
+    expect(
+      reconcileOptionIdentity(identity, { outcome: "unchanged", current: old }),
+    ).toEqual({ selectedIdentity: identity, replacement: null });
+    expect(
+      reconcileOptionIdentity(identity, { outcome: "changed", current: changed }),
+    ).toEqual({ selectedIdentity: identity, replacement: changed });
+    expect(
+      reconcileOptionIdentity(identity, { outcome: "unavailable" }),
+    ).toEqual({ selectedIdentity: "", replacement: null });
+    expect(form).toContain("setSelectionConflict(error.selection)");
+    expect(form).not.toContain('setStale(true);\n          setNotice(\n            "A selected option changed');
+    expect(options).toContain("onAuthorityLoss()");
+  });
+
+  it("hydrates the selected stage directly even when it is outside the first page", () => {
+    const selectedId = "10000000-0000-4000-8000-000000000099",
+      params = selectedOptionParams({
+        kind: "lead",
+        optionKind: "lead_stage",
+        item: {
+          id: selectedId,
+          target: {
+            kind: "updated_at",
+            updatedAt: "2026-08-26T12:00:00.000Z",
+          },
+        },
+      });
+    expect(params.get("id")).toBe(selectedId);
+    expect(params.get("targetKind")).toBe("updated_at");
+    expect(params.get("target")).toBe("2026-08-26T12:00:00.000Z");
+    expect(params.has("cursor")).toBe(false);
+    expect(params.has("limit")).toBe(false);
+  });
+
+  it("retains idempotency for an unchanged command and rotates after reconciliation changes it", () => {
+    expect(form).toContain("if (request.current.body !== serialized)");
+    expect(form).toContain(
+      "request.current = { body: serialized, key: crypto.randomUUID() }",
+    );
+    expect(options).toContain("Use current {label.toLowerCase()}");
+    expect(options).toContain('setSelectedIdentity("")');
   });
 
   it("gates protected mounting and clears state on authority loss", () => {

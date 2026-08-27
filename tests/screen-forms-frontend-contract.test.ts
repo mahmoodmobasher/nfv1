@@ -5,6 +5,8 @@ import {
   screenProfileResultV1Schema,
   leadScreenProfileV2Schema,
   screenFormsErrorEnvelopeV1Schema,
+  screenFormSelectedOptionQueryV1Schema,
+  screenFormSelectedOptionV1Schema,
 } from "../src/frontend/features/screen-forms/contracts/screen-forms.contracts";
 import {
   contactInternalNoteAddCommandV1Schema,
@@ -51,8 +53,18 @@ describe("SCREEN-FORMS revised frontend transport parity", () => {
   });
 
   it("rejects incorrect Screen Forms reconciliation combinations", () => {
+    const submitted={id,target:{kind:"version" as const,version:1}};
     expect(screenFormsErrorEnvelopeV1Schema.safeParse({ error: { code: "selection_unavailable", message: "Selection changed.", retryable: false,
-      reconciliation: { required: true, action: "retry_same_request" }, zeroPartialEffects: true }, requestId: id }).success).toBe(false);
+      reconciliation: { required: true, action: "retry_same_request" }, fields:["profile.company"], selection:{field:"profile.company",optionKind:"company",submitted,outcome:"changed",currentTarget:{kind:"version",version:2}}, zeroPartialEffects: true }, requestId: id }).success).toBe(false);
+  });
+
+  it("mirrors targeted selected-option identity and field reconciliation", () => {
+    const submitted={id,target:{kind:"version" as const,version:1}};
+    expect(screenFormSelectedOptionQueryV1Schema.safeParse({kind:"lead",optionKind:"company",...submitted}).success).toBe(true);
+    const unchanged={contractVersion:"screen-form-selected-option.v1",kind:"lead",optionKind:"company",selected:{submitted,outcome:"unchanged",current:{id,label:"Updated presentation",target:submitted.target}},requestId:id};
+    expect(screenFormSelectedOptionV1Schema.safeParse(unchanged).success).toBe(true);
+    expect(screenFormSelectedOptionV1Schema.safeParse({...unchanged,selected:{...unchanged.selected,current:{...unchanged.selected.current,target:{kind:"version",version:2}}}}).success).toBe(false);
+    expect(screenFormsErrorEnvelopeV1Schema.safeParse({error:{code:"selection_unavailable",message:"Selection unavailable.",retryable:false,reconciliation:{required:true,action:"refetch_bootstrap"},fields:["profile.company"],selection:{field:"profile.company",optionKind:"company",submitted,outcome:"unavailable"},zeroPartialEffects:true},requestId:id}).success).toBe(true);
   });
 
   it("accepts only the owner-presented split Identity Review outcome", () => {

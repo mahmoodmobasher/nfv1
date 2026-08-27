@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screenProfileDetailV1Schema } from "../src/backend/modules/screen-forms";
+import { screenProfileDetailV1Schema } from "../src/backend/modules/screen-forms/contracts/screen-forms.contract";
 
 const id=()=>crypto.randomUUID();
 const base={contractVersion:"screen-profile-detail.v1" as const,recordId:id(),version:1,capabilities:{canEdit:false,canManageAssignment:false,canWriteSensitiveProfile:false},assignment:{disclosure:"withheld" as const},requestId:id()};
@@ -19,9 +19,12 @@ describe("SCREEN-FORMS-01 detail presentation",()=>{
   });
 
   it("requires an explicit Lead consent envelope and withholds assignment facts independently",()=>{
-    const value={...base,kind:"lead" as const,identityReview:{companyDimension:"resolved" as const,contactDimension:"resolved" as const},base:{salutation:null,firstName:"Grace",lastName:"Hopper",jobTitle:null,source:"manual" as const,sourcePlatform:null,stageId:id(),rating:"hot" as const,industry:null,employeeCount:null},categories:{channels:{disclosure:"withheld" as const},address:{disclosure:"withheld" as const},revenue:{disclosure:"withheld" as const},consent:{disclosure:"full" as const,value:{promotionalEmailOptOut:true,recordedAt:new Date().toISOString(),source:"manual" as const}},hierarchy:{disclosure:"masked" as const,value:{display:"A***"}}}};
+    const value={...base,kind:"lead" as const,identityReview:{companyDimension:"resolved" as const,contactDimension:"resolved" as const},base:{salutation:null,firstName:"Grace",lastName:"Hopper",jobTitle:null,source:"manual" as const,sourcePlatform:null,stageId:id(),stageUpdatedAt:"2026-08-26T12:00:00.000Z",rating:"hot" as const,industry:null,employeeCount:null},categories:{channels:{disclosure:"withheld" as const},address:{disclosure:"withheld" as const},revenue:{disclosure:"withheld" as const},consent:{disclosure:"full" as const,value:{promotionalEmailOptOut:true,recordedAt:new Date().toISOString(),source:"manual" as const}},hierarchy:{disclosure:"masked" as const,value:{display:"A***"}}}};
     expect(screenProfileDetailV1Schema.parse(value)).toEqual(value);
     expect(screenProfileDetailV1Schema.safeParse({...value,assignment:{disclosure:"withheld",value:{responsibleMembershipId:id()}}}).success).toBe(false);
     expect(screenProfileDetailV1Schema.parse({...value,categories:{...value.categories,consent:{disclosure:"full",value:null}}})).toMatchObject({categories:{consent:{disclosure:"full",value:null}}});
+    const {stageUpdatedAt: _stageUpdatedAt, ...targetlessBase}=value.base;
+    expect(_stageUpdatedAt).toBe(value.base.stageUpdatedAt);
+    expect(screenProfileDetailV1Schema.safeParse({...value,base:targetlessBase}).success).toBe(false);
   });
 });

@@ -44,6 +44,65 @@ export async function listAuthorityScreenOptions(
   }));
 }
 
+export async function readAuthorityScreenOptionTarget(
+  tx: PoolClient,
+  actor: TrustedActor,
+  input: {
+    optionKind: "assignment_membership" | "assignment_team";
+    id: string;
+  },
+) {
+  const table =
+      input.optionKind === "assignment_membership"
+        ? "workspace_memberships"
+        : "teams",
+    row = (
+      await tx.query<{ version: number }>(
+        `select version from ${table} where workspace_id=$1 and id=$2 and status='active' for no key update`,
+        [actor.workspaceId, input.id],
+      )
+    ).rows[0];
+  return row ? { kind: "version" as const, version: row.version } : null;
+}
+
+export async function readAuthorityScreenOption(
+  tx: PoolClient,
+  actor: TrustedActor,
+  input: {
+    optionKind: "assignment_membership" | "assignment_team";
+    id: string;
+  },
+) {
+  if (input.optionKind === "assignment_membership") {
+    const row = (
+      await tx.query<{ id: string; label: string; version: number }>(
+        `select m.id,coalesce(nullif(btrim(u.display_name),''),'Workspace member') label,m.version from workspace_memberships m join users u on u.id=m.user_id and u.status='active' where m.workspace_id=$1 and m.id=$2 and m.status='active' for no key update of m,u`,
+        [actor.workspaceId, input.id],
+      )
+    ).rows[0];
+    return row
+      ? {
+          id: row.id,
+          label: row.label,
+          target: { kind: "version" as const, version: row.version },
+        }
+      : null;
+  }
+  const row = (
+    await tx.query<{ id: string; label: string; version: number }>(
+      `select id,name label,version from teams where workspace_id=$1 and id=$2 and status='active' for no key update`,
+      [actor.workspaceId, input.id],
+    )
+  ).rows[0];
+  return row
+    ? {
+        id: row.id,
+        label: row.label,
+        target: { kind: "version" as const, version: row.version },
+      }
+    : null;
+}
+
 export async function assertScreenAssignmentTargetVersions(
   tx: PoolClient,
   actor: TrustedActor,

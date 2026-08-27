@@ -1,5 +1,6 @@
 import { localDatabase, mutationGuard } from "@/server/http";
 import { tenant } from "@/server/tenant-admin/http";
+import { screenFormsErrorEnvelopeV1Schema } from "../contracts/screen-forms.contract";
 
 const privateHeaders = {
   "cache-control": "private, no-store, max-age=0",
@@ -23,18 +24,19 @@ const presentation = {
 
 type ScreenCode = keyof typeof presentation;
 
-function normalized(error: unknown): { code: ScreenCode; status: number; fields?: string[] } {
+function normalized(error: unknown): { code: ScreenCode; status: number; fields?: string[]; selection?: unknown } {
   if (!error || typeof error !== "object" || !("code" in error) || !("status" in error))
     return { code: "unexpected_error", status: 500 };
-  const candidate = error as { code: string; status: number; fields?: unknown; safe?: { fields?: unknown } };
+  const candidate = error as { code: string; status: number; fields?: unknown; selection?: unknown; safe?: { fields?: unknown } };
   if (!(candidate.code in presentation)) return { code: "unexpected_error", status: 500 };
   const entry = presentation[candidate.code as ScreenCode];
   if (candidate.status !== entry[3]) return { code: "unexpected_error", status: 500 };
   const source = candidate.fields ?? candidate.safe?.fields;
-  const fields = candidate.status === 400 && Array.isArray(source)
+  const fields = (candidate.status === 400 || candidate.code === "selection_unavailable") && Array.isArray(source)
     ? source.filter((field): field is string => typeof field === "string" && /^[A-Za-z0-9_.-]{1,80}$/.test(field)).slice(0, 32)
     : undefined;
-  return { code: candidate.code as ScreenCode, status: candidate.status, ...(fields?.length ? { fields } : {}) };
+  return { code: candidate.code as ScreenCode, status: candidate.status, ...(fields?.length ? { fields } : {}),
+    ...(candidate.code === "selection_unavailable" ? { selection: candidate.selection } : {}) };
 }
 
 export function screenFormsJson(data: unknown, status = 200) {
@@ -43,17 +45,25 @@ export function screenFormsJson(data: unknown, status = 200) {
 
 export function screenFormsFailure(error: unknown, requestId: string) {
   const known = normalized(error), entry = presentation[known.code], action = entry[2];
-  return Response.json({
+  const candidate = {
     error: {
       code: known.code,
       message: entry[0],
       retryable: entry[1],
       reconciliation: { required: action !== "none", action },
       ...(known.fields ? { fields: known.fields } : {}),
+      ...(known.selection ? { selection: known.selection } : {}),
       zeroPartialEffects: true,
     },
     requestId,
-  }, { status: known.status, headers: privateHeaders });
+  };
+  const parsed = screenFormsErrorEnvelopeV1Schema.safeParse(candidate);
+  if (parsed.success)
+    return Response.json(parsed.data, { status: known.status, headers: privateHeaders });
+  const fallback = presentation.unexpected_error;
+  return Response.json({ error: { code: "unexpected_error", message: fallback[0], retryable: fallback[1],
+    reconciliation: { required: true, action: fallback[2] }, zeroPartialEffects: true }, requestId },
+  { status: fallback[3], headers: privateHeaders });
 }
 
 export async function screenFormsRoute(
