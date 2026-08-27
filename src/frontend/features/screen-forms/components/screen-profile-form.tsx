@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button, FieldMessage, Panel } from "@/frontend/design-system";
 import type { ScreenFormOption } from "./quick-create-company";
+import { LeadSourceFields } from "./lead-source-fields";
 import { OptionChecks, OptionSelect } from "./screen-form-options";
 import {
   COMPANY_SCREEN_CREATE_V2,
@@ -100,6 +101,7 @@ function fieldId(path: string) {
         companyVersion: "companyId",
         parentCompanyVersion: "parentCompanyId",
         stageUpdatedAt: "stageId",
+        sourcePlatform: "sourcePlatform",
       } as Record<string, string>
     )[last] ?? last
   );
@@ -227,6 +229,7 @@ function linkedFields(kind: ScreenKind) {
             "twitterHandle",
             "promotionalEmailOptOut",
             "source",
+            "sourcePlatform",
             "stageId",
             "rating",
             "industry",
@@ -885,6 +888,7 @@ export function ScreenProfileForm({
           twitterHandle: nullable(data, "twitterHandle"),
           promotionalEmailOptOut: consent === "" ? null : consent === "true",
           source: value(data, "source"),
+          sourcePlatform: nullable(data, "sourcePlatform"),
           stageId: stage.id,
           stageUpdatedAt: stage.target,
           rating: nullable(data, "rating"),
@@ -1421,28 +1425,12 @@ export function ScreenProfileForm({
               <section aria-labelledby="profiling-heading">
                 <SectionHeading id="profiling-heading" title="Lead &amp; Profiling" help="Status is operational and does not itself qualify the Lead." />
                 <div className="form-grid">
-                  <Select
-                    id="source"
-                    label="Source"
-                    required
-                    defaultValue={lead?.base.source ?? "manual"}
-                  >
-                    {[
-                      "website",
-                      "referral",
-                      "outbound",
-                      "event",
-                      "partner",
-                      "social_media",
-                      "import",
-                      "manual",
-                      "other",
-                    ].map((v) => (
-                      <option value={v} key={v}>
-                        {v.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                  </Select>
+                  <LeadSourceFields
+                    initialSource={lead?.base.source ?? "manual"}
+                    initialPlatform={lead?.base.sourcePlatform}
+                    sourceError={errors.source}
+                    platformError={errors.sourcePlatform}
+                  />
                   <OptionSelect
                     workspaceId={workspaceId}
                     kind="lead"

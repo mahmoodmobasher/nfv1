@@ -686,8 +686,30 @@ test("fresh Workspace quick-creates an exact Company selection and then saves th
     fullPage: true,
   });
   await page.locator("#stageId").selectOption({ label: "Not contacted" });
+  await page.locator("#source").selectOption("social_media");
+  await expect(page.locator("#sourcePlatform")).toBeVisible();
+  await page.getByRole("button", { name: "Save Lead" }).click();
+  const platformError = page.getByRole("link", {
+    name: "Select the social platform.",
+  });
+  await expect(platformError).toBeVisible();
+  await platformError.click();
+  await expect(page.locator("#sourcePlatform")).toBeFocused();
+  await expect(page.getByLabel(/Company required/)).toHaveValue(new RegExp(companyId));
+  await expect(page.getByLabel(/^First name required$/)).toHaveValue("Ada");
+  expect(leadAttempts).toBe(0);
+  await page.locator("#sourcePlatform").selectOption("linkedin");
+  await page.locator("#source").selectOption("manual");
+  await expect(page.locator("#sourcePlatform")).toHaveCount(0);
+  await page.locator("#source").selectOption("social_media");
+  await expect(page.locator("#sourcePlatform")).toHaveValue("");
+  await page.locator("#sourcePlatform").selectOption("linkedin");
   await page.getByRole("button", { name: "Save Lead" }).click();
   await expect.poll(() => leadBody).toContain(companyId);
+  expect(JSON.parse(leadBody).profile).toMatchObject({
+    source: "social_media",
+    sourcePlatform: "linkedin",
+  });
   await expect(page.getByText(/The Company was created; the Lead was not saved/)).toBeVisible();
   await expect(page.getByLabel(/Company required/)).toHaveValue(new RegExp(companyId));
   await page.getByRole("button", { name: "Save Lead" }).click();
