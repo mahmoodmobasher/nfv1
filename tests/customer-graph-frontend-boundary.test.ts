@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const component = readFileSync("src/frontend/features/customer-graph/components/customer-graph.tsx", "utf8");
+const listComponent = readFileSync("src/frontend/features/customer-graph/components/customer-graph-list.tsx", "utf8");
 const contracts = readFileSync("src/frontend/features/customer-graph/contracts/customer-graph.contracts.ts", "utf8");
 const navigation = readFileSync("src/app/product-navigation.ts", "utf8");
 
@@ -16,9 +17,17 @@ describe("CUSTOMER-GRAPH-01 frontend boundaries", () => {
     expect(component).toContain("record.capabilities.canArchive");
     expect(component).toContain("record.capabilities.canRestore");
     expect(component).toContain("No adoption or backfill action is offered.");
-    expect(component).toContain("view?.capabilities.canCreate");
+    expect(listComponent).toContain("parsed.data.data.capabilities.canCreate");
     expect(component).toContain("?bootstrap=true");
     expect(component).not.toMatch(/role\s*===\s*["'](?:owner|admin)["']/);
+    expect(listComponent).not.toMatch(/role\s*===\s*["'](?:owner|admin)["']/);
+  });
+  it("keeps directory rows disclosure-safe and active/archived keysets independent", () => {
+    expect(listComponent).toContain("Include archived");
+    expect(listComponent).toContain("Load more active");
+    expect(listComponent).toContain("Load more archived");
+    expect(listComponent).toContain("Search applies only to the records currently loaded below.");
+    expect(listComponent).not.toMatch(/maskedEmail|maskedPhone|companyName|industry|subsidiar|dealCount|contactCount/i);
   });
   it("keeps sensitive disclosure minimized and strict", () => {
     expect(component).toContain("maskedEmail"); expect(component).toContain("maskedPhone");

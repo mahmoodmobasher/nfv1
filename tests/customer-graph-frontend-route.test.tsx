@@ -26,7 +26,7 @@ describe("CUSTOMER-GRAPH-01 frontend routes and initial interactions", () => {
     const list = renderToStaticMarkup(<CustomerGraphListPage workspaceId="30000000-0000-4000-8000-000000000001" kind="company"/>),
       detail = renderToStaticMarkup(<CustomerGraphDetailPage workspaceId="30000000-0000-4000-8000-000000000001" kind="contact" id="30000000-0000-4000-8000-000000000002"/>),
       directNew = renderToStaticMarkup(<CustomerGraphFormPage workspaceId="30000000-0000-4000-8000-000000000001" kind="contact"/>);
-    expect(list).toContain("Loading companies"); expect(detail).toContain("Loading contact");
+    expect(list).toContain("Loading active companies"); expect(detail).toContain("Loading contact");
     expect(directNew).toContain("Checking permission to add contact"); expect(directNew).not.toContain("<form"); expect(directNew).not.toContain('name="email"');
     expect(`${list}${detail}${directNew}`).not.toMatch(/Acme|example@example|555-\d{4}/i);
   });

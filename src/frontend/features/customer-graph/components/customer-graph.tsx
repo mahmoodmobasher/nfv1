@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { ActionLink, Button, DataTable, EmptyState, FeedbackState, FieldMessage, Panel, StatusBadge, ViewTabs } from "@/frontend/design-system";
+import { ActionLink, Button, FeedbackState, FieldMessage, Panel, StatusBadge } from "@/frontend/design-system";
 import {
   COMPANY_CREATE, COMPANY_EDIT, COMPANY_LIFECYCLE, CONTACT_CREATE, CONTACT_EDIT, CONTACT_LIFECYCLE,
   companyCreateCommandV1Schema, companyEditCommandV1Schema, companyResultEnvelopeSchema,
@@ -43,17 +43,6 @@ function SafeAuthorityState({ kind, error, detail = false }: { kind: CustomerGra
     action={<ActionLink href={error?.code === "authentication_required" ? login : back}>{error?.code === "authentication_required" ? "Sign in again" : `Back to ${title(kind).toLowerCase()}`}</ActionLink>}>
     <p>Your authority changed or this information is no longer available. Protected details, choices, and entries have been cleared.</p>
   </FeedbackState>;
-}
-
-export function CustomerGraphListPage({ workspaceId, kind, initialStatus = "active", initialCursor }: { workspaceId: string; kind: CustomerGraphKind; initialStatus?: CustomerGraphStatus; initialCursor?: string }) {
-  const [view, setView] = useState<CustomerGraphList | null>(null), [error, setError] = useState<CustomerGraphError | null>(null), [loading, setLoading] = useState(true);
-  useEffect(() => { const controller = new AbortController(); setLoading(true); setError(null); setView(null); const query = new URLSearchParams({ status: initialStatus, limit: "50" }); if (initialCursor) query.set("cursor", initialCursor);
-    fetch(`${endpoint(workspaceId, kind)}?${query}`, { cache: "no-store", signal: controller.signal }).then(async response => { const payload = await responseBody(response); if (!response.ok) throw safeError(payload); const parsed = customerGraphListEnvelopeSchema.safeParse(payload); if (!parsed.success || parsed.data.data.kind !== kind) throw safeError(null); setView(parsed.data.data); }).catch(value => { if (!controller.signal.aborted) { setView(null); setError(value && typeof value === "object" && "code" in value ? value as CustomerGraphError : safeError(null)); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort();
-  }, [workspaceId, kind, initialStatus, initialCursor]);
-  const base = `/crm/${plural(kind)}`;
-  return <><header className="product-page-header crm-page-heading"><div><p className="eyebrow">Customers / {title(kind)}</p><h1>{title(kind)}</h1><p className="lead">Visible {title(kind).toLowerCase()} in the current Workspace. Open a record to see server-authorized details and actions.</p></div>{view?.capabilities.canCreate && <div className="product-page-actions"><ActionLink variant="primary" href={`${base}/new`}>Add {itemTitle(kind).toLowerCase()}</ActionLink></div>}</header>
-    <div className="ds-view-row"><ViewTabs label={`${title(kind)} status`} items={[{ href: base, label: "Active", active: initialStatus === "active" }, { href: `${base}?status=archived`, label: "Archived", active: initialStatus === "archived" }]}/></div>
-    {loading ? <CustomerGraphLoading label={`Loading ${title(kind).toLowerCase()}…`}/> : error ? isAuthorityLoss(error) ? <SafeAuthorityState kind={kind} error={error}/> : <FeedbackState tone="danger" autoFocus title={`${title(kind)} are temporarily unavailable`} action={<Button onClick={() => location.reload()}>Try again</Button>}><p>{error.message} No protected record details are shown.</p></FeedbackState> : view && <section aria-label={`Visible ${title(kind).toLowerCase()}`}><p role="status" aria-live="polite">{view.items.length} {view.items.length === 1 ? itemTitle(kind).toLowerCase() : title(kind).toLowerCase()} shown.</p>{view.items.length === 0 ? <EmptyState title={`No ${initialStatus} ${title(kind).toLowerCase()}`}><p>There are no server-authorized records in this view.</p>{view.capabilities.canCreate && <ActionLink variant="primary" href={`${base}/new`}>Add {itemTitle(kind).toLowerCase()}</ActionLink>}</EmptyState> : <DataTable caption={`Visible ${title(kind).toLowerCase()}`}><thead><tr><th scope="col">{itemTitle(kind)}</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{view.items.map(item => <tr key={item.id}><th scope="row"><Link href={`${base}/${item.id}`}>{item.displayName}</Link></th><td><StatusBadge tone={statusTone(item.status)}>{item.status}</StatusBadge></td><td>{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(item.updatedAt))}</td><td><ActionLink href={`${base}/${item.id}`}>View</ActionLink></td></tr>)}</tbody></DataTable>}{view.nextCursor && <div className="ds-pagination"><ActionLink href={`${base}?${new URLSearchParams({ status: initialStatus, cursor: view.nextCursor })}`}>Next page</ActionLink></div>}</section>}</>;
 }
 
 function Facts({ values }: { values: Array<[string, string]> }) { return <dl className="ds-fact-list">{values.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>; }
