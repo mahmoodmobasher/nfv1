@@ -9,7 +9,7 @@ export default async function Page() {
   try {
     return (
       <CrmShell workspace={workspace.name} role={context.role}>
-        <section className="admin-content narrow-admin">
+        <section className="admin-content lead-form-page">
           <ScreenProfileForm workspaceId={workspace.id} kind="lead" />
         </section>
       </CrmShell>

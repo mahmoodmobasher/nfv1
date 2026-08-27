@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button, FieldMessage, Panel } from "@/frontend/design-system";
+import type { ScreenFormOption } from "./quick-create-company";
+import { OptionChecks, OptionSelect } from "./screen-form-options";
 import {
   COMPANY_SCREEN_CREATE_V2,
   COMPANY_SCREEN_EDIT_V2,
@@ -17,11 +19,9 @@ import {
   leadScreenCreateCommandV2Schema,
   leadScreenEditCommandV2Schema,
   screenFormBootstrapV1Schema,
-  screenFormOptionsV1Schema,
   screenFormsErrorEnvelopeV1Schema,
   screenProfileDetailV1Schema,
   screenProfileResultV1Schema,
-  type ScreenFormOptionsQueryV1,
 } from "../contracts/screen-forms.contracts";
 import {
   CONTACT_INTERNAL_NOTE_ADD_V1,
@@ -31,13 +31,7 @@ import {
 } from "../contracts/contact-note.contracts";
 
 export type ScreenKind = "company" | "contact" | "lead";
-type Option = {
-  id: string;
-  label: string;
-  target:
-    | { kind: "version"; version: number }
-    | { kind: "updated_at"; updatedAt: string };
-};
+type Option = ScreenFormOption;
 type Errors = Record<string, string>;
 const plural = (kind: ScreenKind) =>
   kind === "company" ? "companies" : kind === "contact" ? "contacts" : "leads";
@@ -145,9 +139,12 @@ function ErrorSummary({
             <li key={id}>
               <a
                 href={`#${id}`}
-                onClick={() =>
-                  setTimeout(() => document.getElementById(id)?.focus())
-                }
+                onClick={() => setTimeout(() => {
+                  const target = document.getElementById(id);
+                  const disclosure = target?.closest("details");
+                  if (disclosure) disclosure.open = true;
+                  target?.focus();
+                })}
               >
                 {message}
               </a>
@@ -159,6 +156,20 @@ function ErrorSummary({
       </ul>
     </div>
   );
+}
+
+function SectionHeading({ id, title, help }: { id: string; title: string; help: string }) {
+  return (
+    <header className="screen-section-heading">
+      <span className="screen-section-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><path d="M5 5h14v14H5zM8 9h8M8 13h8M8 17h5" /></svg>
+      </span>
+      <div><h2 id={id}>{title}</h2><p>{help}</p></div>
+    </header>
+  );
+}
+function OptionalSection({ enabled, open, summary, children }: { enabled: boolean; open: boolean; summary: string; children: React.ReactNode }) {
+  return enabled ? <details className="screen-disclosure" open={open}><summary>{summary}</summary>{children}</details> : <>{children}</>;
 }
 const commonLinkedFields = [
   "annualRevenue",
@@ -315,271 +326,6 @@ function Select({
   );
 }
 
-function optionValue(item: Option) {
-  return JSON.stringify({
-    id: item.id,
-    target:
-      item.target.kind === "version"
-        ? item.target.version
-        : item.target.updatedAt,
-    label: item.label,
-  });
-}
-function OptionSelect({
-  workspaceId,
-  kind,
-  optionKind,
-  id,
-  label,
-  required,
-  initial,
-  initialId,
-  error,
-  excludeRecordId,
-  onAuthorityLoss,
-}: {
-  workspaceId: string;
-  kind: ScreenKind;
-  optionKind: ScreenFormOptionsQueryV1["optionKind"];
-  id: string;
-  label: string;
-  required?: boolean;
-  initial?: Option | null;
-  initialId?: string;
-  error?: string;
-  excludeRecordId?: string;
-  onAuthorityLoss: () => void;
-}) {
-  const [query, setQuery] = useState(""),
-    [items, setItems] = useState<Option[]>(initial ? [initial] : []),
-    [selectedValue, setSelectedValue] = useState(
-      initial ? optionValue(initial) : "",
-    ),
-    [cursor, setCursor] = useState<string | null>(null),
-    [loading, setLoading] = useState(false),
-    [message, setMessage] = useState("");
-  async function load(next = false) {
-    let authorityCleared = false;
-    setLoading(true);
-    setMessage("");
-    const params = new URLSearchParams({
-      kind,
-      optionKind,
-      query,
-      limit: "25",
-    });
-    if (next && cursor) params.set("cursor", cursor);
-    if (excludeRecordId) params.set("excludeRecordId", excludeRecordId);
-    try {
-      const response = await fetch(
-          `${endpoint(workspaceId, "screen-form-options")}?${params}`,
-          { cache: "no-store" },
-        ),
-        payload = await json(response);
-      if (!response.ok) {
-        const failure = screenFormsErrorEnvelopeV1Schema.safeParse(payload);
-        if (
-          failure.success &&
-          failure.data.error.reconciliation.action === "clear_protected_state"
-        ) {
-          authorityCleared = true;
-          onAuthorityLoss();
-          return;
-        }
-        throw new Error();
-      }
-      const parsed = screenFormOptionsV1Schema.safeParse(payload?.data);
-      if (
-        !parsed.success ||
-        parsed.data.kind !== kind ||
-        parsed.data.optionKind !== optionKind
-      )
-        throw new Error();
-      setItems((current) =>
-        next
-          ? [
-              ...current,
-              ...parsed.data.items.filter(
-                (item) => !current.some((value) => value.id === item.id),
-              ),
-            ]
-          : [
-              ...(initial &&
-              !parsed.data.items.some((item) => item.id === initial.id)
-                ? [initial]
-                : []),
-              ...parsed.data.items,
-            ],
-      );
-      const retained = parsed.data.items.find((item) => item.id === initialId);
-      if (!selectedValue && retained) setSelectedValue(optionValue(retained));
-      setCursor(parsed.data.nextCursor);
-    } catch {
-      setMessage(
-        "Options are temporarily unavailable. No selection was changed.",
-      );
-    } finally {
-      if (!authorityCleared) setLoading(false);
-    }
-  }
-  useEffect(() => {
-    void load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <div className="screen-option-field">
-      <label className="field" htmlFor={`${id}-search`}>
-        <span>Search {label.toLowerCase()}</span>
-        <input
-          id={`${id}-search`}
-          type="search"
-          maxLength={100}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
-      <Button type="button" onClick={() => void load()} disabled={loading}>
-        {loading ? "Searching…" : "Search"}
-      </Button>
-      <label className="field" htmlFor={id}>
-        <span>
-          {label}
-          {required ? (
-            <strong className="required-marker"> required</strong>
-          ) : (
-            <small> optional</small>
-          )}
-        </span>
-        <select
-          id={id}
-          name={id}
-          required={required}
-          aria-required={required || undefined}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-error` : undefined}
-          value={selectedValue}
-          onChange={(event) => setSelectedValue(event.target.value)}
-        >
-          <option value="">
-            {required ? `Choose ${label}` : `No ${label.toLowerCase()}`}
-          </option>
-          {items.map((item) => (
-            <option key={item.id} value={optionValue(item)}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-        {error && (
-          <FieldMessage id={`${id}-error`} tone="error">
-            {error}
-          </FieldMessage>
-        )}
-      </label>
-      {cursor && (
-        <Button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={loading}
-        >
-          Load more
-        </Button>
-      )}
-      {message && (
-        <p className="helper" role="status">
-          {message}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function OptionChecks({
-  workspaceId,
-  kind,
-  initial = [],
-  error,
-  onAuthorityLoss,
-}: {
-  workspaceId: string;
-  kind: ScreenKind;
-  initial?: Option[];
-  error?: string;
-  onAuthorityLoss: () => void;
-}) {
-  const [items, setItems] = useState<Option[]>(initial),
-    [message, setMessage] = useState("");
-  useEffect(() => {
-    const params = new URLSearchParams({
-      kind,
-      optionKind: "assignment_team",
-      limit: "50",
-    });
-    fetch(`${endpoint(workspaceId, "screen-form-options")}?${params}`, {
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        const payload = await json(response);
-        if (!response.ok) {
-          const failure = screenFormsErrorEnvelopeV1Schema.safeParse(payload);
-          if (
-            failure.success &&
-            failure.data.error.reconciliation.action === "clear_protected_state"
-          ) {
-            onAuthorityLoss();
-            return;
-          }
-          throw new Error();
-        }
-        const parsed = screenFormOptionsV1Schema.safeParse(payload?.data);
-        if (!parsed.success) throw new Error();
-        setItems((current) => [
-          ...current,
-          ...parsed.data.items.filter(
-            (item) => !current.some((value) => value.id === item.id),
-          ),
-        ]);
-      })
-      .catch(() =>
-        setMessage("Visible Team options are temporarily unavailable."),
-      );
-  }, [workspaceId, kind]); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <fieldset
-      id="visibleTeamIds"
-      aria-invalid={Boolean(error)}
-      aria-describedby={error ? "visibleTeamIds-error" : undefined}
-    >
-      <legend>Visible Teams</legend>
-      {items.length ? (
-        <>
-          {items.map((item) => (
-            <label className="check" key={item.id}>
-              <input
-                type="checkbox"
-                name="visibleTeamIds"
-                value={optionValue(item)}
-                defaultChecked={initial.some((value) => value.id === item.id)}
-              />
-              {item.label}
-            </label>
-          ))}
-        </>
-      ) : (
-        <p className="helper">No authorized Teams are available.</p>
-      )}
-      {message && (
-        <p className="helper" role="status">
-          {message}
-        </p>
-      )}
-      {error && (
-        <FieldMessage id="visibleTeamIds-error" tone="error">
-          {error}
-        </FieldMessage>
-      )}
-    </fieldset>
-  );
-}
-
 function parseTarget(raw: string) {
   if (!raw) return { id: "", target: "", label: "" };
   try {
@@ -613,11 +359,13 @@ const versionOption = (
 function commonAddress(
   errors: Errors,
   defaults: Record<string, string | null> = {},
+  collapsible = false,
 ) {
   return (
     <section aria-labelledby="address-heading">
-      <h2 id="address-heading">Address</h2>
-      <div className="form-grid">
+      <SectionHeading id="address-heading" title="Address Information" help="Add the current business mailing address." />
+      <OptionalSection enabled={collapsible} open={Boolean(errors.street || errors.city || errors.stateProvince || errors.postalCode || errors.country)} summary="Address fields — optional">
+        <div className="form-grid">
         <Input
           id="street"
           label="Street"
@@ -655,7 +403,8 @@ function commonAddress(
           help="Use a two-letter country code, for example CA."
           data-error={errors.country}
         />
-      </div>
+        </div>
+      </OptionalSection>
     </section>
   );
 }
@@ -687,10 +436,12 @@ export function ScreenProfileForm({
     [noteFailed, setNoteFailed] = useState(false),
     [noteNeedsRefetch, setNoteNeedsRefetch] = useState(false),
     [noteContactVersion, setNoteContactVersion] = useState<number | null>(null),
+    [canCreateCompany, setCanCreateCompany] = useState(false),
     summary = useRef<HTMLDivElement>(null),
     safeAlert = useRef<HTMLDivElement>(null),
     request = useRef({ body: "", key: crypto.randomUUID() }),
     noteRequest = useRef({ body: "", key: crypto.randomUUID() });
+  const quickCompanyCommittedRef = useRef(false);
   const basePath = `/crm/${plural(kind)}`,
     profileRoute = recordId ? `${plural(kind)}/${recordId}/profile` : "";
   function clearProtectedState() {
@@ -704,6 +455,8 @@ export function ScreenProfileForm({
     setNoteFailed(false);
     setNoteNeedsRefetch(false);
     setNoteContactVersion(null);
+    quickCompanyCommittedRef.current = false;
+    setCanCreateCompany(false);
     setBusy(false);
     setLoadError(false);
     request.current = { body: "", key: "" };
@@ -753,6 +506,9 @@ export function ScreenProfileForm({
           clearProtectedState();
           return;
         }
+        setCanCreateCompany(
+          kind === "lead" && parsed.data.capabilities.canCreateCompany,
+        );
       }
       setReady(true);
     } catch {
@@ -1154,7 +910,11 @@ export function ScreenProfileForm({
       parsed = schema.safeParse(command);
     if (!parsed.success) {
       setErrors(issues(parsed.error));
-      setNotice("Review the highlighted fields.");
+      setNotice(
+        quickCompanyCommittedRef.current
+          ? "The Company was created; the Lead was not saved. Review the highlighted fields."
+          : "Review the highlighted fields.",
+      );
       return;
     }
     const serialized = JSON.stringify(parsed.data);
@@ -1205,7 +965,11 @@ export function ScreenProfileForm({
             (error.fields ?? []).map((path) => [fieldId(path), error.message]),
           ),
         );
-        setNotice(error.message);
+        setNotice(
+          quickCompanyCommittedRef.current && kind === "lead"
+            ? `The Company was created; the Lead was not saved. ${error.message}`
+            : error.message,
+        );
         return;
       }
       const saved = screenProfileResultV1Schema.safeParse(payload?.data);
@@ -1221,7 +985,9 @@ export function ScreenProfileForm({
       setResult(saved.data);
     } catch {
       setNotice(
-        "The form could not be saved. No unconfirmed changes were applied; your safe draft remains available.",
+        quickCompanyCommittedRef.current && kind === "lead"
+          ? "The Company was created; the Lead was not saved. Your Lead draft remains available."
+          : "The form could not be saved. No unconfirmed changes were applied; your safe draft remains available.",
       );
       setErrors({ _form: "Try again safely." });
     } finally {
@@ -1243,7 +1009,7 @@ export function ScreenProfileForm({
           </p>
         </div>
       </header>
-      <Panel title={`${noun(kind)} information`}>
+      <Panel title={kind === "lead" ? undefined : `${noun(kind)} information`} className={kind === "lead" ? "lead-profile-shell" : undefined}>
         <form
           className="ds-form screen-profile-form"
           noValidate
@@ -1255,7 +1021,7 @@ export function ScreenProfileForm({
             summary={summary}
             linkedFields={linkedFields(kind)}
           />
-          {notice && !Object.keys(errors).length && (
+          {notice && (
             <p className="alert info" role="status">
               {notice}
             </p>
@@ -1527,15 +1293,9 @@ export function ScreenProfileForm({
           )}
           {kind === "lead" && (
             <>
-              <section aria-labelledby="primary-heading">
-                <h2 id="primary-heading">Primary information</h2>
+              <section aria-labelledby="lead-essentials-heading">
+                <SectionHeading id="lead-essentials-heading" title="Primary Information" help="Start with the Lead’s identity and existing Company." />
                 <div className="form-grid">
-                  <Input
-                    id="salutation"
-                    label="Salutation"
-                    defaultValue={lead?.base.salutation ?? ""}
-                    data-error={errors.salutation}
-                  />
                   <Input
                     id="firstName"
                     label="First name"
@@ -1562,6 +1322,15 @@ export function ScreenProfileForm({
                     initial={companyOption}
                     error={errors.companyId}
                     onAuthorityLoss={clearProtectedState}
+                    canCreateCompany={canCreateCompany}
+                    onCompanyCreated={() => {
+                      quickCompanyCommittedRef.current = true;
+                      setErrors((current) => {
+                        const next = { ...current };
+                        delete next.companyId;
+                        return next;
+                      });
+                    }}
                   />
                   <Input
                     id="jobTitle"
@@ -1569,10 +1338,16 @@ export function ScreenProfileForm({
                     defaultValue={lead?.base.jobTitle ?? ""}
                     data-error={errors.jobTitle}
                   />
+                  <Input
+                    id="salutation"
+                    label="Salutation"
+                    defaultValue={lead?.base.salutation ?? ""}
+                    data-error={errors.salutation}
+                  />
                 </div>
               </section>
               <section aria-labelledby="lead-channels-heading">
-                <h2 id="lead-channels-heading">Contact channels</h2>
+                <SectionHeading id="lead-channels-heading" title="Contact Channels" help="Add current ways to reach this Lead." />
                 <div className="form-grid">
                   <Input
                     id="primaryEmail"
@@ -1583,6 +1358,10 @@ export function ScreenProfileForm({
                     defaultValue={channel?.primaryEmail ?? ""}
                     data-error={errors.primaryEmail}
                   />
+                </div>
+                <details className="screen-disclosure" open={Boolean(errors.secondaryEmail || errors.officePhone || errors.mobilePhone || errors.fax || errors.website || errors.twitterHandle || errors.promotionalEmailOptOut)}>
+                  <summary>Optional contact channels</summary>
+                  <div className="form-grid">
                   <Input
                     id="secondaryEmail"
                     label="Secondary email"
@@ -1636,10 +1415,11 @@ export function ScreenProfileForm({
                     <option value="false">Can receive promotional email</option>
                     <option value="true">Opted out of promotional email</option>
                   </Select>
-                </div>
+                  </div>
+                </details>
               </section>
               <section aria-labelledby="profiling-heading">
-                <h2 id="profiling-heading">Lead and profiling</h2>
+                <SectionHeading id="profiling-heading" title="Lead &amp; Profiling" help="Status is operational and does not itself qualify the Lead." />
                 <div className="form-grid">
                   <Select
                     id="source"
@@ -1674,6 +1454,10 @@ export function ScreenProfileForm({
                     error={errors.stageId}
                     onAuthorityLoss={clearProtectedState}
                   />
+                </div>
+                <details className="screen-disclosure" open={Boolean(errors.rating || errors.industry || errors.annualRevenue || errors.employeeCount)}>
+                  <summary>Optional profiling fields</summary>
+                  <div className="form-grid">
                   <Select
                     id="rating"
                     label="Rating"
@@ -1714,13 +1498,19 @@ export function ScreenProfileForm({
                     defaultValue={lead?.base.employeeCount ?? ""}
                     data-error={errors.employeeCount}
                   />
-                </div>
+                  </div>
+                </details>
               </section>
-              {commonAddress(errors, addr ?? {})}
+              {commonAddress(errors, addr ?? {}, true)}
             </>
           )}
           <section aria-labelledby="assignment-heading">
-            <h2 id="assignment-heading">Responsibility and visibility</h2>
+            {kind === "lead" ? (
+              <SectionHeading id="assignment-heading" title="Responsibility &amp; Visibility" help="Use only current server-authorized owners, Teams, and visibility." />
+            ) : (
+              <h2 id="assignment-heading">Responsibility and visibility</h2>
+            )}
+            <OptionalSection enabled={kind === "lead"} open={Boolean(errors.responsibleMembershipId || errors.responsibleTeamId || errors.visibility || errors.visibleTeamIds)} summary="Responsibility and visibility fields — optional">
             <OptionSelect
               workspaceId={workspaceId}
               kind={kind}
@@ -1782,6 +1572,7 @@ export function ScreenProfileForm({
               error={errors.visibleTeamIds}
               onAuthorityLoss={clearProtectedState}
             />
+            </OptionalSection>
           </section>
           {stale && (
             <div className="alert error" role="alert" tabIndex={-1}>

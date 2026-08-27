@@ -93,7 +93,9 @@ async function mockAuthority(page: Page, workspaceId: string, allowed = true) {
                 kind: new URL(route.request().url()).searchParams.get("kind"),
                 capabilities: {
                   canCreate: true,
-                  canCreateCompany: new URL(route.request().url()).searchParams.get("kind") === "lead",
+                  canCreateCompany:
+                    new URL(route.request().url()).searchParams.get("kind") ===
+                    "lead",
                   canManageAssignment: true,
                   canWriteSensitiveProfile: true,
                 },
@@ -535,4 +537,162 @@ test("Contact Notes authority loss remains terminal after the Contact commits", 
   await expect(page.getByRole("button", { name: "Save Contact" })).toHaveCount(
     0,
   );
+});
+
+test("fresh Workspace quick-creates an exact Company selection and then saves the still-mounted Lead", async ({
+  page,
+}) => {
+  const workspaceId = await fixture(page),
+    companyId = randomUUID(),
+    leadId = randomUUID(),
+    stageId = randomUUID(),
+    stageUpdatedAt = new Date().toISOString();
+  await mockAuthority(page, workspaceId);
+  await page.route("**/api/auth/csrf", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "csrf-test-token" }),
+    }),
+  );
+  await page.route("**/api/workspaces/*/screen-form-options?*", (route) => {
+    const url = new URL(route.request().url()),
+      kind = url.searchParams.get("kind"),
+      optionKind = url.searchParams.get("optionKind");
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          contractVersion: "screen-form-options.v1",
+          kind,
+          optionKind,
+          items:
+            optionKind === "lead_stage"
+              ? [
+                  {
+                    id: stageId,
+                    label: "Not contacted",
+                    target: { kind: "updated_at", updatedAt: stageUpdatedAt },
+                  },
+                ]
+              : [],
+          nextCursor: null,
+          requestId: randomUUID(),
+        },
+      }),
+    });
+  });
+  let leadBody = "",
+    leadAttempts = 0;
+  await page.route("**/api/workspaces/*/companies", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          contractVersion: "screen-profile-result.v1",
+          kind: "company",
+          recordId: companyId,
+          version: 1,
+          replayed: false,
+          selection: {
+            id: companyId,
+            label: "Northwind Demo",
+            target: { kind: "version", version: 1 },
+          },
+          requestId: randomUUID(),
+        },
+      }),
+    }),
+  );
+  await page.route("**/api/workspaces/*/leads", async (route) => {
+    leadAttempts += 1;
+    leadBody = route.request().postData() ?? "";
+    if (leadAttempts === 1)
+      return route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: "{}",
+      });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          contractVersion: "screen-profile-result.v1",
+          kind: "lead",
+          recordId: leadId,
+          version: 1,
+          replayed: false,
+          identityReview: {
+            companyDimension: "resolved",
+            contactDimension: "resolved",
+          },
+          requestId: randomUUID(),
+        },
+      }),
+    });
+  });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/crm/leads/new");
+  await page.getByRole("button", { name: "Open CRM navigation" }).click();
+  await expect(page.getByRole("link", { name: "Companies" })).toBeVisible();
+  await page.getByRole("button", { name: "Close CRM navigation" }).last().click();
+  await page.getByLabel(/^First name required$/).fill("Ada");
+  await page.getByLabel(/^Last name required$/).fill("Lovelace");
+  await page.getByLabel(/^Primary email required$/).fill("ada@example.test");
+  await expect(page.getByRole("heading", { name: "Create a Company first" })).toBeVisible();
+  await page.screenshot({
+    path: "artifacts/onboarding-lead-01-empty-320.png",
+    fullPage: true,
+  });
+  const trigger = page.getByRole("button", { name: "Quick create company" });
+  await trigger.click();
+  await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.getByLabel(/^Company name required$/).fill("Northwind Demo");
+  await page.getByRole("button", { name: "Create company", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Company created and selected. Your Lead has not been saved yet.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel(/Company required/)).toHaveValue(
+    new RegExp(companyId),
+  );
+  await expect(page.getByLabel(/^First name required$/)).toHaveValue("Ada");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: "artifacts/onboarding-lead-01-selected-dark.png",
+    fullPage: true,
+  });
+  await page.getByLabel(/Company required/).focus();
+  await page.getByLabel(/Company required/).evaluate((node) =>
+    node.scrollIntoView({ block: "start" }),
+  );
+  await page.screenshot({
+    path: "artifacts/onboarding-lead-01-scrolled-focus-dark.png",
+  });
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: "artifacts/onboarding-lead-01-selected-light.png",
+    fullPage: true,
+  });
+  await page.locator("#stageId").selectOption({ label: "Not contacted" });
+  await page.getByRole("button", { name: "Save Lead" }).click();
+  await expect.poll(() => leadBody).toContain(companyId);
+  await expect(page.getByText(/The Company was created; the Lead was not saved/)).toBeVisible();
+  await expect(page.getByLabel(/Company required/)).toHaveValue(new RegExp(companyId));
+  await page.getByRole("button", { name: "Save Lead" }).click();
+  await expect(page.getByRole("heading", { name: "Lead saved" })).toBeVisible();
+  expect(
+    await page.locator("body").evaluate((node) => node.scrollWidth <= innerWidth),
+  ).toBe(true);
 });

@@ -180,7 +180,9 @@ export function ProductShell({
         const groups = navigationFromCapabilities(parsed.data);
         setNavigation(groups);
         setCanAddLead(parsed.data.capabilities.leads.canCreate);
-        setExpandedGroups(new Set());
+        // Keep every authorized domain visible on first load. An active route still
+        // re-opens its owner after a user collapses another presentation group.
+        setExpandedGroups(new Set(groups.map((group) => group.id)));
         setNavigationState("ready");
       } catch (error) {
         if (controller.signal.aborted) return;

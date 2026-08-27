@@ -5,6 +5,10 @@ const form = readFileSync(
   "src/frontend/features/screen-forms/components/screen-profile-form.tsx",
   "utf8",
 );
+const options = readFileSync(
+  "src/frontend/features/screen-forms/components/screen-form-options.tsx",
+  "utf8",
+);
 
 describe("SCREEN-FORMS-01 frontend boundary", () => {
   it("covers every approved screenshot field without donor-only behavior", () => {
@@ -50,8 +54,8 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
   });
 
   it("uses strict server options and preserves their version or timestamp targets", () => {
-    expect(form).toContain('endpoint(workspaceId, "screen-form-options")');
-    expect(form).toContain("screenFormOptionsV1Schema.safeParse");
+    expect(options).toContain('endpoint(workspaceId, "screen-form-options")');
+    expect(options).toContain("screenFormOptionsV1Schema.safeParse");
     expect(form).toContain("selectedCompany.label");
     expect(form).toContain("initialId={lead?.base.stageId}");
     expect(form).toContain("visibleTeamVersions");
