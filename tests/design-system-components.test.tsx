@@ -22,9 +22,11 @@ describe("CRM shared design-system components", () => {
   });
 
   it("renders the five shared CRM archetype foundations without domain authority", () => {
-    const markup = renderToStaticMarkup(<><DataTable caption="Contacts"><tbody><tr><td>Ada</td></tr></tbody></DataTable><StageColumn tone="qualified" title="Qualified" count={1}><article>Lead</article></StageColumn><FactsGrid><div><dt>Owner</dt><dd>Ada</dd></div></FactsGrid><WorkflowSummaryGrid><Panel tone="qualification" title="Qualification">Ready</Panel></WorkflowSummaryGrid><FormWorkbench label="Edit contact"><SectionNav label="Form sections" items={[{href:"#overview",label:"Overview"}]}/></FormWorkbench></>);
+    const markup = renderToStaticMarkup(<><DataTable caption="Contacts"><tbody><tr><td>Ada</td></tr></tbody></DataTable><StageColumn id="stage-qualified" tone="qualified" title="Qualified" count={1}><article data-lead-id="lead-1">Lead</article></StageColumn><FactsGrid><div><dt>Owner</dt><dd>Ada</dd></div></FactsGrid><WorkflowSummaryGrid><Panel tone="qualification" title="Qualification">Ready</Panel></WorkflowSummaryGrid><FormWorkbench label="Edit contact"><SectionNav label="Form sections" items={[{href:"#overview",label:"Overview"}]}/></FormWorkbench></>);
     expect(markup).toContain("ds-table");
     expect(markup).toContain("ds-stage-column--qualified");
+    expect(markup).toContain('class="pipeline-stage ds-stage-column__content"');
+    expect(markup).toContain('id="stage-qualified" tabindex="-1"');
     expect(markup).toContain("ds-facts-grid");
     expect(markup).toContain("ds-section-panel--qualification");
     expect(markup).toContain('aria-label="Form sections"');

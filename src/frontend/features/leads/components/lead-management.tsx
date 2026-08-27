@@ -46,8 +46,8 @@ function keyFor(body: string, previous: { body: string; key: string }) {
   return previous.body === body ? previous : { body, key: crypto.randomUUID() };
 }
 
-function ManagementDialog({ titleId, descriptionId, restoreFocus, onClose, children }: {
-  titleId: string; descriptionId: string; restoreFocus: () => void; onClose: () => void; children: ReactNode;
+function ManagementDialog({ titleId, descriptionId, initialFocus = "cancel", restoreFocus, onClose, children }: {
+  titleId: string; descriptionId: string; initialFocus?: "cancel" | "select"; restoreFocus: () => void; onClose: () => void; children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null), restore = useRef(restoreFocus);
   useEffect(() => { restore.current = restoreFocus; }, [restoreFocus]);
@@ -55,10 +55,9 @@ function ManagementDialog({ titleId, descriptionId, restoreFocus, onClose, child
     const node = dialog.current;
     if (!node) return;
     node.showModal();
-    (node.querySelector<HTMLElement>("[data-dialog-cancel]") ??
-      node.querySelector<HTMLElement>("button,select,a[href]"))?.focus();
+    (initialFocus === "select" ? node.querySelector<HTMLElement>("select") : node.querySelector<HTMLElement>("[data-dialog-cancel]"))?.focus();
     return () => { if (node.open) node.close(); restore.current(); };
-  }, []);
+  }, [initialFocus]);
   return <dialog ref={dialog} className="lead-management-dialog" aria-labelledby={titleId} aria-describedby={descriptionId}
     onCancel={event => { event.preventDefault(); onClose(); }}>{children}</dialog>;
 }
@@ -217,7 +216,7 @@ export function LeadStageMove({ workspaceId, leadId, leadName, version, currentS
   }
   if (!targets.length) return <span className="lead-stage-unavailable">No other active stages</span>;
   const titleId = `move-stage-title-${leadId}`, descriptionId = `move-stage-description-${leadId}`;
-  return <><button className="ds-action ds-action--secondary" type="button" onClick={event => { restoreTrigger.current = true; setReturnFocus(event.currentTarget); setTarget(""); setOpen(true); }} aria-haspopup="dialog">Move stage<span className="sr-only"> for {leadName}</span></button>{open && <ManagementDialog titleId={titleId} descriptionId={descriptionId} restoreFocus={() => { if (restoreTrigger.current) returnFocus?.focus(); }} onClose={close}>
+  return <><button className="ds-action ds-action--secondary" type="button" onClick={event => { restoreTrigger.current = true; setReturnFocus(event.currentTarget); setTarget(""); setOpen(true); }} aria-haspopup="dialog">Move stage<span className="sr-only"> for {leadName}</span></button>{open && <ManagementDialog titleId={titleId} descriptionId={descriptionId} initialFocus={focusDestinationOnSuccess ? "select" : "cancel"} restoreFocus={() => { if (restoreTrigger.current) returnFocus?.focus(); }} onClose={close}>
     {result ? <div ref={terminalState} role="status" aria-live="polite" aria-atomic="true" tabIndex={-1}><h2 id={titleId}>{result.changed ? `Stage updated to ${result.stage.name}.` : `Already in ${result.stage.name}.`}</h2><p id={descriptionId}>{result.changed ? result.replayed ? "This stage movement was already applied. No duplicate activity was created." : "The Lead was moved and its activity history was updated." : result.replayed ? "This no-change result was already recorded. The Lead remains unchanged." : "The Lead was already in this stage. No Lead change or activity was created."}</p><div className="ds-page-actions"><Button variant="primary" type="button" onClick={finish}>Done</Button><Link className="ds-action ds-action--secondary" href={`/crm/leads/${leadId}`}>View Lead</Link></div></div> : authorityLoss ? <div ref={terminalState} role="alert" aria-atomic="true" tabIndex={-1}><h2 id={titleId}>Lead no longer available</h2><p id={descriptionId}>Access changed or this Lead is no longer visible. No stage change was applied.</p><div className="ds-page-actions"><Button variant="primary" type="button" onClick={() => location.reload()}>Reload safely</Button></div></div> : <><h2 id={titleId}>{selected ? `Move ${leadName} from ${currentStageName} to ${selected.name}?` : `Move ${leadName} to another stage?`}</h2><p id={descriptionId}>Current stage: {currentStageName}. Choose an active Pipeline stage and confirm the movement. Lifecycle and status will not change.</p>{error && <div ref={alert} className="ds-feedback ds-feedback--danger" role="alert" tabIndex={-1}><div><p>{leadManagementErrorDisposition(error) === "refetch_edit" || leadManagementErrorDisposition(error) === "refetch_stage" ? "This Lead or the available stages changed. No movement was applied; reload the latest Pipeline before trying again." : error.message}</p></div></div>}<label className="field" htmlFor={`move-stage-${leadId}`}><span>Pipeline stage</span><select id={`move-stage-${leadId}`} value={target} disabled={busy || Boolean(forbidden)} onChange={event => { setTarget(event.target.value); setError(null); request.current = { body: "", key: crypto.randomUUID() }; }}><option value="">Choose a stage</option>{targets.map(stage => <option key={stage.stageId} value={stage.stageId}>{stage.name}</option>)}</select></label><div className="ds-page-actions"><Button data-dialog-cancel type="button" disabled={busy} onClick={close}>Cancel</Button>{forbidden ? <Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Close and refresh</Button> : error && (leadManagementErrorDisposition(error) === "refetch_edit" || leadManagementErrorDisposition(error) === "refetch_stage") ? <Button variant="primary" type="button" onClick={() => { close(); router.refresh(); }}>Reload latest</Button> : <Button variant="primary" type="button" disabled={busy || !selected} onClick={() => void move()}>{busy ? "Moving Lead…" : selected ? `Move from ${currentStageName} to ${selected.name}` : "Choose a target stage"}</Button>}</div></>}
   </ManagementDialog>}</>;
 }

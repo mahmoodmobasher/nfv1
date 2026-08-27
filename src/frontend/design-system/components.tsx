@@ -100,8 +100,7 @@ export function ViewTabs({
 }
 
 export function StageColumn({ title, count, children, tone = "neutral", id }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string }) {
-  const titleId = id ? `${id}-title` : undefined;
-  return <section id={id} className={classes("ds-stage-column", `ds-stage-column--${tone}`)} aria-labelledby={titleId}><header><h2 id={titleId}>{title}</h2>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></section>;
+  return <section className={classes("ds-stage-column", `ds-stage-column--${tone}`)} aria-labelledby={id}><div className="pipeline-stage ds-stage-column__content"><header><h2 id={id} tabIndex={-1}>{title}</h2>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></div></section>;
 }
 
 export function FactsGrid({ children }: { children: ReactNode }) {
