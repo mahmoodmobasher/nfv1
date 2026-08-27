@@ -879,6 +879,10 @@ test("Nexa Spectrum Workspace menu keeps labelled Sign out reachable in desktop 
   await summary.focus();
   await expect(summary).toBeFocused();
   await summary.press("Enter");
+  const theme = desktopMenu.getByRole("link", { name: "Theme and appearance" });
+  await expect(theme).toBeVisible();
+  expect((await theme.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expect(page.getByLabel("Appearance settings")).toHaveCount(0);
   const signOut = desktopMenu.getByRole("button", { name: "Sign out" });
   await expect(signOut).toBeVisible();
   expect((await signOut.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -899,6 +903,9 @@ test("Nexa Spectrum Workspace menu keeps labelled Sign out reachable in desktop 
   const drawerMenu = drawer.locator(".admin-workspace-menu");
   await drawerMenu.locator("summary").click();
   const drawerSignOut = drawerMenu.getByRole("button", { name: "Sign out" });
+  const drawerTheme = drawerMenu.getByRole("link", { name: "Theme and appearance" });
+  await expect(drawerTheme).toBeVisible();
+  expect((await drawerTheme.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await expect(drawerSignOut).toBeVisible();
   expect((await drawerSignOut.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

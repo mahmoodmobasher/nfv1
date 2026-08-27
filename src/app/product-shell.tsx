@@ -12,7 +12,6 @@ import {
   LogOut,
   Mail,
   Menu,
-  Palette,
   Plus,
   Search,
   Settings,
@@ -269,12 +268,15 @@ export function ProductShell({
       setBusy(false);
     }
   }
-  const signOutControl = (
+  const accountActions = (<>
+    <Link className="product-theme-action" href="/settings#preferences">
+      <span>Theme and appearance</span>
+    </Link>
     <button className="product-signout" onClick={logout} disabled={busy}>
       <LogOut aria-hidden="true" />
       <span>{busy ? "Signing out…" : "Sign out"}</span>
     </button>
-  );
+  </>);
   const item = (entry: ProductNavItem, drawer = false) => {
     const active = isProductNavItemActive(pathname, entry),
       ItemIcon = icons[entry.icon];
@@ -299,7 +301,7 @@ export function ProductShell({
         drawer ? "product-drawer-content" : "product-navigation-content"
       }
     >
-      {drawer && <WorkspaceControl name={workspace} role={role} accountAction={signOutControl} />}
+      {drawer && <WorkspaceControl name={workspace} role={role} accountAction={accountActions} />}
       <nav
         aria-label={kind === "crm" ? "CRM navigation" : "Workspace navigation"}
       >
@@ -373,14 +375,7 @@ export function ProductShell({
               />
             </form>
           )}
-          {navigationState === "ready" && <WorkspaceControl name={workspace} role={role} accountAction={signOutControl} />}
-          <Link
-            className="product-icon-action"
-            href="/settings#preferences"
-            aria-label="Appearance settings"
-          >
-            <Palette aria-hidden="true" />
-          </Link>
+          {navigationState === "ready" && <WorkspaceControl name={workspace} role={role} accountAction={accountActions} />}
         </div>
       </header>
       <header className="product-mobile">

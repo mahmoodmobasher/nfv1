@@ -279,6 +279,50 @@ test("Company and Contact choice labels provide shared 44px targets at desktop a
   }
 });
 
+test("shared Nexa Spectrum form foundation raises hierarchy and preserves narrow containment", async ({ page }) => {
+  const workspaceId = await fixture(page);
+  await mockAuthority(page, workspaceId);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/crm/contacts/new");
+  const workbench = page.locator(".ds-form-workbench");
+  const header = page.locator(".ds-page-header");
+  await expect(workbench).toBeVisible();
+  const width = (await workbench.boundingBox())!.width;
+  expect(width).toBeGreaterThan(900);
+  expect(width).toBeLessThanOrEqual(1040);
+  const surfaces = await page.locator(".ds-form-section").evaluateAll((sections) =>
+    sections.map((section) => ({
+      title: section.querySelector("h2")?.textContent,
+      background: getComputedStyle(section).backgroundColor,
+      edge: getComputedStyle(section).borderInlineStartColor,
+    })),
+  );
+  const byTitle = new Map(surfaces.map((surface) => [surface.title, surface]));
+  expect(byTitle.get("Contact overview")?.background).not.toBe(byTitle.get("Company affiliation")?.background);
+  expect(byTitle.get("Company affiliation")?.background).not.toBe(byTitle.get("Internal notes")?.background);
+  expect(byTitle.get("Internal notes")?.background).not.toBe(byTitle.get("Responsibility & visibility")?.background);
+  expect(byTitle.get("Contact overview")?.edge).not.toBe(byTitle.get("Company affiliation")?.edge);
+  expect(await header.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+  expect(await page.locator(".ds-section-nav").evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+  expect(await page.locator(".ds-form-actions").evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+  await page.screenshot({ path: test.info().outputPath("slice1-contact-form-light.png"), fullPage: true });
+
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(parseFloat(await page.locator(".ds-section-nav a").first().evaluate((element) => getComputedStyle(element).transitionDuration))).toBeLessThanOrEqual(0.001);
+  await page.screenshot({ path: test.info().outputPath("slice1-contact-form-dark.png"), fullPage: true });
+
+  await page.emulateMedia({ forcedColors: "active" });
+  expect(await page.locator(".ds-form-section").first().evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
+  expect(await header.evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
+  await page.emulateMedia({ forcedColors: "none", colorScheme: "light", reducedMotion: "no-preference" });
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect(await page.locator("body").evaluate((node) => node.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath("slice1-contact-form-320.png"), fullPage: true });
+});
+
 test("direct new authority denial never mounts protected fields", async ({
   page,
 }) => {

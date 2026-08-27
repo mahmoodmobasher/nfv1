@@ -64,9 +64,10 @@ describe("design-system document boundary", () => {
     expect(tokens).toContain("--nf-sidebar-width: 232px");
     expect(tokens).toContain("--nf-content-max: 1400px");
     expect(tokens).toContain("--nf-content-padding: 28px");
-    expect(tokens).toContain("--nx-canvas: #f7f7f5");
+    expect(tokens).toContain("--nx-canvas: #f2f3f0");
     expect(tokens).toContain("--nx-action-primary: #5b57d6");
     expect(tokens).toContain("--nf-radius-card: 14px");
+    expect(tokens).toContain("--nf-form-workbench-max: 1040px");
     expect(tokens).not.toMatch(/--spectrum-/);
   });
 
@@ -204,6 +205,11 @@ describe("design-system document boundary", () => {
     expect(components).toContain(".ds-table tbody tr:nth-child(even)");
     expect(components).not.toContain(".cg-directory-table");
     expect(components).toContain(".ds-stage-column--new");
+    expect(components).toContain(".ds-form-section.ds-section-panel--overview");
+    expect(components).toContain(".ds-form-section.ds-section-panel--relationship");
+    expect(components).toContain(".ds-form-section.ds-section-panel--activity");
+    expect(components).toContain(".ds-form-section.ds-section-panel--access");
+    expect(components).toContain("var(--nf-form-workbench-max)");
     expect(deals).not.toContain("<StageColumn");
     expect(deals).toContain("deal-board__stage ds-stage-column");
   });
@@ -277,8 +283,10 @@ describe("design-system document boundary", () => {
     expect(shell).not.toContain('aria-label="Account menu"');
     expect(shell).toContain('className="product-signout"');
     expect(shell).toContain("Sign out");
-    expect(shell).toContain("accountAction={signOutControl}");
-    expect(shell).not.toContain("{signOutControl}\n        </div>");
+    expect(shell).toContain("accountAction={accountActions}");
+    expect(shell).toContain("Theme and appearance");
+    expect(shell).not.toContain("Appearance settings");
+    expect(shell).not.toContain("Palette");
     expect(shell).not.toMatch(/global search|create menu|billing portal/i);
   });
   it("renders a persistent truthful CRM top bar from existing Lead authority", () => {

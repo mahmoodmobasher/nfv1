@@ -162,7 +162,7 @@
 
 /* Nexa Spectrum shared CRM archetypes. Domain files may arrange these
    primitives, but geometry, colour, focus, states, and reflow stay here. */
-.ds-page-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: var(--nf-space-5); padding-block: var(--nf-space-7) var(--nf-space-5); }
+.ds-page-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: var(--nf-space-5); margin-top: var(--nf-space-6); padding: var(--nf-space-5) var(--nf-space-6); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-major); background: var(--nx-surface-raised); box-shadow: var(--nf-shadow-2); }
 .ds-page-header h1,.ds-page-header p { margin: 0; }
 .ds-page-header h1 { margin-top: var(--nf-space-1); font-size: var(--nf-text-display); line-height: 1.15; }
 .ds-page-header__eyebrow { color: var(--nx-text-muted); font-size: var(--nf-text-eyebrow); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
@@ -207,15 +207,21 @@
 .ds-panel--toned { border-inline-start: 4px solid var(--ds-section-accent); background: var(--ds-section-surface); }
 .ds-panel--toned>.ds-panel__body { color: var(--nx-text); }
 
-.ds-form-workbench { display: grid; width: min(100%,var(--nf-reading-max)); margin-inline: auto; gap: var(--nf-space-5); }
-.ds-form-section { --ds-section-surface: var(--nx-surface-secondary); --ds-section-accent: var(--nx-border-emphasis); display: grid; min-width: 0; gap: var(--nf-space-4); padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-inline-start: 4px solid var(--ds-section-accent); border-radius: var(--nf-radius-card); background: var(--ds-section-surface); }
+.ds-form-workbench { display: grid; width: min(100%,var(--nf-form-workbench-max)); margin-inline: auto; gap: var(--nf-space-5); }
+.ds-form-section { --ds-section-surface: var(--nx-surface-secondary); --ds-section-accent: var(--nx-border-emphasis); display: grid; min-width: 0; gap: var(--nf-space-4); padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-inline-start: 4px solid var(--ds-section-accent); border-radius: var(--nf-radius-card); background: var(--ds-section-surface); box-shadow: var(--nf-shadow-1); }
+.ds-form-section.ds-section-panel--overview { --ds-section-surface: var(--nx-section-overview); --ds-section-accent: var(--nx-section-overview-accent); }
+.ds-form-section.ds-section-panel--relationship { --ds-section-surface: var(--nx-section-relationship); --ds-section-accent: var(--nx-section-relationship-accent); }
+.ds-form-section.ds-section-panel--qualification { --ds-section-surface: var(--nx-section-qualification); --ds-section-accent: var(--nx-section-qualification-accent); }
+.ds-form-section.ds-section-panel--conversion { --ds-section-surface: var(--nx-section-conversion); --ds-section-accent: var(--nx-section-conversion-accent); }
+.ds-form-section.ds-section-panel--activity { --ds-section-surface: var(--nx-section-activity); --ds-section-accent: var(--nx-section-activity-accent); }
+.ds-form-section.ds-section-panel--access { --ds-section-surface: var(--nx-section-access); --ds-section-accent: var(--nx-section-access-accent); }
 .ds-form-section__header { display: flex; align-items: flex-start; gap: var(--nf-space-3); }
 .ds-form-section__header h2,.ds-form-section__header p { margin: 0; }
 .ds-form-section__header p { margin-top: var(--nf-space-1); color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
 .ds-form-section__number { display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; border: 1px solid var(--ds-section-accent); border-radius: var(--nf-radius-full); color: var(--nx-text-strong); font-size: var(--nf-text-micro); font-weight: 800; }
 .ds-form-grid { align-items: start; }
-.ds-form-actions { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nf-space-3); padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); }
-.ds-section-nav { display: flex; max-width: 100%; gap: var(--nf-space-1); padding: var(--nf-space-1); overflow-x: auto; overscroll-behavior-inline: contain; border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }
+.ds-form-actions { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nf-space-3); padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-raised); box-shadow: var(--nf-shadow-1); }
+.ds-section-nav { display: flex; max-width: 100%; gap: var(--nf-space-1); padding: var(--nf-space-1); overflow-x: auto; overscroll-behavior-inline: contain; border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-raised); box-shadow: var(--nf-shadow-1); }
 .ds-section-nav a { display: inline-flex; min-height: var(--nf-control-min); flex: 0 0 auto; align-items: center; padding-inline: var(--nf-space-3); border-radius: var(--nf-radius-control); color: var(--nx-text); text-decoration: none; }
 .ds-section-nav a:hover { background: var(--nx-surface-secondary); color: var(--nx-text-strong); }
 
@@ -293,8 +299,9 @@
 @media (forced-colors: active) {
   .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.ds-record-list,.ds-record-row,.ds-stage-column,.ds-facts-grid>div,.ds-section-panel,.ds-section-nav,.deal-board__stage,.lead-management-dialog,.lead-operational-edit fieldset,.lead-activity-card,.cg-directory-icon,.cg-directory-tools,.cg-list-row-feedback { border: 1px solid CanvasText; }
   .ds-section-panel,.ds-stage-column__content>header { border-inline-start-color: CanvasText; border-bottom-color: CanvasText; }
+  .ds-page-header,.ds-form-section,.ds-section-nav,.ds-form-actions { box-shadow: none; }
   .ds-badge { forced-color-adjust: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ds-action,.ds-view-tabs a,.lead-management-dialog,.lead-activity-card { transition: none; }
+  .ds-action,.ds-view-tabs a,.ds-section-nav a,.lead-management-dialog,.lead-activity-card { scroll-behavior: auto; transition: none; }
 }
