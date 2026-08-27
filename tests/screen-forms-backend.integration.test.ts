@@ -438,7 +438,7 @@ suite("SCREEN-FORMS-01 backend", () => {
     );
     expect(bootstrap).toMatchObject({
       kind: "lead",
-      capabilities: { canCreate: true },
+      capabilities: { canCreate: true, canCreateCompany: true },
     });
     expect(JSON.stringify(bootstrap)).not.toContain("Explicit Company");
     const first = await listScreenFormOptionsV1(
@@ -470,6 +470,32 @@ suite("SCREEN-FORMS-01 backend", () => {
       ),
     ).toBe(true);
     expect(second.nextCursor).toBeNull();
+  });
+
+  it("supports a fresh Workspace Company quick-create, option refresh, explicit Lead selection, and independent failure", async () => {
+    const f = await fixture();
+    await pool.query(`delete from companies where workspace_id=$1`, [f.actor.workspaceId]);
+    const navigation = await getWorkspaceNavigationCapabilitiesV1(pool, f.actor, f.actor.workspaceId, randomUUID());
+    expect(navigation.capabilities.companies).toEqual({canView:true,canCreate:true});
+    const bootstrap = await getScreenFormBootstrapV1(pool, f.actor, "lead", randomUUID());
+    expect(bootstrap.capabilities).toMatchObject({canCreate:true,canCreateCompany:true});
+    const empty = await listScreenFormOptionsV1(pool, f.actor, {kind:"lead",optionKind:"company",query:"",limit:25}, randomUUID());
+    expect(empty).toMatchObject({items:[],nextCursor:null});
+    const created = await createCompany(pool, {actor:f.actor,key:`quick-company-${randomUUID()}`,requestId:randomUUID(),command:{
+      contractVersion:"company-screen-create.v2",profile:{name:"Quick Company",domain:null,website:null,industry:null,sizeBand:null,
+        employeeCount:null,annualRevenue:null,parentCompanyId:null,parentCompanyVersion:null,phone:null,address},assignment,
+    }});
+    const refreshed = await listScreenFormOptionsV1(pool, f.actor, {kind:"lead",optionKind:"company",query:"Quick Company",limit:25}, randomUUID());
+    expect(refreshed.items).toEqual([{id:created.companyId,label:"Quick Company",target:{kind:"version",version:created.version}}]);
+    const selected = {...f,company:{id:created.companyId,version:created.version}};
+    const createdLead = await createLeadScreenV2(pool,{actor:f.actor,key:`quick-lead-${randomUUID()}`,requestId:randomUUID(),command:{
+      ...command(selected),profile:{...command(selected).profile,company:{snapshotName:"Quick Company",companyId:created.companyId,companyVersion:created.version}},
+    }});
+    expect(createdLead).toMatchObject({kind:"lead",version:1});
+    await expect(createLeadScreenV2(pool,{actor:f.actor,key:`quick-lead-fail-${randomUUID()}`,requestId:randomUUID(),command:{
+      ...command(selected),profile:{...command(selected).profile,primaryEmail:`failed-${randomUUID()}@example.test`,company:{snapshotName:"Quick Company",companyId:created.companyId,companyVersion:created.version+1}},
+    }})).rejects.toMatchObject({code:"resource_not_found"});
+    expect((await pool.query(`select count(*)::int count from companies where workspace_id=$1 and id=$2`,[f.actor.workspaceId,created.companyId])).rows[0].count).toBe(1);
   });
 
   it("atomically creates a Lead, explicit Company decision, evidence and receipt without lifecycle or Contact effects", async () => {

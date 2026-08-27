@@ -21,6 +21,20 @@ const assignment = {
 };
 
 describe("SCREEN-FORMS-01 strict transport", () => {
+  it("returns a versioned Company selection for explicit Lead quick-create", () => {
+    const recordId = id(), result = {
+      contractVersion: "screen-profile-result.v1" as const,
+      kind: "company" as const,
+      recordId,
+      version: 1,
+      replayed: false,
+      requestId: id(),
+      selection: { id: recordId, label: "Northwind", target: { kind: "version" as const, version: 1 } },
+    };
+    expect(screenProfileResultV1Schema.parse(result)).toEqual(result);
+    expect(screenProfileResultV1Schema.safeParse({ ...result, selection: { ...result.selection, id: id() } }).success).toBe(false);
+  });
+
   it("publishes only the minimized server-owned Lead identity review outcome", () => {
     const result = {
       contractVersion: "screen-profile-result.v1" as const,
@@ -156,7 +170,7 @@ describe("SCREEN-FORMS-01 strict transport", () => {
     const bootstrap = {
       contractVersion: "screen-form-bootstrap.v1" as const,
       kind: "lead" as const,
-      capabilities: { canCreate: true, canManageAssignment: true, canWriteSensitiveProfile: true },
+      capabilities: { canCreate: true, canCreateCompany: true, canManageAssignment: true, canWriteSensitiveProfile: true },
       requestId: id(),
     };
     expect(screenFormBootstrapV1Schema.parse(bootstrap)).toEqual(bootstrap);

@@ -51,6 +51,7 @@ test("the production bundle returns strict Company and Contact screen results an
     const result = (await created.json()).data;
     expect(result).toMatchObject({ contractVersion: "screen-profile-result.v1", kind: "company", version: 1, replayed: false });
     expect(result.recordId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.selection).toEqual({ id: result.recordId, label: "Bundle Route Company", target: { kind: "version", version: 1 } });
     expect(created.headers()["cache-control"]).toContain("private, no-store");
     expect(created.headers().vary?.toLowerCase()).toContain("cookie");
 

@@ -93,6 +93,7 @@ async function mockAuthority(page: Page, workspaceId: string, allowed = true) {
                 kind: new URL(route.request().url()).searchParams.get("kind"),
                 capabilities: {
                   canCreate: true,
+                  canCreateCompany: new URL(route.request().url()).searchParams.get("kind") === "lead",
                   canManageAssignment: true,
                   canWriteSensitiveProfile: true,
                 },

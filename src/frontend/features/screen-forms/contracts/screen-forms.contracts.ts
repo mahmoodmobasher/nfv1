@@ -244,6 +244,7 @@ export const screenFormBootstrapV1Schema = z
     capabilities: z
       .object({
         canCreate: z.boolean(),
+        canCreateCompany: z.boolean(),
         canManageAssignment: z.boolean(),
         canWriteSensitiveProfile: z.boolean(),
       })
@@ -330,10 +331,13 @@ export const leadIdentityReviewOutcomeV1Schema = z.object({
   contactDimension: z.enum(["resolved", "pending"]),
 }).strict();
 export const screenProfileResultV1Schema = z.discriminatedUnion("kind", [
-  z.object({...profileResultBase, kind:z.literal("company")}).strict(),
+  z.object({...profileResultBase, kind:z.literal("company"), selection:z.object({id:uuid,label:clean(200),target:z.object({kind:z.literal("version"),version}).strict()}).strict()}).strict(),
   z.object({...profileResultBase, kind:z.literal("contact")}).strict(),
   z.object({...profileResultBase, kind:z.literal("lead"), identityReview:leadIdentityReviewOutcomeV1Schema}).strict(),
-]);
+]).superRefine((value, context) => {
+  if (value.kind === "company" && (value.selection.id !== value.recordId || value.selection.target.version !== value.version))
+    context.addIssue({code:"custom",message:"company_selection_result_mismatch",path:["selection"]});
+});
 export const screenFormsErrorEnvelopeV1Schema = z
   .object({
     error: z

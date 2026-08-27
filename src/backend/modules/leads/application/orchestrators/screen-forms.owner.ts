@@ -216,6 +216,7 @@ export async function getScreenFormBootstrapV1(
         kind,
         capabilities: {
           canCreate: false,
+          canCreateCompany: false,
           canManageAssignment: false,
           canWriteSensitiveProfile: false,
         },
@@ -228,6 +229,7 @@ export async function getScreenFormBootstrapV1(
       kind,
       capabilities: {
         canCreate: true,
+        canCreateCompany: kind === "lead",
         canManageAssignment: true,
         canWriteSensitiveProfile: true,
       },
