@@ -1,52 +1,19 @@
-# Continuation prompt for a new ChatGPT/Codex session
+# Continuation prompt for a new Product/root session
 
-Copy the text below into the first message of the new session.
+Continue NexaFlow in `/Users/moemahmood/builder_code/Nexflow_v1` as Product/root coordinator.
 
----
+Before acting, read `AGENTS.md`, `docs/handover/README.md`, `docs/handover/PROJECT-STATUS.md`, and the relevant engineering handoffs. Inspect Git status, local/origin SHAs, worktrees, and the migration journal. Preserve all existing work and never expose credentials or protected customer data.
 
-You are continuing the NexaFlow CRM project in `/Users/moemahmood/builder_code/Nexflow_v1`.
+Current authority snapshot (2026-08-27):
 
-Before taking action, read these files completely:
+- Local `main` and `origin/main`: `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`.
+- UAT release: `/opt/nexaflow/uat/releases/600a9aa-uat28`, image `nexaflow:600a9aa-uat28` (`sha256:ba38d93379c2bf82987b4ff9ed34a7cfab96beb836dc410b1e95a77b829bbca3`).
+- Migration ledger: 26 entries; head `0025_db_01b_lead_source_platform`, timestamp `1787793528579`.
+- UAT services were healthy with zero restarts at handoff; production was untouched.
+- Donor evidence remains pinned to `57d38b0c2091f1376344614720890c9544916933`. It is workflow/layout evidence, not tenancy, schema, authorization, or runtime authority.
 
-1. `docs/handover/README.md`
-2. `docs/handover/PROJECT-STATUS.md`
-3. `docs/handover/architecture-handover.md`
-4. `docs/handover/engineering-handover.md`
-5. `docs/handover/design-product-handover.md`
-6. `docs/product/feature-2-implementation-checklist.md`
-7. `AGENTS.md`
+Delivered verticals include Customer Graph Companies/Contacts, Sales Deals and Deal board, Lead conversion, screenshot-driven Company/Contact/Lead profiles, Contact internal Notes, grouped current-authority navigation, Lead inline Company creation, current Lead social-platform attribution, stable option reconciliation, and the donor-adapted Companies/Contacts directories.
 
-Treat repository documents and Git history as the durable project state. Inspect `git status` before acting and preserve any post-deployment documentation updates.
+User validation still owns the authenticated visual confirmation for UAT release `600a9aa-uat28`. The recommended next bounded feature is `ACTIVITY-01A`: manual Lead activity create plus target-scoped newest-first list using the integrated DB-01/DB-01A foundation. Fixed-owner Lead routing follows after its remaining Product semantics are frozen.
 
-Current delivery status:
-
-- Feature 1 is accepted and complete.
-- Feature 2 Work Items 1–6 are complete and accepted for the UAT milestone.
-- “NexaFlow Workspace Foundation Complete” is accepted by Architecture and Graphics.
-- Final deployed application commit is `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`, at `https://app.nexaflowsystems.com`.
-- All 11 migrations and the primary onboarding, Workspace, administration, tenant-denial, CRM, email/outbox, audit, and logout smoke passed.
-- Persistent CRM Leads and a server-backed dashboard already exist; later capability previews must remain clearly marked sample data.
-- Feature 1, Feature 2, WI6, Workspace Foundation, and the approved-recipient Resend UAT delivery gate are closed. Do not reopen them without a concrete downstream defect or an explicitly authorized contract change.
-- Resend is the active UAT email adapter; Mailpit is local-development only.
-- Production-only limitations remain explicit: real Google OIDC, billing/package lifecycle, Audit retention/export, generalized email deliverability and asynchronous bounce/complaint reconciliation, monitoring/backup policy, and production-launch approval.
-
-Immediate objective:
-
-Review the final handover and deployment evidence, then propose the next vertical feature for explicit Product authorization. The roadmap currently places Feature 3 — Personal Profile, Preferences & Account Security next. Do not reopen the Workspace Foundation speculatively; change it only when a real downstream vertical exposes a concrete gap.
-
-Shared platform rule:
-
-Every Workspace-scoped capability must inherit Workspace ownership, active Membership, trusted server/Session Active Workspace context, RBAC, Ownership/Team/Visibility record access, Audit, and package Entitlement. No downstream feature may invent a separate security or tenancy model.
-
-Working model:
-
-- Product/root coordinates scope and acceptance; it does not write application code.
-- Develop owns all coding, database work, migrations, and test repairs.
-- Architect reviews security, data integrity, tenancy, and contracts without coding.
-- Graphics reviews UX, accessibility, responsive behavior, and truthful states without coding.
-- Use the visible project chats for assignments and status communication.
-- Resend is active in UAT under protected verified-domain configuration. Approved-recipient registration/verification, verification rotation, recovery/reset, and invitation delivery/acceptance passed. Never expose credentials, recipient evidence, tokens, links, provider IDs, or message bodies.
-
-First report back with: repository/worktree status, deployed UAT identity and health, the proposed next vertical and its inherited Workspace contract, and any material blocker. Then proceed only after that vertical is explicitly authorized.
-
----
+Only Dev1, Dev2, and Dev3 implement under bounded delegation. Architecture and Graphics are read-only support/review roles. Continue the fast-track policy: parallel review, immutable exact-SHA integration, fall-forward UAT, no speculative rehearsal, and no production mutation without explicit Product authorization.

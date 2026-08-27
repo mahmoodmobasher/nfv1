@@ -1,65 +1,35 @@
 # NexaFlow project handover — start here
 
-Handover date: 2026-08-21
-Project directory: `/Users/moemahmood/builder_code/Nexflow_v1`
-Purpose: enable a new project owner or ChatGPT/Codex session to continue without relying on prior chat history.
+Handover date: 2026-08-27
+Project: `/Users/moemahmood/builder_code/Nexflow_v1`
+
+## Read order
+
+1. `AGENTS.md`
+2. `docs/handover/PROJECT-STATUS.md`
+3. `docs/handover/CONTINUATION-PROMPT.md`
+4. Relevant feature handoffs under `docs/engineering/`
+5. `docs/handover/DONOR-FIRST-DATABASE-HANDOVER.md` for historical donor/database policy
+6. `docs/handover/ROLE-RESTART-PROMPTS.md` when restarting a specialist role
 
 ## Current position
 
-- Feature 1 — Account onboarding and Workspace provisioning: **accepted / complete**.
-- Feature 2 — User, Role, Membership, Workspace context, and Audit: **accepted / complete**.
-- Work Items 1–5 are complete; Work Item 6 was completed through the integrated release gate.
-- **NexaFlow Workspace Foundation Complete** is accepted and deployed to UAT.
-- Current UAT application authority: commit `3f7fc1d5a4c6f4206bf3f9c1d13a3115952a157e`, tag `v0.2.1-uat.2`, at `https://app.nexaflowsystems.com`.
-- Resend is the active UAT transactional-email provider. Mailpit is the local-development adapter only.
-- Accepted Resend deployment/review evidence was published in documentation commit `3c4bfc28fbb333fca83b02ae8393da75e7eafcb2`.
-- Persistent CRM Leads and a server-backed CRM home/dashboard already exist. Some later dashboard capability cards are explicitly labelled sample/demo data.
+Local `main`, `origin/main`, and the published source revision are exact `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`. UAT runs `600a9aa-uat28`; the migration ledger has 26 entries through 0025. Production is untouched.
 
-## Read in this order
+The application now includes Customer Graph, Deals/Pipeline, Lead conversion, expanded profile forms, Contact Notes, current-authority navigation, Lead Quick create Company, stable Lead option reconciliation, and redesigned Companies/Contacts directories.
 
-1. [`PROJECT-STATUS.md`](PROJECT-STATUS.md) — concise status, boundaries, decisions, and next action.
-2. [`architecture-handover.md`](architecture-handover.md) — authoritative Workspace security and data contract.
-3. [`engineering-handover.md`](engineering-handover.md) — implementation inventory, local setup, migrations, tests, and worktree safety.
-4. [`design-product-handover.md`](design-product-handover.md) — accepted UX direction, screen inventory, accessibility, and design debt.
-5. [`CONTINUATION-PROMPT.md`](CONTINUATION-PROMPT.md) — reusable prompt for a new ChatGPT/Codex session.
+## Governing rules
 
-## Immediate next action
+- Preserve Workspace/Membership/Team/RBAC/visibility and Platform Audit/Outbox/Idempotency as the shared authority spine.
+- Donor `57d38b0c2091f1376344614720890c9544916933` is workflow and layout evidence only.
+- Never copy donor tenancy/auth, direct cross-owner writes, cascades, mock data authority, offset pagination, or local evidence systems.
+- Keep owner-module writes explicit and use current-authority final fences.
+- Integrate only reviewed immutable SHAs; prefer fall-forward UAT corrections.
+- UAT is disposable, but destructive reset/deletion still requires explicit scope and target verification.
+- Production changes always require separate Product authorization.
 
-Select and authorize the next vertical product feature. The roadmap currently places **Feature 3 — Personal Profile, Preferences & Account Security** next.
+## Next outcome
 
-Do not reopen or refactor the Workspace Foundation speculatively. Reopen it only when a real downstream vertical proves a concrete gap.
+After Product validates the latest UAT UI, the recommended next slice is manual Lead activity create/list (`ACTIVITY-01A`) on the existing DB-01/DB-01A foundation. Lead routing follows as a separately frozen feature.
 
-## Non-negotiable platform rule
-
-Every future Workspace-scoped capability inherits the same sequence:
-
-1. Resource belongs to a Workspace.
-2. User has an active Membership.
-3. Active Workspace is validated in trusted server/Session context.
-4. RBAC determines action permission.
-5. Ownership, Team, and Visibility determine record access.
-6. Significant mutations and security-relevant denials are audited.
-7. Package Entitlement determines capability availability.
-
-No downstream feature may create a separate tenant, ownership, access, audit, or entitlement model.
-
-## Critical worktree warning
-
-The application release and accepted Resend deployment/review documentation are committed and pushed. At the final transition-audit boundary, local `main` matched `origin/main` and the worktree was clean before the bounded documentation audit.
-
-Do not run destructive cleanup, reset, checkout, rebase, or bulk overwrite operations. Inspect `git status` first and preserve all existing changes.
-
-## Source-of-truth evidence
-
-- [`feature-2-audit-completion-checkpoint.md`](../engineering/feature-2-audit-completion-checkpoint.md)
-- [`feature-2-work-item-5-audit-review.md`](../architecture/feature-2-work-item-5-audit-review.md)
-- [`feature-2-work-item-5-ux-review.md`](../design/feature-2-work-item-5-ux-review.md)
-- [`workspace-foundation-direction.md`](../architecture/workspace-foundation-direction.md)
-- [`feature-2-implementation-checklist.md`](../product/feature-2-implementation-checklist.md)
-- [`feature-1-2-deployment-result.md`](../release/feature-1-2-deployment-result.md)
-- [`feature-1-2-architecture-deployment-review.md`](../release/feature-1-2-architecture-deployment-review.md)
-- [`feature-1-2-ux-deployment-review.md`](../release/feature-1-2-ux-deployment-review.md)
-- [`resend-email-release-readiness.md`](../release/resend-email-release-readiness.md)
-- [`resend-email-deployment-result.md`](../release/resend-email-deployment-result.md)
-- [`resend-email-architecture-review.md`](../release/resend-email-architecture-review.md)
-- [`resend-transactional-email-ux-review.md`](../design/resend-transactional-email-ux-review.md)
+Older handovers remain useful historical evidence, but this dated index and `PROJECT-STATUS.md` control when they conflict.
