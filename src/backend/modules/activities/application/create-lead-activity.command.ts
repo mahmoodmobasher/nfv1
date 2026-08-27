@@ -50,10 +50,10 @@ export async function createLeadActivityV1(pool: Pool, input: { actor: TrustedAc
         principalKey, operation, input.idempotencyKey), target = leadActivityTargetParticipant(tx);
       const activities = activityRepository(tx);
       if (prior) {
+        const authorized = await target.authorizeView(input.actor, input.leadId);
         const receipt = storedReceiptSchema.safeParse(prior.outcome);
         if (!receipt.success) activityFail("activity_unavailable", 503);
         const hashConflict = prior.requestHash !== requestHash;
-        const authorized = await target.authorizeView(input.actor, input.leadId);
         if (hashConflict) activityFail("idempotency_conflict", 409);
         if (receipt.data.leadId !== input.leadId || receipt.data.activityVersion !== ACTIVITY_SUPPORTED_VERSION)
           activityFail("activity_unavailable", 503);

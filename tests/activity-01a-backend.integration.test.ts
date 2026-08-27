@@ -129,6 +129,36 @@ suite("ACTIVITY-01A backend", () => {
       { queryVersion: "activity-list-query.v1", limit: 20 })).rejects.toMatchObject({ code: "activity_unavailable" });
   });
 
+  it("masks malformed receipt state when current Lead disclosure is denied", async () => {
+    const f = await fixture(), key = `activity-create-${randomUUID()}`;
+    await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(), idempotencyKey: key });
+    await pool.query(`update idempotency_records set outcome=$2
+      where operation='activity-create.v1' and idempotency_key=$1`,
+    [key, JSON.stringify({ activityId: "tampered-protected-state" })]);
+    const before = await counts();
+    await pool.query("update workspace_memberships set status='suspended' where id=$1", [f.owner.membershipId]);
+    const error = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(),
+      idempotencyKey: key }).catch((value: unknown) => value);
+    expect(error).toMatchObject({ code: "resource_not_found", status: 404 });
+    expect(JSON.stringify(error)).not.toContain("activity_unavailable");
+    expect(JSON.stringify(error)).not.toContain("tampered-protected-state");
+    expect(await counts()).toEqual(before);
+  });
+
+  it("masks changed-hash reuse when current Lead disclosure is denied", async () => {
+    const f = await fixture(), key = `activity-create-${randomUUID()}`;
+    await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id, command: command(), idempotencyKey: key });
+    const before = await counts();
+    await pool.query("update workspace_memberships set status='suspended' where id=$1", [f.owner.membershipId]);
+    const error = await createLeadActivityV1(pool, { actor: f.owner, leadId: f.lead.id,
+      command: command({ subject: "Changed protected subject" }), idempotencyKey: key })
+      .catch((value: unknown) => value);
+    expect(error).toMatchObject({ code: "resource_not_found", status: 404 });
+    expect(JSON.stringify(error)).not.toContain("idempotency_conflict");
+    expect(JSON.stringify(error)).not.toContain("Changed protected subject");
+    expect(await counts()).toEqual(before);
+  });
+
   it("serves strict private/no-store POST and GET route contracts", async () => {
     const f = await fixture(), csrf = randomUUID(), cookie = `nexaflow_session=${encodeURIComponent(f.owner.token)}; nexaflow_csrf=${csrf}`;
     const post = await activityPost(new Request(`http://127.0.0.1:3000/api/workspaces/${f.workspace.id}/leads/${f.lead.id}/activities`, {
