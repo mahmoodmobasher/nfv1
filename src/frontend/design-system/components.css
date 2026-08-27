@@ -61,6 +61,8 @@
 .ds-table th,.ds-table td { padding: var(--nf-space-3) var(--nf-space-4); border-top: 1px solid var(--nx-border-soft, var(--nx-border-subtle)); text-align: left; vertical-align: top; }
 .ds-table th { background: var(--nx-surface-secondary); color: var(--nx-text-strong); font-size: var(--nf-text-micro); letter-spacing: .06em; text-transform: uppercase; }
 .ds-table tbody tr:hover { background: var(--nx-surface-secondary); }
+.ds-table tbody tr:nth-child(even),.cg-directory-table tbody tr:nth-child(even) { background: var(--nx-record-row-alternate); }
+.ds-table tbody tr:focus-within,.cg-directory-table tbody tr:focus-within { background: var(--nx-record-row-hover); }
 
 .ds-view-tabs { display: inline-flex; max-width: 100%; gap: var(--nf-space-1); padding: var(--nf-space-1); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }
 .ds-view-tabs a { display: inline-flex; min-height: var(--nf-control-min); align-items: center; padding: var(--nf-space-2) var(--nf-space-3); border-radius: var(--nf-radius-control); color: var(--nx-text); font-size: var(--nf-text-caption); text-decoration: none; }
@@ -165,6 +167,11 @@
 .ds-stage-column h2 { margin: 0; font-size: var(--nf-text-h2); }
 .ds-stage-column__count { min-width: 28px; padding: var(--nf-space-1); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-full); background: var(--nx-surface-primary); text-align: center; }
 .ds-stage-column__items { display: grid; gap: var(--nf-space-2); padding-top: var(--nf-space-3); }
+.ds-stage-column .helper { color: var(--nx-text); }
+.ds-stage-column--new { background: var(--nx-stage-new-surface); border-top-color: var(--nx-stage-new-accent); }
+.ds-stage-column--contacted { background: var(--nx-stage-contacted-surface); border-top-color: var(--nx-stage-contacted-accent); }
+.ds-stage-column--qualified { background: var(--nx-stage-qualified-surface); border-top-color: var(--nx-stage-qualified-accent); }
+.ds-stage-column--proposal { background: var(--nx-stage-proposal-surface); border-top-color: var(--nx-stage-proposal-accent); }
 
 .ds-facts-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(190px,100%),1fr)); gap: var(--nf-space-3); margin: 0; }
 .ds-facts-grid>div { min-width: 0; padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }

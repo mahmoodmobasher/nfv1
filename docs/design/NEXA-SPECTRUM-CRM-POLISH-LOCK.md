@@ -1,7 +1,7 @@
 # Nexa Spectrum CRM polish design lock
 
-Status: **LOCKED — user approved**  
-Lock date: 2026-08-27  
+Status: **LOCKED — user approved**
+Lock date: 2026-08-27
 Authority: Nexa Spectrum visual and interaction system
 
 This record freezes the approved CRM visual direction for implementation planning and exact-SHA review. It does not change application behavior, authorization, data contracts, UAT state, or deployment authority.

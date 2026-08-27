@@ -476,10 +476,6 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-drawer-content>.admin-workspace-menu>summary { width: 100%; }
 .product-drawer-content>.admin-workspace-menu .admin-workspace-menu__panel { position: static; width: 100%; margin-top: var(--nf-space-2); box-sizing: border-box; }
 
-@media (max-width: 1200px) {
-  .product-shell .product-topbar>.product-topbar-actions>.admin-workspace { display: none; }
-}
-
 @media (max-width: 1040px) {
   .product-global-search { display: none; }
 }
@@ -679,6 +675,7 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-shell--crm .pipeline-stage .pipeline-owner,
 .product-shell--crm .pipeline-stage .pipeline-visibility,
 .product-shell--crm .pipeline-stage .pipeline-empty-stage { color: var(--nx-text-muted); }
+.product-shell--crm .ds-stage-column .pipeline-empty-stage { color: var(--nx-text); }
 .product-shell--crm .pipeline-stage .pipeline-change-stage {
   margin-top: var(--nf-space-2);
   border-color: var(--nx-border-emphasis);

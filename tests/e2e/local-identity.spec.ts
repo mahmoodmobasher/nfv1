@@ -883,8 +883,13 @@ test("Nexa Spectrum Workspace menu keeps labelled Sign out reachable in desktop 
   await expect(signOut).toBeVisible();
   expect((await signOut.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.keyboard.press("Escape");
-  await summary.press("Enter");
   await expect(signOut).toBeHidden();
+  await expect(summary).toBeFocused();
+  for (const width of [1200, 1024, 901]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(summary).toBeVisible();
+    expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
 
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto("/crm");
@@ -1565,11 +1570,9 @@ test("Spectrum shell honors forced colours and reduced motion", async ({
   expect(
     transition.split(",").every((value) => Number.parseFloat(value) <= 0.01),
   ).toBe(true);
-  const account = page
-    .locator(".product-topbar")
-    .getByRole("button", { name: "Account menu" });
+  const account = page.locator(".product-topbar .admin-workspace-menu summary");
   await account.click();
-  const accountMenu = page.getByRole("menu", { name: "Account menu" });
+  const accountMenu = page.locator(".product-topbar .admin-workspace-menu__panel");
   await expect(accountMenu).toBeVisible();
   expect(
     await account.evaluate(
@@ -1598,6 +1601,8 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
     const populatedStage = page.getByRole("region", { name: /New/ });
     const emptyStage = page.getByRole("region", { name: /Proposal/ });
+    await expect(populatedStage).toHaveClass(/ds-stage-column--new/);
+    await expect(emptyStage).toHaveClass(/ds-stage-column--proposal/);
     const card = populatedStage.locator(".ds-lead-card");
     const count = populatedStage.getByText("1 lead", { exact: true });
     const viewLead = card.getByRole("link", { name: "View lead" });
@@ -1642,7 +1647,7 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     ).toBeGreaterThanOrEqual(4.5);
     expect(
       await renderedTextContrast(
-        page.locator(".product-shell--crm>.product-topbar .admin-workspace b"),
+        page.locator(".product-shell--crm>.product-topbar .admin-workspace>summary b"),
         page.locator(".product-shell--crm>.product-topbar"),
       ),
     ).toBeGreaterThanOrEqual(4.5);

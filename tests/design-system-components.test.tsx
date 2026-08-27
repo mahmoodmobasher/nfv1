@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionLink, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormWorkbench, LoadingState, PageHeader, Panel, RecordList, RecordRow, SectionNav, SectionPanel, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
+import { ActionLink, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormWorkbench, LoadingState, Panel, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
 
 describe("CRM shared design-system components", () => {
   it("renders complete semantic state primitives without feature authority", () => {
@@ -22,10 +22,9 @@ describe("CRM shared design-system components", () => {
   });
 
   it("renders the five shared CRM archetype foundations without domain authority", () => {
-    const markup = renderToStaticMarkup(<><PageHeader eyebrow="Contacts" title="Contacts" description="Server-authorized records"/><RecordList label="Contacts"><RecordRow><span>Ada</span></RecordRow></RecordList><StageColumn title="Qualified" count={1}><article>Lead</article></StageColumn><FactsGrid><div><dt>Owner</dt><dd>Ada</dd></div></FactsGrid><WorkflowSummaryGrid><SectionPanel tone="qualification" title="Qualification">Ready</SectionPanel></WorkflowSummaryGrid><FormWorkbench label="Edit contact"><SectionNav label="Form sections" items={[{href:"#overview",label:"Overview"}]}/></FormWorkbench></>);
-    expect(markup).toContain("ds-page-header");
-    expect(markup).toContain('role="list"');
-    expect(markup).toContain("ds-stage-column");
+    const markup = renderToStaticMarkup(<><DataTable caption="Contacts"><tbody><tr><td>Ada</td></tr></tbody></DataTable><StageColumn tone="qualified" title="Qualified" count={1}><article>Lead</article></StageColumn><FactsGrid><div><dt>Owner</dt><dd>Ada</dd></div></FactsGrid><WorkflowSummaryGrid><Panel tone="qualification" title="Qualification">Ready</Panel></WorkflowSummaryGrid><FormWorkbench label="Edit contact"><SectionNav label="Form sections" items={[{href:"#overview",label:"Overview"}]}/></FormWorkbench></>);
+    expect(markup).toContain("ds-table");
+    expect(markup).toContain("ds-stage-column--qualified");
     expect(markup).toContain("ds-facts-grid");
     expect(markup).toContain("ds-section-panel--qualification");
     expect(markup).toContain('aria-label="Form sections"');

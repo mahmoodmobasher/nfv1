@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 function classes(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -99,30 +99,9 @@ export function ViewTabs({
   return <nav className="ds-view-tabs" aria-label={label}>{items.map(item => <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</Link>)}</nav>;
 }
 
-export function PageHeader({
-  title,
-  eyebrow,
-  description,
-  actions,
-}: {
-  title: ReactNode;
-  eyebrow?: ReactNode;
-  description?: ReactNode;
-  actions?: ReactNode;
-}) {
-  return <header className="ds-page-header"><div>{eyebrow && <p className="ds-page-header__eyebrow">{eyebrow}</p>}<h1>{title}</h1>{description && <div className="ds-page-header__description">{description}</div>}</div>{actions && <div className="ds-page-header__actions">{actions}</div>}</header>;
-}
-
-export function RecordList({ children, label }: { children: ReactNode; label?: string }) {
-  return <div className="ds-record-list" role="list" aria-label={label}>{children}</div>;
-}
-
-export function RecordRow({ children, className, ...props }: HTMLAttributes<HTMLElement>) {
-  return <article className={classes("ds-record-row", className)} role="listitem" {...props}>{children}</article>;
-}
-
-export function StageColumn({ title, count, children }: { title: ReactNode; count?: ReactNode; children: ReactNode }) {
-  return <section className="ds-stage-column"><header><h2>{title}</h2>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></section>;
+export function StageColumn({ title, count, children, tone = "neutral", id }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string }) {
+  const titleId = id ? `${id}-title` : undefined;
+  return <section id={id} className={classes("ds-stage-column", `ds-stage-column--${tone}`)} aria-labelledby={titleId}><header><h2 id={titleId}>{title}</h2>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></section>;
 }
 
 export function FactsGrid({ children }: { children: ReactNode }) {
@@ -131,10 +110,6 @@ export function FactsGrid({ children }: { children: ReactNode }) {
 
 export function WorkflowSummaryGrid({ children }: { children: ReactNode }) {
   return <div className="ds-workflow-summary-grid">{children}</div>;
-}
-
-export function SectionPanel({ tone, title, children, action }: { tone: SectionTone; title: ReactNode; children: ReactNode; action?: ReactNode }) {
-  return <section className={`ds-section-panel ds-section-panel--${tone}`}><header><h2>{title}</h2>{action}</header><div>{children}</div></section>;
 }
 
 export function FormWorkbench({ children, label }: { children: ReactNode; label?: string }) {

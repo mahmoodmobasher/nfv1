@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Button, FieldMessage, Panel } from "@/frontend/design-system";
+import { Button, FieldMessage, FormWorkbench, Panel, SectionNav } from "@/frontend/design-system";
 import type { ScreenFormOption } from "./quick-create-company";
 import { LeadSourceFields } from "./lead-source-fields";
 import { OptionChecks, OptionSelect } from "./screen-form-options";
@@ -574,6 +574,8 @@ export function ScreenProfileForm({
           </p>
         </div>
       </header>
+      <FormWorkbench label={`${editing ? "Edit" : "Add"} ${noun(kind)}`}>
+      <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-contact-heading",label:"Contact"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
       <Panel title={kind === "lead" ? undefined : `${noun(kind)} information`} className={kind === "lead" ? "lead-profile-shell" : undefined}>
         <form
           className="ds-form screen-profile-form"
@@ -1200,6 +1202,7 @@ export function ScreenProfileForm({
           </div>
         </form>
       </Panel>
+      </FormWorkbench>
     </>
   );
 }

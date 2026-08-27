@@ -191,6 +191,22 @@ describe("design-system document boundary", () => {
     expect(shell).toContain("font-weight: 600");
   });
 
+  it("consumes shared archetypes in live CRM surfaces without label-derived Deal tones", () => {
+    const components = readFileSync(new URL("../src/frontend/design-system/components.css", import.meta.url), "utf8");
+    const leads = readFileSync(new URL("../src/frontend/features/leads/components/lead-presentation.tsx", import.meta.url), "utf8");
+    const forms = readFileSync(new URL("../src/frontend/features/screen-forms/components/screen-profile-form.tsx", import.meta.url), "utf8");
+    const deals = readFileSync(new URL("../src/frontend/features/deals/components/deals.tsx", import.meta.url), "utf8");
+    expect(leads).toContain("<StageColumn");
+    expect(leads).toContain("<FactsGrid>");
+    expect(leads).toContain("<WorkflowSummaryGrid>");
+    expect(forms).toContain("<FormWorkbench");
+    expect(forms).toContain("<SectionNav");
+    expect(components).toContain(".ds-table tbody tr:nth-child(even),.cg-directory-table tbody tr:nth-child(even)");
+    expect(components).toContain(".ds-stage-column--new");
+    expect(deals).not.toContain("<StageColumn");
+    expect(deals).toContain("deal-board__stage ds-stage-column");
+  });
+
   it("keeps Phase 3 CRM presentation on the centralized semantic contract", () => {
     const css = readFileSync(
       new URL("../src/app/globals.css", import.meta.url),
