@@ -1,5 +1,7 @@
 # NexaFlow CRM onboarding MVP: security and data contracts
 
+> Retained foundational security contract. Later CRM verticals inherit these boundaries; current delivery status is recorded in `docs/handover/PROJECT-STATUS.md`.
+
 Status: product/architecture contract for implementation planning  
 Scope: plan selection, account creation, identity verification, workspace provisioning, owner assignment, CRM entry, invitations, roles, optional teams, sessions, and recovery  
 Out of scope: UI implementation, billing collection, lead-domain schema, and vendor-specific integration code

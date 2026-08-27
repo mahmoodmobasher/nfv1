@@ -1,5 +1,7 @@
 # P1A Lead intake and identity contract
 
+> Retained original Product contract. Manual intake, identity review, and later conversion are now active in bounded forms; deferred import/provider scope remains held. Current status is in `docs/handover/PROJECT-STATUS.md`.
+
 Date: 2026-08-24
 Status: **reconciled Product planning authority; implementation HOLD**
 Scope: canonical Lead inquiry intake, minimum Contact and Company identity, identity review, attribution, imports, concurrency, Audit, and domain-event boundaries

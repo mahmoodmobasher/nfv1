@@ -1,5 +1,7 @@
 # P1A-01 presentation wire-contract addendum
 
+> Retained original wire-contract decision. Current public schemas in source control are authoritative where later versioned contracts supersede this addendum.
+
 Status: frozen additive authority for the manual-only P1A-01 backend presentation surface. The implementation gate remains separate. This addendum changes no schema and does not authorize deferred adapters.
 
 ## Stable identities and transport

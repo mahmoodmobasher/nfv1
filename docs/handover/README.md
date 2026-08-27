@@ -14,7 +14,7 @@ Project: `/Users/moemahmood/builder_code/Nexflow_v1`
 
 ## Current position
 
-Local `main`, `origin/main`, and the published source revision are exact `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`. UAT runs `600a9aa-uat28`; the migration ledger has 26 entries through 0025. Production is untouched.
+Local `main` and `origin/main` are aligned after the documentation cleanup. The deployed application revision is `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`; UAT runs `600a9aa-uat28`, and the migration ledger has 26 entries through 0025. Production is untouched.
 
 The application now includes Customer Graph, Deals/Pipeline, Lead conversion, expanded profile forms, Contact Notes, current-authority navigation, Lead Quick create Company, stable Lead option reconciliation, and redesigned Companies/Contacts directories.
 

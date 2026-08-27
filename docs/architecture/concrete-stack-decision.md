@@ -1,5 +1,7 @@
 # Concrete Stack Decision
 
+> Retained foundational stack authority. Current source, UAT, and feature status are recorded in `docs/handover/PROJECT-STATUS.md`.
+
 Status: approved implementation default for the Production Identity + Workspace Provisioning gate  
 Date: 2026-08-20  
 Scope: local development and later Docker Compose deployment behind Caddy with PostgreSQL  

@@ -6,7 +6,8 @@ Status date: 2026-08-27
 
 | Area | Exact identity | State |
 | --- | --- | --- |
-| Source | `600a9aa96ec598b38aed557c2c4cb9b62d4afc08` | Local `main` and `origin/main` aligned. |
+| Repository | Verify `main` against `origin/main` | The documentation cleanup commit follows the deployed application revision. |
+| Deployed application source | `600a9aa96ec598b38aed557c2c4cb9b62d4afc08` | Must remain an ancestor of the repository documentation HEAD. |
 | UAT | `600a9aa-uat28` | Published and healthy at last deployment check. |
 | UAT image | `sha256:ba38d93379c2bf82987b4ff9ed34a7cfab96beb836dc410b1e95a77b829bbca3` | Exact OCI revision; non-root `10001:10001`. |
 | Database | 26 ledger entries; head `0025` / `1787793528579` | No reset for the latest frontend deployment. |

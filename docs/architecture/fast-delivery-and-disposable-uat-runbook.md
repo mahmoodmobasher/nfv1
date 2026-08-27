@@ -1,7 +1,7 @@
 # Fast delivery and disposable UAT runbook
 
 Date: 2026-08-24
-Status: proposed forward-looking authority; effective only after Product accepts it
+Status: accepted operating model; current release identity is recorded in `docs/release/CURRENT-UAT.md`
 Scope: NexaFlow development, integration, and UAT; production is excluded
 
 ## Decision

@@ -6,7 +6,7 @@ Before acting, read `AGENTS.md`, `docs/handover/README.md`, `docs/handover/PROJE
 
 Current authority snapshot (2026-08-27):
 
-- Local `main` and `origin/main`: `600a9aa96ec598b38aed557c2c4cb9b62d4afc08`.
+- Local `main` and `origin/main` are aligned; verify the exact documentation HEAD before acting. The deployed application revision is `600a9aa96ec598b38aed557c2c4cb9b62d4afc08` and must be an ancestor.
 - UAT release: `/opt/nexaflow/uat/releases/600a9aa-uat28`, image `nexaflow:600a9aa-uat28` (`sha256:ba38d93379c2bf82987b4ff9ed34a7cfab96beb836dc410b1e95a77b829bbca3`).
 - Migration ledger: 26 entries; head `0025_db_01b_lead_source_platform`, timestamp `1787793528579`.
 - UAT services were healthy with zero restarts at handoff; production was untouched.
