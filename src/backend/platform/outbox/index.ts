@@ -4,3 +4,4 @@ export * from "./customer-graph-event";
 export * from "./sales-event";
 export * from "./lead-conversion-event";
 export * from "./notes-event";
+export * from "./activity-event";

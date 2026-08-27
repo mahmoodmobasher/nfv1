@@ -8,7 +8,7 @@ function files(root: string): string[] {
     return statSync(path).isDirectory() ? files(path) : [path];
   });
 }
-const modules = ["leads", "contacts", "companies", "identity-review", "notes"];
+const modules = ["leads", "contacts", "companies", "identity-review", "notes", "activities"];
 const moduleFiles = files("src/backend/modules").filter((path) =>
   path.endsWith(".ts"),
 );
@@ -99,6 +99,10 @@ const ownedByModule: Record<string, Set<string>> = {
     "note_records",
     "note_revisions",
     "note_record_references",
+  ]),
+  activities: new Set([
+    "activity_records",
+    "activity_record_references",
   ]),
   "identity-review": new Set([
     "lead_identity_reviews",

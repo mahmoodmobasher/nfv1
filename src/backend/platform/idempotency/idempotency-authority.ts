@@ -7,7 +7,7 @@ export type IdempotentMutationOperation = "lead-operational-edit.v1" | "lead-sta
   "contact-affiliation-replace.v1" | "sales-deal-create.v1" | "sales-deal-update.v1" |
   "sales-deal-stage-transition.v1" | "sales-deal-archive.v1" | "sales-deal-restore.v1" |
   "lead-convert-to-deal.v1" | "lead-screen-create.v2" | "lead-screen-edit.v2" |
-  "contact-internal-note-add.v1";
+  "contact-internal-note-add.v1" | "activity-create.v1";
 export type LeadMutationOperation = Extract<IdempotentMutationOperation,"lead-operational-edit.v1"|"lead-stage-transition.v1">;
 
 export type IdempotencyReceipt<T = unknown> = {

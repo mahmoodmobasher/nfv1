@@ -38,3 +38,4 @@ export type { LeadConvertToDealCommandV1, LeadConversionPreviewV1, LeadConversio
 export { convertLeadToDealV1, getLeadConversionPreviewV1 } from
   "./application/orchestrators/convert-lead-to-deal.orchestrator";
 export { leadConversionFailure, leadConversionJson } from "./presentation/lead-conversion.http";
+export { leadActivityTargetParticipant } from "./contracts/lead-activity.participant";

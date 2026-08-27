@@ -4,3 +4,4 @@ export * from "./customer-graph-evidence";
 export * from "./sales-evidence";
 export * from "./lead-conversion-evidence";
 export * from "./notes-evidence";
+export * from "./activity-evidence";
