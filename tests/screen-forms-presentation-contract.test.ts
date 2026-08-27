@@ -16,6 +16,13 @@ describe("SCREEN-FORMS-01 detail presentation",()=>{
     const value={...base,recordId:contactId,kind:"contact" as const,base:{salutation:null,firstName:"Ada",lastName:"Lovelace",jobTitle:null,department:null,lifecycleStage:"lead" as const},categories:{channels:{disclosure:"masked" as const,value:{primaryEmail:"a***@example.test",secondaryEmail:null,directPhone:"***-***-0100",mobilePhone:null,linkedinUrl:null}},address:{disclosure:"withheld" as const},notes:{disclosure:"full" as const,value:{listRoute:`/api/workspaces/${workspaceId}/contacts/${contactId}/notes`}},hierarchy:{disclosure:"withheld" as const}}};
     expect(screenProfileDetailV1Schema.parse(value)).toEqual(value);
     expect(JSON.stringify(value)).not.toContain("body");
+    const legacy = screenProfileDetailV1Schema.parse({
+      ...value,
+      base: { ...value.base, lifecycleStage: null },
+    });
+    expect(legacy.kind).toBe("contact");
+    if (legacy.kind !== "contact") throw new Error("expected Contact detail");
+    expect(legacy.base.lifecycleStage).toBeNull();
   });
 
   it("requires an explicit Lead consent envelope and withholds assignment facts independently",()=>{

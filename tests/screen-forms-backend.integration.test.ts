@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import {
   createLeadScreenV2,
+  contactScreenCreateCommandV2Schema,
+  contactScreenEditCommandV2Schema,
   editLeadScreenV2,
   getScreenFormBootstrapV1,
   getScreenFormSelectedOptionV1,
@@ -355,6 +357,151 @@ suite("SCREEN-FORMS-01 backend", () => {
         )
       ).rows[0],
     ).toEqual({ companyId: f.company.id, roleCode: "employee", primary: true });
+  });
+
+  it("rejects duplicate normalized Contact channels before persistence with zero effects", async () => {
+    const f = await fixture(),
+      before = (
+        await pool.query<{ contacts: number; points: number }>(
+          `select (select count(*)::int from contacts where workspace_id=$1) contacts,
+                  (select count(*)::int from contact_identity_points where workspace_id=$1) points`,
+          [f.actor.workspaceId],
+        )
+      ).rows[0],
+      command = {
+        contractVersion: "contact-screen-create.v2" as const,
+        profile: {
+          salutation: null,
+          firstName: "Duplicate",
+          lastName: "Channels",
+          jobTitle: null,
+          department: null,
+          primaryEmail: "same@example.test",
+          secondaryEmail: " SAME@example.test ",
+          directPhone: "+14165550123",
+          mobilePhone: " +14165550123 ",
+          linkedinUrl: null,
+          lifecycleStage: "lead" as const,
+          company: null,
+          address,
+        },
+        assignment,
+      },
+      parsed = contactScreenCreateCommandV2Schema.safeParse(command);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success)
+      expect(parsed.error.issues.map((issue) => issue.path.join("."))).toEqual(
+        expect.arrayContaining([
+          "profile.primaryEmail",
+          "profile.secondaryEmail",
+          "profile.directPhone",
+          "profile.mobilePhone",
+        ]),
+      );
+    const after = (
+      await pool.query<{ contacts: number; points: number }>(
+        `select (select count(*)::int from contacts where workspace_id=$1) contacts,
+                (select count(*)::int from contact_identity_points where workspace_id=$1) points`,
+        [f.actor.workspaceId],
+      )
+    ).rows[0];
+    expect(after).toEqual(before);
+  });
+
+  it("represents legacy-null lifecycle only on authorized detail and still requires it on edit", async () => {
+    const f = await fixture(),
+      created = await createContact(pool, {
+        actor: f.actor,
+        key: `legacy-null-contact-${randomUUID()}`,
+        requestId: randomUUID(),
+        command: {
+          contractVersion: "contact-create.v1",
+          firstName: "Legacy",
+          lastName: "Lifecycle",
+          email: "legacy.lifecycle@example.test",
+          phone: null,
+          affiliation: null,
+          responsibleMembershipId: f.actor.membershipId,
+          responsibleTeamId: null,
+          visibility: "workspace",
+          visibleTeamIds: [],
+        },
+      }),
+      detail = await getScreenProfileV1(
+        pool,
+        f.actor,
+        "contact",
+        created.contactId,
+        randomUUID(),
+      );
+    expect(detail.kind).toBe("contact");
+    if (detail.kind !== "contact") throw new Error("expected Contact detail");
+    expect(detail.base.lifecycleStage).toBeNull();
+    const invalidEdit = contactScreenEditCommandV2Schema.safeParse({
+      contractVersion: "contact-screen-edit.v2",
+      expectedVersion: created.version,
+      profile: {
+        salutation: null,
+        firstName: "Legacy",
+        lastName: "Lifecycle",
+        jobTitle: null,
+        department: null,
+        primaryEmail: "legacy.lifecycle@example.test",
+        secondaryEmail: null,
+        directPhone: null,
+        mobilePhone: null,
+        linkedinUrl: null,
+        lifecycleStage: null,
+        company: null,
+        address,
+      },
+      assignment: {
+        ...assignment,
+        responsibleMembershipId: f.actor.membershipId,
+        responsibleMembershipVersion: 1,
+      },
+    });
+    expect(invalidEdit.success).toBe(false);
+    const duplicateEdit = contactScreenEditCommandV2Schema.safeParse({
+      contractVersion: "contact-screen-edit.v2",
+      expectedVersion: created.version,
+      profile: {
+        salutation: null,
+        firstName: "Legacy",
+        lastName: "Lifecycle",
+        jobTitle: null,
+        department: null,
+        primaryEmail: "legacy.lifecycle@example.test",
+        secondaryEmail: " LEGACY.LIFECYCLE@example.test ",
+        directPhone: null,
+        mobilePhone: null,
+        linkedinUrl: null,
+        lifecycleStage: "lead",
+        company: null,
+        address,
+      },
+      assignment: {
+        ...assignment,
+        responsibleMembershipId: f.actor.membershipId,
+        responsibleMembershipVersion: 1,
+      },
+    });
+    expect(duplicateEdit.success).toBe(false);
+    expect(
+      (
+        await pool.query<{ version: number }>(
+          `select version from contacts where workspace_id=$1 and id=$2`,
+          [f.actor.workspaceId, created.contactId],
+        )
+      ).rows[0].version,
+    ).toBe(created.version);
+    await pool.query(
+      `update workspace_memberships set status='suspended',version=version+1 where workspace_id=$1 and id=$2`,
+      [f.actor.workspaceId, f.actor.membershipId],
+    );
+    await expect(
+      getScreenProfileV1(pool, f.actor, "contact", created.contactId, randomUUID()),
+    ).rejects.toMatchObject({ code: "resource_not_found", status: 404 });
   });
 
   it("serializes sensitive Contact profile categories from current authority without leaking raw channels to Members", async () => {

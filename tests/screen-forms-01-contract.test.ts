@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   companyScreenCreateCommandV2Schema,
   contactScreenCreateCommandV2Schema,
+  contactScreenEditCommandV2Schema,
   leadScreenCreateCommandV2Schema,
   screenFormBootstrapV1Schema,
   screenFormSelectedOptionQueryV1Schema,
@@ -114,6 +115,61 @@ describe("SCREEN-FORMS-01 strict transport", () => {
       ...command,
       profile: { ...command.profile, linkedinUrl: "http://linkedin.com/in/ada" },
     }).success).toBe(false);
+    for (const candidate of [
+      {
+        ...command,
+        profile: {
+          ...command.profile,
+          primaryEmail: " ADA@example.test ",
+          secondaryEmail: "ada@EXAMPLE.test",
+        },
+      },
+      {
+        ...command,
+        profile: {
+          ...command.profile,
+          directPhone: "+14165550100",
+          mobilePhone: " +14165550100 ",
+        },
+      },
+    ]) {
+      const result = contactScreenCreateCommandV2Schema.safeParse(candidate);
+      expect(result.success).toBe(false);
+      if (!result.success)
+        expect(result.error.issues.map((issue) => issue.path.join(".")))
+          .toEqual(expect.arrayContaining(
+            candidate.profile.secondaryEmail
+              ? ["profile.primaryEmail", "profile.secondaryEmail"]
+              : ["profile.directPhone", "profile.mobilePhone"],
+          ));
+    }
+    expect(contactScreenCreateCommandV2Schema.safeParse({
+      ...command,
+      profile: { ...command.profile, lifecycleStage: null },
+    }).success).toBe(false);
+    expect(contactScreenEditCommandV2Schema.safeParse({
+      ...command,
+      contractVersion: "contact-screen-edit.v2",
+      expectedVersion: 1,
+      profile: { ...command.profile, lifecycleStage: null },
+    }).success).toBe(false);
+    const duplicateEdit = contactScreenEditCommandV2Schema.safeParse({
+      ...command,
+      contractVersion: "contact-screen-edit.v2",
+      expectedVersion: 1,
+      profile: {
+        ...command.profile,
+        directPhone: "+14165550100",
+        mobilePhone: "+14165550100",
+      },
+    });
+    expect(duplicateEdit.success).toBe(false);
+    if (!duplicateEdit.success)
+      expect(duplicateEdit.error.issues.map((issue) => issue.path.join(".")))
+        .toEqual(expect.arrayContaining([
+          "profile.directPhone",
+          "profile.mobilePhone",
+        ]));
   });
 
   it("keeps Lead stage, lifecycle, rating, consent, and Company semantics separate", () => {

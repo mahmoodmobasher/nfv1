@@ -24,6 +24,74 @@ const presentation = {
 
 type ScreenCode = keyof typeof presentation;
 
+const STATIC_ROUTE_SEGMENTS = new Set([
+  "api", "workspaces", "screen-form-bootstrap", "screen-form-options",
+  "selected", "companies", "contacts", "leads", "profile",
+]);
+const SCREEN_OPERATIONS = new Set([
+  "company-screen-create.v2", "company-screen-edit.v2",
+  "contact-screen-create.v2", "contact-screen-edit.v2",
+  "lead-screen-create.v2", "lead-screen-edit.v2",
+]);
+const SAFE_CONSTRAINT = /^[a-z][a-z0-9_]{0,62}$/;
+const SAFE_REVISION = /^[0-9a-f]{7,64}$/i;
+
+function routeTemplate(request: Request) {
+  try {
+    return `/${new URL(request.url).pathname.split("/").filter(Boolean)
+      .map((segment) => STATIC_ROUTE_SEGMENTS.has(segment) ? segment : ":id")
+      .join("/")}`;
+  } catch {
+    return "/invalid";
+  }
+}
+
+function operationFrom(request: Request, body: unknown) {
+  const contractVersion =
+    body && typeof body === "object" && "contractVersion" in body
+      ? (body as { contractVersion?: unknown }).contractVersion
+      : null;
+  if (typeof contractVersion === "string" && SCREEN_OPERATIONS.has(contractVersion))
+    return contractVersion;
+  return request.method.toLowerCase();
+}
+
+function databaseFailure(error: unknown) {
+  if (!error || typeof error !== "object") return {};
+  const candidate = error as { code?: unknown; constraint?: unknown };
+  return {
+    ...(typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)
+      ? { sqlState: candidate.code }
+      : {}),
+    ...(typeof candidate.constraint === "string" && SAFE_CONSTRAINT.test(candidate.constraint)
+      ? { constraint: candidate.constraint }
+      : {}),
+  };
+}
+
+function logFailure(
+  error: unknown,
+  known: { code: ScreenCode; status: number },
+  requestId: string,
+  request: Request,
+  body: unknown,
+) {
+  const configuredRevision = process.env.NEXAFLOW_REVISION ?? "unknown";
+  const record = {
+    event: "screen_form_request_failed",
+    requestId,
+    route: routeTemplate(request),
+    operation: operationFrom(request, body),
+    code: known.code,
+    status: known.status,
+    revision: SAFE_REVISION.test(configuredRevision) ? configuredRevision : "unknown",
+    ...databaseFailure(error),
+  };
+  const serialized = JSON.stringify(record);
+  if (known.status >= 500) console.error(serialized);
+  else console.warn(serialized);
+}
+
 function normalized(error: unknown): { code: ScreenCode; status: number; fields?: string[]; selection?: unknown } {
   if (!error || typeof error !== "object" || !("code" in error) || !("status" in error))
     return { code: "unexpected_error", status: 500 };
@@ -43,8 +111,13 @@ export function screenFormsJson(data: unknown, status = 200) {
   return Response.json({ data }, { status, headers: privateHeaders });
 }
 
-export function screenFormsFailure(error: unknown, requestId: string) {
+export function screenFormsFailure(
+  error: unknown,
+  requestId: string,
+  context?: { request: Request; body: unknown },
+) {
   const known = normalized(error), entry = presentation[known.code], action = entry[2];
+  if (context) logFailure(error, known, requestId, context.request, context.body);
   const candidate = {
     error: {
       code: known.code,
@@ -81,11 +154,16 @@ export async function screenFormsRoute(
 ) {
   const requestId = crypto.randomUUID();
   if (mutation && mutationGuard(request))
-    return screenFormsFailure({ code: "permission_required", status: 403 }, requestId);
+    return screenFormsFailure(
+      { code: "permission_required", status: 403 },
+      requestId,
+      { request, body: null },
+    );
   const { pool } = localDatabase();
+  let body: unknown = null;
   try {
     const actor = await tenant(pool, request, workspaceId);
-    const body = mutation ? await request.json().catch(() => null) : null;
+    body = mutation ? await request.json().catch(() => null) : null;
     return screenFormsJson(await work({
       pool,
       actor,
@@ -94,7 +172,7 @@ export async function screenFormsRoute(
       body,
     }), status);
   } catch (error) {
-    return screenFormsFailure(error, requestId);
+    return screenFormsFailure(error, requestId, { request, body });
   } finally {
     await pool.end();
   }

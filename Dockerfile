@@ -19,9 +19,11 @@ COPY . .
 RUN npm run build
 
 FROM base AS runtime
+ARG NEXAFLOW_REVISION=unknown
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
-    PORT=3000
+    PORT=3000 \
+    NEXAFLOW_REVISION=${NEXAFLOW_REVISION}
 RUN groupadd --system --gid 10001 nexaflow && useradd --system --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin nexaflow
 COPY --from=production-dependencies --chown=nexaflow:nexaflow /app/node_modules ./node_modules
 COPY --from=build --chown=nexaflow:nexaflow /app/.next ./.next

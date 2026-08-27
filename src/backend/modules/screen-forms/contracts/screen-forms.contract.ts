@@ -150,7 +150,33 @@ export const contactScreenProfileV2Schema = z
     company: affiliation,
     address,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.secondaryEmail !== null &&
+      value.primaryEmail.trim().toLowerCase() ===
+        value.secondaryEmail.trim().toLowerCase()
+    ) {
+      for (const path of ["primaryEmail", "secondaryEmail"] as const)
+        context.addIssue({
+          code: "custom",
+          message: "duplicate_normalized_email",
+          path: [path],
+        });
+    }
+    if (
+      value.directPhone !== null &&
+      value.mobilePhone !== null &&
+      value.directPhone.trim() === value.mobilePhone.trim()
+    ) {
+      for (const path of ["directPhone", "mobilePhone"] as const)
+        context.addIssue({
+          code: "custom",
+          message: "duplicate_normalized_phone",
+          path: [path],
+        });
+    }
+  });
 const leadSourcePlatformV2Schema = z.enum([
   "tiktok",
   "instagram",
@@ -347,7 +373,7 @@ export const screenProfileDetailV1Schema = z.discriminatedUnion("kind", [
     .object({
       ...detailBase,
       kind: z.literal("contact"),
-      base:z.object({salutation:nullable(20),firstName:clean(100),lastName:clean(100),jobTitle:nullable(160),department:nullable(120),lifecycleStage:z.enum(["lead","marketing_qualified","sales_qualified","opportunity","customer","evangelist","other"])}).strict(),
+      base:z.object({salutation:nullable(20),firstName:clean(100),lastName:clean(100),jobTitle:nullable(160),department:nullable(120),lifecycleStage:z.enum(["lead","marketing_qualified","sales_qualified","opportunity","customer","evangelist","other"]).nullable()}).strict(),
       categories:z.object({channels:z.union([full(contactChannels),masked(maskedContactChannels),withheld]),address:z.union([full(addressValue),masked(maskedAddress),withheld]),notes:notesEnvelope,hierarchy:z.union([full(contactHierarchy),masked(maskedHierarchy),withheld])}).strict(),
       assignment:assignmentEnvelope,
     })
