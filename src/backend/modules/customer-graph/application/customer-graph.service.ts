@@ -523,7 +523,8 @@ export async function getCustomerGraph(
       contractVersion: "customer-graph-detail.v1",
       kind,
       record: {
-        ...r,
+        ...fresh,
+        updatedAt: new Date(fresh.updatedAt).toISOString(),
         ...detail,
         visibleTeamIds: teamIds,
         affiliations: safeAffiliations,

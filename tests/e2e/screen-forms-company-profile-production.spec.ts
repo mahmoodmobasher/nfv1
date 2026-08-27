@@ -65,6 +65,47 @@ test("the production bundle returns strict Company and Contact screen results an
   expect(profile.headers()["cache-control"]).toContain("private, no-store");
   expect(profile.headers().vary?.toLowerCase()).toContain("cookie");
 
+  const companyView = await request.get(`/api/workspaces/${workspace.id}/companies/${result.recordId}`, { headers: { cookie } });
+  expect(companyView.status()).toBe(200);
+  const companyViewData = (await companyView.json()).data;
+  expect(companyViewData).toMatchObject({ contractVersion: "customer-graph-detail.v1", kind: "company", record: { id: result.recordId, version: 1 } });
+  expect(companyViewData.record.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  expect(new Date(companyViewData.record.updatedAt).toISOString()).toBe(companyViewData.record.updatedAt);
+  expect(companyView.headers()["cache-control"]).toContain("private, no-store");
+  expect(companyView.headers().vary?.toLowerCase()).toContain("cookie");
+
+  const companyEditKey = randomUUID(), companyEdit = {
+    contractVersion: "company-screen-edit.v2",
+    expectedVersion: 1,
+    profile: { name: "Bundle Route Company Edited", domain: null, website: null, industry: "Software", sizeBand: null,
+      employeeCount: null, annualRevenue: null, parentCompanyId: null, parentCompanyVersion: null, phone: null,
+      address: { street: null, city: null, stateProvince: null, postalCode: null, country: null } },
+    assignment: { responsibleMembershipId: null, responsibleMembershipVersion: null, responsibleTeamId: null,
+      responsibleTeamVersion: null, visibility: "workspace", visibleTeamIds: [], visibleTeamVersions: {} },
+  };
+  const companyEdited = await request.patch(`/api/workspaces/${workspace.id}/companies/${result.recordId}/profile`, {
+    headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": companyEditKey }, data: companyEdit,
+  });
+  expect(companyEdited.status()).toBe(200);
+  expect((await companyEdited.json()).data).toEqual({ contractVersion: "screen-profile-result.v1", kind: "company",
+    recordId: result.recordId, version: 2, replayed: false, requestId: expect.any(String),
+    selection: { id: result.recordId, label: "Bundle Route Company Edited", target: { kind: "version", version: 2 } } });
+  expect(companyEdited.headers()["cache-control"]).toContain("private, no-store");
+  expect(companyEdited.headers().vary?.toLowerCase()).toContain("cookie");
+  const companyReplay = await request.patch(`/api/workspaces/${workspace.id}/companies/${result.recordId}/profile`, {
+    headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": companyEditKey }, data: companyEdit,
+  });
+  expect(companyReplay.status()).toBe(200);
+  expect((await companyReplay.json()).data).toMatchObject({ recordId: result.recordId, version: 2, replayed: true });
+  const staleCompany = await request.patch(`/api/workspaces/${workspace.id}/companies/${result.recordId}/profile`, {
+    headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": randomUUID() },
+    data: { ...companyEdit, profile: { ...companyEdit.profile, name: "Stale Company" } },
+  });
+  expect(staleCompany.status()).toBe(409);
+  expect((await staleCompany.json()).error).toMatchObject({ code: "stale_version", reconciliation: { action: "refetch_record" }, zeroPartialEffects: true });
+  const companyViewAfterEdit = await request.get(`/api/workspaces/${workspace.id}/companies/${result.recordId}`, { headers: { cookie } });
+  expect((await companyViewAfterEdit.json()).data.record).toMatchObject({ id: result.recordId, displayName: "Bundle Route Company Edited", version: 2 });
+
   const contactCreated = await request.post(`/api/workspaces/${workspace.id}/contacts`, {
     headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": randomUUID() },
     data: {
@@ -90,9 +131,72 @@ test("the production bundle returns strict Company and Contact screen results an
   expect(contactProfile.headers()["cache-control"]).toContain("private, no-store");
   expect(contactProfile.headers().vary?.toLowerCase()).toContain("cookie");
 
+  const contactView = await request.get(`/api/workspaces/${workspace.id}/contacts/${contactResult.recordId}`, { headers: { cookie } });
+  expect(contactView.status()).toBe(200);
+  const contactViewData = (await contactView.json()).data;
+  expect(contactViewData).toMatchObject({ contractVersion: "customer-graph-detail.v1", kind: "contact", record: { id: contactResult.recordId, version: 1 } });
+  expect(new Date(contactViewData.record.updatedAt).toISOString()).toBe(contactViewData.record.updatedAt);
+
+  const contactEditKey = randomUUID(), contactEdit = {
+    contractVersion: "contact-screen-edit.v2",
+    expectedVersion: 1,
+    profile: { salutation: null, firstName: "Bundle", lastName: "Contact Edited", jobTitle: "Director", department: null,
+      primaryEmail: `bundle-contact-${suffix}@example.test`, secondaryEmail: null, directPhone: null, mobilePhone: null,
+      linkedinUrl: null, lifecycleStage: "lead", company: null,
+      address: { street: null, city: null, stateProvince: null, postalCode: null, country: null } },
+    assignment: { responsibleMembershipId: null, responsibleMembershipVersion: null, responsibleTeamId: null,
+      responsibleTeamVersion: null, visibility: "workspace", visibleTeamIds: [], visibleTeamVersions: {} },
+  };
+  const contactEdited = await request.patch(`/api/workspaces/${workspace.id}/contacts/${contactResult.recordId}/profile`, {
+    headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": contactEditKey }, data: contactEdit,
+  });
+  expect(contactEdited.status()).toBe(200);
+  expect((await contactEdited.json()).data).toMatchObject({ contractVersion: "screen-profile-result.v1", kind: "contact",
+    recordId: contactResult.recordId, version: 2, replayed: false });
+  expect(contactEdited.headers()["cache-control"]).toContain("private, no-store");
+  expect(contactEdited.headers().vary?.toLowerCase()).toContain("cookie");
+  const contactReplay = await request.patch(`/api/workspaces/${workspace.id}/contacts/${contactResult.recordId}/profile`, {
+    headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": contactEditKey }, data: contactEdit,
+  });
+  expect(contactReplay.status()).toBe(200);
+  expect((await contactReplay.json()).data).toMatchObject({ recordId: contactResult.recordId, version: 2, replayed: true });
+  const staleContact = await request.patch(`/api/workspaces/${workspace.id}/contacts/${contactResult.recordId}/profile`, {
+    headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": randomUUID() },
+    data: { ...contactEdit, profile: { ...contactEdit.profile, lastName: "Stale" } },
+  });
+  expect(staleContact.status()).toBe(409);
+  expect((await staleContact.json()).error).toMatchObject({ code: "stale_version", reconciliation: { action: "refetch_record" }, zeroPartialEffects: true });
+  const contactProfileAfterEdit = await request.get(`/api/workspaces/${workspace.id}/contacts/${contactResult.recordId}/profile`, { headers: { cookie } });
+  expect((await contactProfileAfterEdit.json()).data).toMatchObject({ recordId: contactResult.recordId, version: 2,
+    base: { lastName: "Contact Edited", jobTitle: "Director" } });
+
+  for (const [kind, recordId] of [["companies", result.recordId], ["contacts", contactResult.recordId]] as const) {
+    const archive = await request.post(`/api/workspaces/${workspace.id}/${kind}/${recordId}/archive`, {
+      headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": randomUUID() },
+      data: { contractVersion: kind === "companies" ? "company-lifecycle.v1" : "contact-lifecycle.v1", expectedVersion: 2 },
+    });
+    expect(archive.status()).toBe(200);
+    expect((await archive.json()).data).toMatchObject({ version: 3, replayed: false });
+    const archived = await request.get(`/api/workspaces/${workspace.id}/${kind}?status=archived&limit=25`, { headers: { cookie } });
+    expect(archived.status()).toBe(200);
+    expect((await archived.json()).data.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: recordId, status: "archived", version: 3 })]));
+    const restore = await request.post(`/api/workspaces/${workspace.id}/${kind}/${recordId}/restore`, {
+      headers: { cookie, origin: "http://127.0.0.1:3012", "x-csrf-token": csrf, "idempotency-key": randomUUID() },
+      data: { contractVersion: kind === "companies" ? "company-lifecycle.v1" : "contact-lifecycle.v1", expectedVersion: 3 },
+    });
+    expect(restore.status()).toBe(200);
+    expect((await restore.json()).data).toMatchObject({ version: 4, replayed: false });
+  }
+
+  const denied = await request.get(`/api/workspaces/${workspace.id}/companies/${result.recordId}`);
+  expect(denied.status()).toBe(401);
+  expect((await denied.json()).error).toMatchObject({ code: "authentication_required" });
+  expect(denied.headers()["cache-control"]).toContain("private, no-store");
+  expect(denied.headers().vary?.toLowerCase()).toContain("cookie");
+
   const leadKey = randomUUID(), leadProfile = {
     salutation: null, firstName: "Bundle", lastName: "Lead",
-    company: { snapshotName: result.selection.label, companyId: result.selection.id, companyVersion: result.selection.target.version },
+    company: { snapshotName: "Bundle Route Company Edited", companyId: result.selection.id, companyVersion: 4 },
     jobTitle: null, primaryEmail: `bundle-lead-${suffix}@example.test`, secondaryEmail: null,
     officePhone: null, mobilePhone: null, fax: null, website: null, twitterHandle: null,
     promotionalEmailOptOut: null, source: "social_media", stageId: stage.id,
