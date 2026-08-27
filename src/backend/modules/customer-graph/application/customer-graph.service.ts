@@ -20,22 +20,35 @@ import {
 import { runModuleTransaction } from "@/backend/platform/database";
 import {
   CustomerGraphError,
-  type CompanyCreateCommandV1,
-  type CompanyEditCommandV1,
-  type ContactCreateCommandV1,
-  type ContactEditCommandV1,
   type ContactAffiliationReplaceCommandV1,
   type CustomerGraphListQueryV1,
 } from "../contracts/customer-graph.contract";
+import { contactTransactionParticipant } from "@/backend/modules/contacts";
 import type {
-  CompanyScreenCreateCommandV2,
   CompanyScreenEditCommandV2,
-  ContactScreenCreateCommandV2,
   ContactScreenEditCommandV2,
 } from "@/backend/modules/screen-forms/contracts/screen-forms.contract";
-import { contactTransactionParticipant } from "@/backend/modules/contacts";
+import {
+  companyCommand,
+  contactCommand,
+  moneyColumns,
+  normalizeDomain,
+  normalizeEmail,
+  normalizeName,
+  normalizePhone,
+  phoneCountry,
+  type CompanyCreate,
+  type CompanyEdit,
+  type ContactCreate,
+  type ContactEdit,
+} from "./customer-graph.command-adapters";
+import {
+  decodeCustomerGraphCursor,
+  encodeCustomerGraphCursor,
+  type CustomerGraphKind,
+} from "./customer-graph.pagination";
 
-type Kind = "company" | "contact";
+type Kind = CustomerGraphKind;
 type LeadMutationOperation = CustomerGraphOperation;
 type Assignment = {
   responsibleMembershipId: string | null;
@@ -46,10 +59,6 @@ type Assignment = {
   responsibleTeamVersion?: number | null;
   visibleTeamVersions?: Record<string, number>;
 };
-type CompanyCreate = CompanyCreateCommandV1 | CompanyScreenCreateCommandV2;
-type CompanyEdit = CompanyEditCommandV1 | CompanyScreenEditCommandV2;
-type ContactCreate = ContactCreateCommandV1 | ContactScreenCreateCommandV2;
-type ContactEdit = ContactEditCommandV1 | ContactScreenEditCommandV2;
 type Root = {
   id: string;
   version: number;
@@ -79,86 +88,6 @@ const fail = (
 ) => {
   throw new CustomerGraphError(code, status);
 };
-const normalizeName = (value: string) =>
-  value.trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
-const normalizeDomain = (value: string | null) =>
-  value ? value.trim().toLowerCase() : null;
-const normalizeEmail = (value: string | null) =>
-  value ? value.trim().toLowerCase() : null;
-const normalizePhone = (value: string | null) => (value ? value.trim() : null);
-const phoneCountry = (value: string | null) =>
-  value
-    ? value.match(/^\+(\d{1,3})/)?.[1]
-      ? `+${value.match(/^\+(\d{1,3})/)![1]}`
-      : "+unknown"
-    : null;
-const moneyColumns = (
-  value: {
-    amountMinor: string;
-    currencyCode: "USD" | "CAD";
-    currencyExponent: 2;
-  } | null,
-) =>
-  [
-    value?.amountMinor ?? null,
-    value?.currencyCode ?? null,
-    value?.currencyExponent ?? null,
-  ] as const;
-const companyCommand = (command: CompanyCreate | CompanyEdit) =>
-  "profile" in command
-    ? {
-        ...command.profile,
-        displayName: command.profile.name,
-        ...command.assignment,
-      }
-    : command;
-const contactCommand = (command: ContactCreate | ContactEdit) =>
-  "profile" in command
-    ? {
-        ...command.profile,
-        email: command.profile.primaryEmail,
-        phone: command.profile.directPhone,
-        affiliation: command.profile.company
-          ? {
-              companyId: command.profile.company.companyId,
-              roleCode: command.profile.company.roleCode,
-            }
-          : null,
-        ...command.assignment,
-      }
-    : command;
-
-function cursor(value: string | undefined, kind: Kind, status: string) {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(value, "base64url").toString()) as {
-      v: number;
-      k: string;
-      s: string;
-      u: string;
-      i: string;
-    };
-    if (
-      parsed.v !== 1 ||
-      parsed.k !== kind ||
-      parsed.s !== status ||
-      !Number.isFinite(Date.parse(parsed.u)) ||
-      !/^[0-9a-f-]{36}$/i.test(parsed.i)
-    )
-      throw 0;
-    return parsed;
-  } catch {
-    fail("validation_failed", 400);
-  }
-}
-const encode = (
-  kind: Kind,
-  status: string,
-  row: { updatedAt: string; id: string },
-) =>
-  Buffer.from(
-    JSON.stringify({ v: 1, k: kind, s: status, u: row.updatedAt, i: row.id }),
-  ).toString("base64url");
 async function readTx<T>(pool: Pool, work: (tx: PoolClient) => Promise<T>) {
   const tx = await pool.connect();
   try {
@@ -391,7 +320,7 @@ export async function listCustomerGraph(
 ) {
   return readTx(pool, async (tx) => {
     const current = await lookupActiveActor(tx, actor),
-      c = cursor(query.cursor, kind, query.status),
+      c = decodeCustomerGraphCursor(query.cursor, kind, query.status),
       t = tables[kind];
     const rows = query.bootstrap
       ? []
@@ -470,7 +399,10 @@ export async function listCustomerGraph(
             : { required: true, action: "authority_adoption_required" },
         };
       }),
-      nextCursor: more && last ? encode(kind, query.status, last) : null,
+      nextCursor:
+        more && last
+          ? encodeCustomerGraphCursor(kind, query.status, last)
+          : null,
       requestId,
     };
   });
