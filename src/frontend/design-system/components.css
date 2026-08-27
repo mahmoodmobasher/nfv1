@@ -161,6 +161,8 @@
 .lead-activity-capability { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
 .lead-activity-layout { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(300px,100%),1fr)); gap: var(--nf-space-5); align-items: start; }
 .lead-activity-form,.lead-activity-timeline { min-width: 0; }
+.lead-activity-form .field input,.lead-activity-form .field select,.lead-activity-form .field textarea { min-height: 44px; }
+.lead-activity .ds-feedback a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; }
 .lead-activity-primary-fields { grid-template-columns: minmax(120px,.55fr) minmax(210px,1.45fr); }
 .lead-activity-form>section { padding-top: 0; border-top: 0; }
 .lead-activity-form h3,.lead-activity-timeline h3,.lead-activity-timeline p { margin: 0; }

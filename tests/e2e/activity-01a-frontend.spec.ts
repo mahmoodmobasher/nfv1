@@ -29,6 +29,11 @@ function list(leadId: string, items: ReturnType<typeof item>[], options: { versi
 function failure(code: "validation_failed" | "stale_version" | "activity_unavailable" | "permission_required", action: "none" | "refetch_lead" | "retry_same_request" | "clear_protected_state", fields?: string[]) { return { error: { code, message: code === "stale_version" ? "The Lead has changed." : code === "permission_required" ? "This action is not available." : "Activities are temporarily unavailable.", retryable: action === "retry_same_request", reconciliation: { required: action !== "none", action }, zeroPartialEffects: true, ...(fields ? { fields } : {}) }, requestId: requestId() }; }
 async function fulfill(route: Route, body: unknown, status = 200) { await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) }); }
 async function fillDraft(page: Page, subject: string, kind = "call") { await page.locator("#activity-kind").selectOption(kind); await page.locator("#activity-subject").fill(subject); }
+async function expectMinimumTarget(locator: ReturnType<Page["locator"]>) {
+  const box = await locator.boundingBox();
+  expect(box, `Expected an actual bounding box for ${await locator.evaluate(element => element.outerHTML.slice(0, 160))}`).not.toBeNull();
+  expect(box!.width).toBeGreaterThanOrEqual(44); expect(box!.height).toBeGreaterThanOrEqual(44);
+}
 
 test("authenticated Activity state machine preserves stale fence, deterministic chronology, filters and focus", async ({ page }, testInfo) => {
   const f = await fixture(page), same = "2026-08-27T14:00:00.000Z", older = "2026-08-26T14:00:00.000Z";
@@ -53,18 +58,22 @@ test("authenticated Activity state machine preserves stale fence, deterministic 
   });
   await page.goto(`/crm/leads/${f.leadId}`);
   await expect(page.getByRole("heading", { name: "Equal high", exact: true })).toBeVisible();
+  for (const selector of ["#activity-kind", "#activity-occurredAt", "#activity-subject", "#activity-direction", "#activity-outcome", "#activity-durationMinutes", "#activity-details", "#activity-filter"]) await expectMinimumTarget(page.locator(selector));
+  await expectMinimumTarget(page.getByRole("button", { name: "Log activity", exact: true }));
+  await expectMinimumTarget(page.getByRole("button", { name: "Load older activity" }));
 
   await page.getByRole("button", { name: "Log activity", exact: true }).click();
   const validation = page.locator('.lead-activity [data-feedback-kind="validation"]');
   await expect(validation).toBeFocused(); await expect(validation).toHaveAttribute("role", "alert");
-  await validation.getByRole("link", { name: /Enter a subject/ }).click(); await expect(page.locator("#activity-subject")).toBeFocused();
+  const subjectRecovery = validation.getByRole("link", { name: /Enter a subject/ }); await expectMinimumTarget(subjectRecovery);
+  await subjectRecovery.click(); await expect(page.locator("#activity-subject")).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath("activity-validation-focus.png"), fullPage: true });
 
   await fillDraft(page, "Stale protected draft"); await page.getByRole("button", { name: "Log activity", exact: true }).click();
   const stale = page.locator('.lead-activity [data-feedback-kind="conflict"]'); await expect(stale).toBeFocused();
   await page.locator("#activity-subject").fill("Stale protected draft edited");
   await expect(page.getByRole("button", { name: "Load latest before submitting" })).toBeDisabled(); await expect(stale).toBeVisible();
-  await stale.getByRole("button", { name: "Load latest Lead and activity" }).click();
+  const staleRecovery = stale.getByRole("button", { name: "Load latest Lead and activity" }); await expectMinimumTarget(staleRecovery); await staleRecovery.click();
   await expect(page.locator('.lead-activity [data-feedback-kind="info"]')).toBeFocused(); await expect(page.locator("#activity-subject")).toHaveValue("Stale protected draft edited");
 
   await page.getByRole("button", { name: "Log activity", exact: true }).click();
@@ -118,7 +127,7 @@ test("authenticated Activity visual matrix covers themes, responsive boundaries 
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).not.toBe("smooth"); await page.screenshot({ path: testInfo.outputPath("activity-forced-colors-reduced-motion.png"), fullPage: true });
 
   mode = "empty"; await page.reload(); await expect(page.getByRole("heading", { name: "No activity yet" })).toBeVisible(); await page.screenshot({ path: testInfo.outputPath("activity-empty.png"), fullPage: true });
-  mode = "first-error"; await page.reload(); await expect(page.getByRole("heading", { name: "Activity unavailable" })).toBeVisible(); await page.screenshot({ path: testInfo.outputPath("activity-first-load-error.png"), fullPage: true });
+  mode = "first-error"; await page.reload(); await expect(page.getByRole("heading", { name: "Activity unavailable" })).toBeVisible(); await expectMinimumTarget(page.getByRole("button", { name: "Try again" })); await page.screenshot({ path: testInfo.outputPath("activity-first-load-error.png"), fullPage: true });
   mode = "older-error"; await page.reload(); await page.getByRole("button", { name: "Load older activity" }).click(); await expect(page.getByText(/Previously loaded activity remains/)).toBeVisible(); await page.screenshot({ path: testInfo.outputPath("activity-load-older-error.png"), fullPage: true });
 
   mode = "populated"; await page.reload(); await page.getByRole("button", { name: "Log activity", exact: true }).click(); await expect(page.locator('.lead-activity [data-feedback-kind="validation"]')).toBeFocused(); await page.screenshot({ path: testInfo.outputPath("activity-validation.png"), fullPage: true });
