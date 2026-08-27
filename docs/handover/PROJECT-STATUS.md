@@ -6,10 +6,10 @@ Status date: 2026-08-27
 
 | Area | Exact identity | State |
 | --- | --- | --- |
-| Repository | `b12495d522d31507ec581db6ac4cd81c321ac59e` | Local `main`, `origin/main`, and HEAD verified equal; tracked tree clean at handoff. |
-| Deployed application source | `600a9aa96ec598b38aed557c2c4cb9b62d4afc08` | Must remain an ancestor of the repository documentation HEAD. |
-| UAT | `600a9aa-uat28` | Published and healthy at last deployment check. |
-| UAT image | `sha256:ba38d93379c2bf82987b4ff9ed34a7cfab96beb836dc410b1e95a77b829bbca3` | Exact OCI revision; non-root `10001:10001`. |
+| Repository | `4bef3415f368492ed4673627f64daa78a8ca9e7d` | Application source on local/origin `main` at UAT30 admission; reverify documentation HEAD before work. |
+| Deployed application source | `4bef3415f368492ed4673627f64daa78a8ca9e7d` | Exact admitted UAT30 application revision. |
+| UAT | `4bef341-uat30` | Published, healthy, and Architecture-admitted. |
+| UAT image | `sha256:2ad41b17ec50be5043eb244fe6da15fc5dc8b583b276757f4f0809c70179511f` | Exact OCI revision; non-root `10001:10001`. |
 | Database | 26 ledger entries; head `0025` / `1787793528579` | No reset for the latest frontend deployment. |
 | Production | Not changed | UAT-only program. |
 
@@ -32,8 +32,8 @@ Status date: 2026-08-27
 
 - The Mobasher `basi` Workspace contains 10 synthetic Companies, 10 Contacts, and 10 Leads linked by index, labelled `UAT Test Mobasher`.
 - A separate isolated seed Workspace `UAT Test Seed bb872c7a` remains intentionally retained until Product authorizes deletion.
-- Deployment/config/security checks passed for release `600a9aa-uat28`.
-- Authenticated user visual validation remains authoritative for the latest Companies/Contacts directory release.
+- Deployment/config/security checks passed for release `4bef341-uat30`.
+- Authenticated Company and Contact Create/View/Edit/stale/Archive/Restore journeys passed. Product visual validation remains welcome but is no longer a release blocker for these actions.
 
 ## Repository work after the deployed UAT source
 
@@ -41,7 +41,7 @@ Status date: 2026-08-27
 - `f207da3`: documentation consolidation and removal of superseded dated records.
 - `f31ea81`: frontend Screen Forms modularization; reusable fields/error/address rendering and strict command construction were separated from the React controller.
 - `b12495d`: Customer Graph application helper split; normalization/command adapters and kind/status-bound keyset cursor handling were separated from the service.
-- These commits are on `main` but are not represented by UAT release `600a9aa-uat28`. They preserve public contracts; do not report them as deployed.
+- The later Customer Directory action commit `3a12d80` and runtime correction `4bef341` are deployed in UAT30. The documentation and modularization commits are ancestors of that release.
 
 ## Recommended next sequence
 
