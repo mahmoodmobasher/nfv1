@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionLink, DataTable, EmptyState, FeedbackState, FieldMessage, LoadingState, Panel, StatusBadge, ViewTabs } from "../src/frontend/design-system";
+import { ActionLink, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormWorkbench, LoadingState, PageHeader, Panel, RecordList, RecordRow, SectionNav, SectionPanel, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
 
 describe("CRM shared design-system components", () => {
   it("renders complete semantic state primitives without feature authority", () => {
@@ -19,5 +19,15 @@ describe("CRM shared design-system components", () => {
     expect(markup).toContain('aria-current="page"');
     expect(markup).toContain("<caption>Visible leads</caption>");
     expect(markup).toContain("ds-action--primary");
+  });
+
+  it("renders the five shared CRM archetype foundations without domain authority", () => {
+    const markup = renderToStaticMarkup(<><PageHeader eyebrow="Contacts" title="Contacts" description="Server-authorized records"/><RecordList label="Contacts"><RecordRow><span>Ada</span></RecordRow></RecordList><StageColumn title="Qualified" count={1}><article>Lead</article></StageColumn><FactsGrid><div><dt>Owner</dt><dd>Ada</dd></div></FactsGrid><WorkflowSummaryGrid><SectionPanel tone="qualification" title="Qualification">Ready</SectionPanel></WorkflowSummaryGrid><FormWorkbench label="Edit contact"><SectionNav label="Form sections" items={[{href:"#overview",label:"Overview"}]}/></FormWorkbench></>);
+    expect(markup).toContain("ds-page-header");
+    expect(markup).toContain('role="list"');
+    expect(markup).toContain("ds-stage-column");
+    expect(markup).toContain("ds-facts-grid");
+    expect(markup).toContain("ds-section-panel--qualification");
+    expect(markup).toContain('aria-label="Form sections"');
   });
 });

@@ -171,16 +171,16 @@ function LeadConversionPanel({ workspaceId, leadId, onAuthorityLoss }: { workspa
     } finally { setBusy(false); }
   }
 
-  if (loading && !preview) return <Panel title="Lead conversion"><LoadingState label="Checking conversion eligibility…" rows={2}/></Panel>;
+  if (loading && !preview) return <Panel tone="conversion" title="Lead conversion"><LoadingState label="Checking conversion eligibility…" rows={2}/></Panel>;
   if (result) {
     const dealHref = result.deal.available && result.nextView.kind === "deal_detail" && result.nextView.dealId === result.deal.dealId ? `/crm/deals/${result.deal.dealId}` : null;
     return <FocusedFeedbackState tone="success" title={result.replayed ? "Conversion was already applied" : "Lead converted"} action={dealHref ? <ActionLink variant="primary" href={dealHref}>View Deal</ActionLink> : <ActionLink href={`/crm/leads/${leadId}`}>View Lead</ActionLink>}><p>The server confirmed one committed conversion. No duplicate Deal or conversion effects were created.</p></FocusedFeedbackState>;
   }
   if (error && !preview) return <FocusedFeedbackState tone="danger" title="Conversion preview unavailable" action={<Button onClick={() => void loadPreview(false)}>Try again</Button>}><p>{notice}</p></FocusedFeedbackState>;
   if (!preview) return null;
-  if (!preview.eligible || !preview.capabilities.canConvert || !draft) return <Panel title="Lead conversion" description="Conversion is read-only until every current server eligibility check passes."><div role="status"><p>Convert Lead to Deal is not available.</p><ul>{preview.ineligibilityReasons.map(reason => <li key={reason}>{reasonCopy[reason]}</li>)}</ul></div></Panel>;
+  if (!preview.eligible || !preview.capabilities.canConvert || !draft) return <Panel tone="conversion" title="Lead conversion" description="Conversion is read-only until every current server eligibility check passes."><div role="status"><p>Convert Lead to Deal is not available.</p><ul>{preview.ineligibilityReasons.map(reason => <li key={reason}>{reasonCopy[reason]}</li>)}</ul></div></Panel>;
   const company = preview.choices.companies.find(value => value.companyId === draft.companyId), contact = preview.choices.primaryContacts.find(value => value.contactId === draft.contactId), described = (id: string, help?: boolean) => [help ? `${id}-help` : "", errors[id] ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined;
-  return <Panel title="Convert Lead to Deal" description="Only the current server preview authorizes this action. Review every destination and atomic effect before confirming.">
+  return <Panel tone="conversion" title="Convert Lead to Deal" description="Only the current server preview authorizes this action. Review every destination and atomic effect before confirming.">
     {notice && <div ref={summary} className={`ds-feedback ${stale || Object.keys(errors).length ? "ds-feedback--conflict" : "ds-feedback--info"}`} role={stale || Object.keys(errors).length ? "alert" : "status"} tabIndex={-1}><div><p>{notice}</p>{Object.keys(errors).length > 0 && <ul>{Object.entries(errors).map(([field, message]) => <li key={field}>{field === "_form" ? message : <a href={`#${field}`} onClick={() => setTimeout(() => document.getElementById(field)?.focus())}>{message}</a>}</li>)}</ul>}</div>{stale && <div className="ds-feedback__actions"><Button onClick={() => void loadPreview(true)} disabled={loading}>Reload conversion preview</Button></div>}</div>}
     <form className="ds-form" onSubmit={review} noValidate aria-busy={busy}>
       <section aria-labelledby="conversion-destination-title"><h3 id="conversion-destination-title">Destination Deal</h3>
@@ -204,5 +204,5 @@ function LeadConversionPanel({ workspaceId, leadId, onAuthorityLoss }: { workspa
 export function LeadDetailWithConversion({ lead, workspaceId, stages = [] }: { lead: LeadSummaryItem; workspaceId: string; stages?: LeadPipelineStage[] }) {
   const [authorityError, setAuthorityError] = useState<LeadConversionError | null>(null);
   if (authorityError) return <SafeConversionState authentication={authorityError.code === "authentication_required"}/>;
-  return <><LeadReadOnlyDetail lead={lead} workspaceId={workspaceId} stages={stages}/><LeadActivityPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={error => setAuthorityError({ code: error.code, message: "The Lead is unavailable.", retryable: false, reconciliation: { required: true, action: "clear_conversion_state" }, guarantees: { zeroPartialEffects: true } })}/><LeadConversionPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={setAuthorityError}/></>;
+  return <><LeadReadOnlyDetail lead={lead} workspaceId={workspaceId} stages={stages}/><LeadConversionPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={setAuthorityError}/><LeadActivityPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={error => setAuthorityError({ code: error.code, message: "The Lead is unavailable.", retryable: false, reconciliation: { required: true, action: "clear_conversion_state" }, guarantees: { zeroPartialEffects: true } })}/></>;
 }

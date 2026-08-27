@@ -864,6 +864,41 @@ test("Workspace navigation states and representative controls retain keyboard fo
   }
 });
 
+test("Nexa Spectrum Workspace menu keeps labelled Sign out reachable in desktop and drawer shells", async ({ page }) => {
+  await tenantBrowserFixture(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/crm");
+  await expect(page.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
+  const rail = page.locator(".product-rail");
+  const main = page.locator(".product-main");
+  const desktopMenu = page.locator(".product-topbar .admin-workspace-menu");
+  const summary = desktopMenu.locator("summary");
+  expect((await rail.boundingBox())!.width).toBeGreaterThanOrEqual(218);
+  expect((await main.boundingBox())!.x).toBeGreaterThanOrEqual((await rail.boundingBox())!.width);
+  expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await summary.focus();
+  await expect(summary).toBeFocused();
+  await summary.press("Enter");
+  const signOut = desktopMenu.getByRole("button", { name: "Sign out" });
+  await expect(signOut).toBeVisible();
+  expect((await signOut.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press("Escape");
+  await summary.press("Enter");
+  await expect(signOut).toBeHidden();
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/crm");
+  await expect(page.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open CRM navigation" }).click();
+  const drawer = page.getByRole("dialog", { name: "CRM navigation" });
+  const drawerMenu = drawer.locator(".admin-workspace-menu");
+  await drawerMenu.locator("summary").click();
+  const drawerSignOut = drawerMenu.getByRole("button", { name: "Sign out" });
+  await expect(drawerSignOut).toBeVisible();
+  expect((await drawerSignOut.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
 test("server-filtered navigation reconciles persisted Owner, Member, and Admin roles", async ({
   page,
 }) => {

@@ -39,6 +39,29 @@ html[data-theme="light"] {
   --nx-disabled-surface: #fbfbfa;
   --nx-disabled-border: #918c82;
   --nx-overlay-shadow: none;
+  --nx-record-row: var(--nx-surface-primary);
+  --nx-record-row-alternate: var(--nx-surface-secondary);
+  --nx-record-row-hover: var(--nx-surface-raised);
+  --nx-section-overview: #edf3fb;
+  --nx-section-overview-accent: #5179a8;
+  --nx-section-relationship: #eaf5f2;
+  --nx-section-relationship-accent: #397f73;
+  --nx-section-qualification: #edf6ed;
+  --nx-section-qualification-accent: #4f8254;
+  --nx-section-conversion: #f2effa;
+  --nx-section-conversion-accent: #7160a4;
+  --nx-section-activity: #fbf3e7;
+  --nx-section-activity-accent: #986b2c;
+  --nx-section-access: #efeffb;
+  --nx-section-access-accent: #5e62a1;
+  --nx-stage-new-surface: #fbf3e7;
+  --nx-stage-new-accent: #986b2c;
+  --nx-stage-contacted-surface: #edf3fb;
+  --nx-stage-contacted-accent: #5179a8;
+  --nx-stage-qualified-surface: #edf6ed;
+  --nx-stage-qualified-accent: #4f8254;
+  --nx-stage-proposal-surface: #f2effa;
+  --nx-stage-proposal-accent: #7160a4;
 
   --nf-font-sans: var(--font-geist), Geist, system-ui, sans-serif;
   --nf-font-mono: var(--font-geist-mono), "Geist Mono", monospace;
@@ -81,6 +104,9 @@ html[data-theme="light"] {
   --nf-sidebar-width: 232px;
   --nf-content-max: 1400px;
   --nf-content-padding: 28px;
+  --nf-control-min: 44px;
+  --nf-reading-max: 920px;
+  --nf-detail-max: 1180px;
 
   --nf-canvas: var(--nx-canvas);
   --nf-surface-1: var(--nx-surface-primary);
@@ -164,6 +190,29 @@ html[data-theme="dark"] {
   --nx-accent-border: #625da0;
   --nx-disabled-surface: #22211e;
   --nx-disabled-border: #817d75;
+  --nx-record-row: var(--nx-surface-primary);
+  --nx-record-row-alternate: #201f1c;
+  --nx-record-row-hover: var(--nx-surface-raised);
+  --nx-section-overview: #202a35;
+  --nx-section-overview-accent: #8ab0db;
+  --nx-section-relationship: #1c302c;
+  --nx-section-relationship-accent: #7fc0b4;
+  --nx-section-qualification: #233125;
+  --nx-section-qualification-accent: #91c495;
+  --nx-section-conversion: #2d293d;
+  --nx-section-conversion-accent: #b4a5df;
+  --nx-section-activity: #342b1f;
+  --nx-section-activity-accent: #ddb77c;
+  --nx-section-access: #292a40;
+  --nx-section-access-accent: #adafe2;
+  --nx-stage-new-surface: #342b1f;
+  --nx-stage-new-accent: #ddb77c;
+  --nx-stage-contacted-surface: #202a35;
+  --nx-stage-contacted-accent: #8ab0db;
+  --nx-stage-qualified-surface: #233125;
+  --nx-stage-qualified-accent: #91c495;
+  --nx-stage-proposal-surface: #2d293d;
+  --nx-stage-proposal-accent: #b4a5df;
   --nf-surface-inverse: var(--nx-text-strong);
 }
 
@@ -187,5 +236,18 @@ html[data-theme="dark"] {
     --nx-selected-text: HighlightText;
     --nx-link: LinkText;
     --nx-focus: Highlight;
+    --nx-record-row: Canvas;
+    --nx-record-row-alternate: Canvas;
+    --nx-record-row-hover: Canvas;
+    --nx-section-overview: Canvas;
+    --nx-section-relationship: Canvas;
+    --nx-section-qualification: Canvas;
+    --nx-section-conversion: Canvas;
+    --nx-section-activity: Canvas;
+    --nx-section-access: Canvas;
+    --nx-stage-new-surface: Canvas;
+    --nx-stage-contacted-surface: Canvas;
+    --nx-stage-qualified-surface: Canvas;
+    --nx-stage-proposal-surface: Canvas;
   }
 }

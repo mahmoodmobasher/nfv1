@@ -250,16 +250,16 @@ describe("design-system document boundary", () => {
     );
   });
 
-  it("uses one direct labelled Sign out control instead of an Account menu", () => {
+  it("keeps labelled Sign out inside the Workspace menu", () => {
     const shell = readFileSync(
       new URL("../src/app/product-shell.tsx", import.meta.url),
       "utf8",
     );
     expect(shell).not.toContain('aria-label="Account menu"');
-    expect(shell).not.toContain('aria-haspopup="menu"');
-    expect(shell).not.toContain('role="menu"');
     expect(shell).toContain('className="product-signout"');
     expect(shell).toContain("Sign out");
+    expect(shell).toContain("accountAction={signOutControl}");
+    expect(shell).not.toContain("{signOutControl}\n        </div>");
     expect(shell).not.toMatch(/global search|create menu|billing portal/i);
   });
   it("renders a persistent truthful CRM top bar from existing Lead authority", () => {

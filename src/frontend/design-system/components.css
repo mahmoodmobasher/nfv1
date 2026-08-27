@@ -63,7 +63,7 @@
 .ds-table tbody tr:hover { background: var(--nx-surface-secondary); }
 
 .ds-view-tabs { display: inline-flex; max-width: 100%; gap: var(--nf-space-1); padding: var(--nf-space-1); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }
-.ds-view-tabs a { display: inline-flex; min-height: 40px; align-items: center; padding: var(--nf-space-2) var(--nf-space-3); border-radius: var(--nf-radius-control); color: var(--nx-text); font-size: var(--nf-text-caption); text-decoration: none; }
+.ds-view-tabs a { display: inline-flex; min-height: var(--nf-control-min); align-items: center; padding: var(--nf-space-2) var(--nf-space-3); border-radius: var(--nf-radius-control); color: var(--nx-text); font-size: var(--nf-text-caption); text-decoration: none; }
 .ds-view-tabs a[aria-current="page"] { background: var(--nx-selected-surface); color: var(--nx-selected-text); font-weight: 600; }
 
 .ds-page-actions,.ds-lead-actions,.ds-pagination { display: flex; flex-wrap: wrap; gap: var(--nf-space-2); }
@@ -76,7 +76,7 @@
 .ds-form>section>h2 { margin: 0; }
 .ds-form .field { margin: var(--nf-space-2) 0; }
 .ds-form .field>span { margin-bottom: var(--nf-space-1); font-size: var(--nf-text-body-sm); }
-.ds-form .field input,.ds-form .field select,.ds-form .field textarea { width: 100%; min-height: 42px; padding: 9px var(--nf-space-3); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-text-strong); font-size: var(--nf-text-body); }
+.ds-form .field input,.ds-form .field select,.ds-form .field textarea { width: 100%; min-height: var(--nf-control-min); padding: 9px var(--nf-space-3); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-text-strong); font-size: var(--nf-text-body); }
 .ds-form .field textarea { min-height: 88px; resize: vertical; }
 .ds-form .field input:focus,.ds-form .field select:focus,.ds-form .field textarea:focus { border-color: var(--nx-focus); box-shadow: var(--nx-focus-ring); }
 .ds-form .field [aria-invalid="true"] { border-color: var(--nx-danger); background: var(--nx-danger-surface); }
@@ -91,8 +91,8 @@
 .ds-lead-list .ds-table th[scope="row"] { min-width: 160px; color: var(--nx-text-strong); font-weight: 600; }
 .ds-lead-list .ds-table th[scope="row"] a { display: block; margin-bottom: var(--nf-space-1-5); color: var(--nx-link); }
 .ds-lead-list .ds-table td:last-child { min-width: 190px; }
-.ds-lead-list .ds-action { min-height: 36px; padding-block: var(--nf-space-1-5); }
-.ds-detail-layout { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--nf-space-4); margin-top: var(--nf-space-5); }
+.ds-lead-list .ds-action { min-height: var(--nf-control-min); }
+.ds-detail-layout { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(300px,100%),1fr)); gap: var(--nf-space-4); margin-top: var(--nf-space-5); }
 .ds-detail-layout>.ds-panel:last-child { grid-column: 1/-1; }
 .cg-affiliations { margin: 0; padding-inline-start: var(--nf-space-5); }
 .cg-affiliations li+li { margin-top: var(--nf-space-2); }
@@ -143,7 +143,53 @@
 .ds-lead-card h3 a { color: var(--nx-text-strong); }
 .ds-lead-card small { color: var(--nx-text-muted); }
 .ds-lead-card .ds-lead-actions { margin-top: var(--nf-space-1); }
-.ds-lead-card .ds-action { flex: 1; min-height: 38px; padding: var(--nf-space-1-5) var(--nf-space-2); }
+.ds-lead-card .ds-action { flex: 1; min-height: var(--nf-control-min); padding-inline: var(--nf-space-2); }
+
+/* Nexa Spectrum shared CRM archetypes. Domain files may arrange these
+   primitives, but geometry, colour, focus, states, and reflow stay here. */
+.ds-page-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: var(--nf-space-5); padding-block: var(--nf-space-7) var(--nf-space-5); }
+.ds-page-header h1,.ds-page-header p { margin: 0; }
+.ds-page-header h1 { margin-top: var(--nf-space-1); font-size: var(--nf-text-display); line-height: 1.15; }
+.ds-page-header__eyebrow { color: var(--nx-text-muted); font-size: var(--nf-text-eyebrow); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.ds-page-header__description { max-width: 68ch; margin-top: var(--nf-space-2); color: var(--nx-text-muted); }
+.ds-page-header__actions { display: flex; flex-wrap: wrap; gap: var(--nf-space-2); }
+
+.ds-record-list { display: grid; min-width: 0; border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); overflow: clip; background: var(--nx-surface-primary); }
+.ds-record-row { display: grid; min-width: 0; gap: var(--nf-space-3); padding: var(--nf-space-4); border-top: 1px solid var(--nx-border-subtle); background: var(--nx-record-row); color: var(--nx-text); overflow-wrap: anywhere; }
+.ds-record-row:first-child { border-top: 0; }
+.ds-record-row:nth-child(even) { background: var(--nx-record-row-alternate); }
+.ds-record-row:hover,.ds-record-row:focus-within { background: var(--nx-record-row-hover); }
+
+.ds-stage-column { min-width: 0; padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-secondary); }
+.ds-stage-column>header { display: flex; align-items: center; justify-content: space-between; gap: var(--nf-space-2); padding-bottom: var(--nf-space-3); border-bottom: 3px solid var(--nx-border-emphasis); }
+.ds-stage-column h2 { margin: 0; font-size: var(--nf-text-h2); }
+.ds-stage-column__count { min-width: 28px; padding: var(--nf-space-1); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-full); background: var(--nx-surface-primary); text-align: center; }
+.ds-stage-column__items { display: grid; gap: var(--nf-space-2); padding-top: var(--nf-space-3); }
+
+.ds-facts-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(190px,100%),1fr)); gap: var(--nf-space-3); margin: 0; }
+.ds-facts-grid>div { min-width: 0; padding: var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }
+.ds-facts-grid dt { color: var(--nx-text-muted); font-size: var(--nf-text-caption); font-weight: 600; }
+.ds-facts-grid dd { margin: var(--nf-space-1) 0 0; color: var(--nx-text-strong); overflow-wrap: anywhere; }
+.ds-workflow-summary-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(300px,100%),1fr)); gap: var(--nf-space-4); }
+
+.ds-section-panel { --ds-section-surface: var(--nx-surface-secondary); --ds-section-accent: var(--nx-border-emphasis); min-width: 0; padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-inline-start: 4px solid var(--ds-section-accent); border-radius: var(--nf-radius-card); background: var(--ds-section-surface); color: var(--nx-text); }
+.ds-section-panel>header { display: flex; align-items: center; justify-content: space-between; gap: var(--nf-space-3); margin-bottom: var(--nf-space-4); }
+.ds-section-panel h2 { margin: 0; color: var(--nx-text-strong); }
+.ds-section-panel--overview { --ds-section-surface: var(--nx-section-overview); --ds-section-accent: var(--nx-section-overview-accent); }
+.ds-section-panel--relationship { --ds-section-surface: var(--nx-section-relationship); --ds-section-accent: var(--nx-section-relationship-accent); }
+.ds-section-panel--qualification { --ds-section-surface: var(--nx-section-qualification); --ds-section-accent: var(--nx-section-qualification-accent); }
+.ds-section-panel--conversion { --ds-section-surface: var(--nx-section-conversion); --ds-section-accent: var(--nx-section-conversion-accent); }
+.ds-section-panel--activity { --ds-section-surface: var(--nx-section-activity); --ds-section-accent: var(--nx-section-activity-accent); }
+.ds-section-panel--access { --ds-section-surface: var(--nx-section-access); --ds-section-accent: var(--nx-section-access-accent); }
+.ds-panel--toned { border-inline-start: 4px solid var(--ds-section-accent); background: var(--ds-section-surface); }
+.ds-panel--toned>.ds-panel__body { color: var(--nx-text); }
+
+.ds-form-workbench { display: grid; width: min(100%,var(--nf-reading-max)); margin-inline: auto; gap: var(--nf-space-5); }
+.ds-section-nav { display: flex; max-width: 100%; gap: var(--nf-space-1); padding: var(--nf-space-1); overflow-x: auto; overscroll-behavior-inline: contain; border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); }
+.ds-section-nav a { display: inline-flex; min-height: var(--nf-control-min); flex: 0 0 auto; align-items: center; padding-inline: var(--nf-space-3); border-radius: var(--nf-radius-control); color: var(--nx-text); text-decoration: none; }
+.ds-section-nav a:hover { background: var(--nx-surface-secondary); color: var(--nx-text-strong); }
+
+:where(.ds-action,.ds-view-tabs a,.ds-section-nav a,.ds-record-row a,.ds-stage-column a):focus-visible { outline: 3px solid var(--nx-focus); outline-offset: 2px; }
 
 .lead-management-dialog { position: fixed; inset: 50% auto auto 50%; box-sizing: border-box; width: min(520px,calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); margin: 0; overflow: auto; overscroll-behavior: contain; padding: var(--nf-space-5); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-overlay); color: var(--nx-text-strong); box-shadow: var(--nx-overlay-shadow); transform: translate(-50%,-50%); }
 .lead-management-dialog::backdrop { background: var(--nx-blanket); }
@@ -182,6 +228,8 @@
 .lead-activity-load-older { display: flex; justify-content: center; min-height: 44px; overflow-anchor: none; }
 
 @media (max-width: 520px) {
+  .ds-page-header { align-items: stretch; flex-direction: column; }
+  .ds-page-header__actions,.ds-page-header__actions>* { width: 100%; }
   .ds-panel__header { align-items: stretch; flex-direction: column; }
   .ds-panel__actions,.ds-panel__actions>* { width: 100%; }
   .ds-feedback__actions,.ds-empty__actions,.ds-feedback__actions>*,.ds-empty__actions>* { width: 100%; }
@@ -216,7 +264,8 @@
   .cg-directory-pagination,.cg-directory-pagination>div,.cg-directory-pagination .ds-action { width: 100%; }
 }
 @media (forced-colors: active) {
-  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.deal-board__stage,.lead-management-dialog,.lead-operational-edit fieldset,.lead-activity-card,.cg-directory-icon,.cg-directory-tools,.cg-directory-table-wrap,.cg-directory-table tr,.cg-list-row-feedback { border: 1px solid CanvasText; }
+  .ds-action,.ds-panel,.ds-badge,.ds-feedback,.ds-empty,.ds-loading,.ds-table-wrap,.ds-view-tabs,.ds-record-list,.ds-record-row,.ds-stage-column,.ds-facts-grid>div,.ds-section-panel,.ds-section-nav,.deal-board__stage,.lead-management-dialog,.lead-operational-edit fieldset,.lead-activity-card,.cg-directory-icon,.cg-directory-tools,.cg-directory-table-wrap,.cg-directory-table tr,.cg-list-row-feedback { border: 1px solid CanvasText; }
+  .ds-section-panel,.ds-stage-column>header { border-inline-start-color: CanvasText; border-bottom-color: CanvasText; }
   .ds-badge { forced-color-adjust: none; }
 }
 @media (prefers-reduced-motion: reduce) {

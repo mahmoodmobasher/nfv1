@@ -66,7 +66,7 @@ export function ProductPageHeader({
   context?: string;
 }) {
   return (
-    <header className="product-page-header">
+    <header className="product-page-header ds-page-header">
       <div>
         {context && <p className="product-page-context">{context}</p>}
         <h1>{title}</h1>
@@ -320,7 +320,7 @@ export function ProductShell({
         drawer ? "product-drawer-content" : "product-navigation-content"
       }
     >
-      {drawer && <WorkspaceControl name={workspace} role={role} />}
+      {drawer && <WorkspaceControl name={workspace} role={role} accountAction={signOutControl} />}
       <nav
         aria-label={kind === "crm" ? "CRM navigation" : "Workspace navigation"}
       >
@@ -394,7 +394,7 @@ export function ProductShell({
               />
             </form>
           )}
-          {navigationState === "ready" && <WorkspaceControl name={workspace} role={role} />}
+          {navigationState === "ready" && <WorkspaceControl name={workspace} role={role} accountAction={signOutControl} />}
           <Link
             className="product-icon-action"
             href="/settings#preferences"
@@ -402,7 +402,6 @@ export function ProductShell({
           >
             <Palette aria-hidden="true" />
           </Link>
-          {signOutControl}
         </div>
       </header>
       <header className="product-mobile">
@@ -410,9 +409,7 @@ export function ProductShell({
           <Brand />
           <span>{navigationState === "ready" ? workspace : "Workspace"}</span>
         </div>
-        <div ref={mobileAccount} className="product-mobile-account">
-          {signOutControl}
-        </div>
+        <div ref={mobileAccount} className="product-mobile-account" />
         <button
           ref={trigger}
           className="menu-button"

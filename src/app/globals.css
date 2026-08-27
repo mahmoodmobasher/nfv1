@@ -463,6 +463,18 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .spectrum-state-sheet .state-table th,.spectrum-state-sheet .state-table td { padding: 10px; border: 1px solid var(--nx-border-emphasis); text-align: left; }
 .spectrum-state-sheet .state-table th { background: var(--nx-surface-secondary); color: var(--nx-text-strong); }
 .product-shell .product-drawer-content>.admin-workspace { margin-bottom: var(--nf-space-4); padding: var(--nf-space-3); background: var(--nx-surface-secondary); }
+.admin-workspace-menu { position: relative; display: block!important; max-width: none!important; margin: 0!important; padding: 0!important; background: transparent!important; }
+.admin-workspace-menu>summary { display: flex; min-width: 150px; min-height: var(--nf-control-min); align-items: center; justify-content: space-between; gap: var(--nf-space-2); padding: var(--nf-space-1-5) var(--nf-space-2-5); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-text-strong); cursor: pointer; list-style: none; }
+.admin-workspace-menu>summary::-webkit-details-marker { display: none; }
+.admin-workspace-menu>summary>span:first-child { display: grid; min-width: 0; text-transform: none; }
+.admin-workspace-menu>summary b,.admin-workspace-menu>summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-workspace-menu>summary small { color: var(--nx-text-muted); text-transform: capitalize; }
+.admin-workspace-menu[open]>summary { border-color: var(--nx-action-primary); background: var(--nx-selected-surface); }
+.admin-workspace-menu__panel { position: absolute; z-index: 20; top: calc(100% + var(--nf-space-2)); right: 0; display: grid; width: min(280px,calc(100vw - 28px)); gap: var(--nf-space-2); padding: var(--nf-space-3); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-overlay); box-shadow: var(--nx-overlay-shadow); }
+.admin-workspace-menu__panel .admin-workspace__identity { display: grid; padding-bottom: var(--nf-space-2); border-bottom: 1px solid var(--nx-border-subtle); }
+.admin-workspace-menu__panel>a,.admin-workspace-menu__panel>.product-signout { width: 100%; min-height: var(--nf-control-min); justify-content: flex-start; }
+.product-drawer-content>.admin-workspace-menu>summary { width: 100%; }
+.product-drawer-content>.admin-workspace-menu .admin-workspace-menu__panel { position: static; width: 100%; margin-top: var(--nf-space-2); box-sizing: border-box; }
 
 @media (max-width: 1200px) {
   .product-shell .product-topbar>.product-topbar-actions>.admin-workspace { display: none; }
@@ -502,7 +514,7 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 }
 
 @media (forced-colors: active) {
-  .product-shell>.product-rail,.product-shell>.product-topbar,.product-shell>.product-mobile,.product-shell .mobile-menu-panel,.product-signout { border-color: CanvasText; }
+  .product-shell>.product-rail,.product-shell>.product-topbar,.product-shell>.product-mobile,.product-shell .mobile-menu-panel,.product-signout,.admin-workspace-menu>summary,.admin-workspace-menu__panel { border-color: CanvasText; }
   .product-shell .product-nav-group a[aria-current="page"] { outline: 2px solid Highlight; }
   .product-nav-group h2 button[aria-expanded="true"],.product-nav-group[data-active] h2 button,.product-nav-group>div { border-color: CanvasText; }
 }
