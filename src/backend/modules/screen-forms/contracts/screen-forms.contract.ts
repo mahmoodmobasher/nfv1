@@ -151,6 +151,14 @@ export const contactScreenProfileV2Schema = z
     address,
   })
   .strict();
+const leadSourcePlatformV2Schema = z.enum([
+  "tiktok",
+  "instagram",
+  "facebook",
+  "linkedin",
+  "x",
+  "youtube",
+]);
 export const leadScreenProfileV2Schema = z
   .object({
     salutation: nullable(20),
@@ -180,6 +188,7 @@ export const leadScreenProfileV2Schema = z
       "manual",
       "other",
     ]),
+    sourcePlatform: leadSourcePlatformV2Schema.nullable().optional(),
     stageId: uuid,
     stageUpdatedAt: z.string().datetime({offset:true}),
     rating: z.enum(["hot", "warm", "cold"]).nullable(),
@@ -188,7 +197,21 @@ export const leadScreenProfileV2Schema = z
     employeeCount: z.number().int().min(0).max(2147483647).nullable(),
     address,
   })
-  .strict();
+  .strict()
+  .superRefine((profile, context) => {
+    if (profile.source === "social_media" && profile.sourcePlatform == null)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select the social platform.",
+        path: ["sourcePlatform"],
+      });
+    if (profile.source !== "social_media" && profile.sourcePlatform != null)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Social platform is only valid for Social media source.",
+        path: ["sourcePlatform"],
+      });
+  });
 
 export const companyScreenCreateCommandV2Schema = z
   .object({
@@ -312,7 +335,7 @@ export const screenProfileDetailV1Schema = z.discriminatedUnion("kind", [
     .object({
       ...detailBase,
       kind: z.literal("lead"),
-      base:z.object({salutation:nullable(20),firstName:clean(100),lastName:clean(100),jobTitle:nullable(160),source:z.enum(["website","referral","outbound","event","partner","social_media","import","manual","other"]),stageId:uuid,rating:z.enum(["hot","warm","cold"]).nullable(),industry:nullable(120),employeeCount:z.number().int().min(0).max(2147483647).nullable()}).strict(),
+      base:z.object({salutation:nullable(20),firstName:clean(100),lastName:clean(100),jobTitle:nullable(160),source:z.enum(["website","referral","outbound","event","partner","social_media","import","manual","other"]),sourcePlatform:leadSourcePlatformV2Schema.nullable(),stageId:uuid,rating:z.enum(["hot","warm","cold"]).nullable(),industry:nullable(120),employeeCount:z.number().int().min(0).max(2147483647).nullable()}).strict(),
       identityReview:z.object({companyDimension:z.literal("resolved"),contactDimension:z.enum(["resolved","pending"])}).strict(),
       categories:z.object({channels:z.union([full(leadChannels),masked(maskedLeadChannels),withheld]),address:z.union([full(addressValue),masked(maskedAddress),withheld]),revenue:revenueEnvelope,consent:z.union([full(z.object({promotionalEmailOptOut:z.boolean(),recordedAt:z.string().datetime({offset:true}),source:z.enum(["manual","import","integration"])}).strict().nullable()),masked(z.object({display:maskedText}).strict()),withheld]),hierarchy:z.union([full(leadHierarchy),masked(maskedHierarchy),withheld])}).strict(),
       assignment:assignmentEnvelope,

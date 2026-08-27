@@ -488,10 +488,20 @@ suite("SCREEN-FORMS-01 backend", () => {
     const refreshed = await listScreenFormOptionsV1(pool, f.actor, {kind:"lead",optionKind:"company",query:"Quick Company",limit:25}, randomUUID());
     expect(refreshed.items).toEqual([{id:created.companyId,label:"Quick Company",target:{kind:"version",version:created.version}}]);
     const selected = {...f,company:{id:created.companyId,version:created.version}};
-    const createdLead = await createLeadScreenV2(pool,{actor:f.actor,key:`quick-lead-${randomUUID()}`,requestId:randomUUID(),command:{
-      ...command(selected),profile:{...command(selected).profile,company:{snapshotName:"Quick Company",companyId:created.companyId,companyVersion:created.version}},
-    }});
+    const leadKey=`quick-lead-${randomUUID()}`, leadCommand={
+      ...command(selected),profile:{...command(selected).profile,source:"social_media" as const,sourcePlatform:"linkedin" as const,
+        company:{snapshotName:"Quick Company",companyId:created.companyId,companyVersion:created.version}},
+    };
+    const createdLead = await createLeadScreenV2(pool,{actor:f.actor,key:leadKey,requestId:randomUUID(),command:leadCommand});
     expect(createdLead).toMatchObject({kind:"lead",version:1});
+    const replayedLead=await createLeadScreenV2(pool,{actor:f.actor,key:leadKey,requestId:randomUUID(),command:leadCommand});
+    expect(replayedLead).toMatchObject({recordId:createdLead.recordId,version:1,replayed:true});
+    const attribution=(await pool.query(`select l.original_source_category "leadSource",l.original_source_platform "leadPlatform",
+      i.source_category "intakeSource",i.source_platform "intakePlatform"
+      from leads l join lead_intakes i on i.workspace_id=l.workspace_id and i.lead_id=l.id
+      where l.workspace_id=$1 and l.id=$2`,[f.actor.workspaceId,createdLead.recordId])).rows[0];
+    expect(attribution).toEqual({leadSource:"social_media",leadPlatform:"linkedin",intakeSource:"social_media",intakePlatform:"linkedin"});
+    expect((await pool.query(`select count(*)::int count from leads where workspace_id=$1 and id=$2`,[f.actor.workspaceId,createdLead.recordId])).rows[0].count).toBe(1);
     await expect(createLeadScreenV2(pool,{actor:f.actor,key:`quick-lead-fail-${randomUUID()}`,requestId:randomUUID(),command:{
       ...command(selected),profile:{...command(selected).profile,primaryEmail:`failed-${randomUUID()}@example.test`,company:{snapshotName:"Quick Company",companyId:created.companyId,companyVersion:created.version+1}},
     }})).rejects.toMatchObject({code:"resource_not_found"});
@@ -693,6 +703,29 @@ suite("SCREEN-FORMS-01 backend", () => {
       reviewStatus: "resolved",
       lineage: 0,
     });
+  });
+
+  it("edits only the current source tuple and preserves original Lead and intake provenance", async () => {
+    const f=await fixture(),base=command(f),created=await createLeadScreenV2(pool,{actor:f.actor,key:`source-create-${randomUUID()}`,requestId:randomUUID(),
+      command:{...base,profile:{...base.profile,source:"social_media",sourcePlatform:"linkedin"}}});
+    const cleared=await editLeadScreenV2(pool,{actor:f.actor,leadId:created.recordId,key:`source-clear-${randomUUID()}`,requestId:randomUUID(),command:{
+      contractVersion:"lead-screen-edit.v2",expectedVersion:created.version,profile:{...base.profile,source:"manual",sourcePlatform:null},assignment}});
+    const clearedDetail=await getScreenProfileV1(pool,f.actor,"lead",created.recordId,randomUUID());
+    expect(clearedDetail.kind).toBe("lead");
+    if(clearedDetail.kind!=="lead")throw new Error("expected Lead detail");
+    expect(clearedDetail.base).toMatchObject({source:"manual",sourcePlatform:null});
+    const social=await editLeadScreenV2(pool,{actor:f.actor,leadId:created.recordId,key:`source-social-${randomUUID()}`,requestId:randomUUID(),command:{
+      contractVersion:"lead-screen-edit.v2",expectedVersion:cleared.version,profile:{...base.profile,source:"social_media",sourcePlatform:"instagram"},assignment}});
+    expect(social.version).toBe(3);
+    const facts=(await pool.query(`select l.source "currentSource",l.source_platform "currentPlatform",
+      l.original_source_category "originalSource",l.original_source_platform "originalPlatform",
+      i.source_category "intakeSource",i.source_platform "intakePlatform" from leads l join lead_intakes i
+      on i.workspace_id=l.workspace_id and i.lead_id=l.id where l.workspace_id=$1 and l.id=$2`,[f.actor.workspaceId,created.recordId])).rows[0];
+    expect(facts).toEqual({currentSource:"social_media",currentPlatform:"instagram",originalSource:"social_media",originalPlatform:"linkedin",intakeSource:"social_media",intakePlatform:"linkedin"});
+    const detail=await getScreenProfileV1(pool,f.actor,"lead",created.recordId,randomUUID());
+    expect(detail.kind).toBe("lead");
+    if(detail.kind!=="lead")throw new Error("expected Lead detail");
+    expect(detail.base).toMatchObject({source:"social_media",sourcePlatform:"instagram"});
   });
 
   it("reads legacy unknown Lead consent and preserves it during an unrelated edit without fabricating evidence", async () => {

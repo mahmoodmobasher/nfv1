@@ -31,6 +31,14 @@ describe("SCREEN-FORMS revised frontend transport parity", () => {
     expect(leadScreenCreateCommandV2Schema.safeParse({ contractVersion: "lead-screen-create.v2", profile, assignment }).success).toBe(false);
   });
 
+  it("requires a governed platform only for Social media attribution", () => {
+    expect(leadScreenProfileV2Schema.safeParse({ ...profile, source: "social_media", sourcePlatform: null }).success).toBe(false);
+    expect(leadScreenProfileV2Schema.safeParse({ ...profile, source: "social_media", sourcePlatform: "linkedin" }).success).toBe(true);
+    expect(leadScreenProfileV2Schema.safeParse({ ...profile, source: "social_media", sourcePlatform: "other_social" }).success).toBe(false);
+    expect(leadScreenProfileV2Schema.safeParse({ ...profile, source: "manual", sourcePlatform: "linkedin" }).success).toBe(false);
+    expect(leadScreenProfileV2Schema.parse(profile).sourcePlatform).toBeUndefined();
+  });
+
   it("binds Notes writes to a positive Contact version", () => {
     expect(contactInternalNoteAddCommandV1Schema.safeParse({ contractVersion: "contact-internal-note-add.v1", expectedContactVersion: 2, body: "Follow up next week." }).success).toBe(true);
     expect(contactInternalNoteAddCommandV1Schema.safeParse({ contractVersion: "contact-internal-note-add.v1", expectedContactVersion: 0, body: "Follow up." }).success).toBe(false);
