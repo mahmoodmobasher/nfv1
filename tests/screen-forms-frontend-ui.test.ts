@@ -11,6 +11,15 @@ const form = readFileSync(
   "src/frontend/features/screen-forms/components/screen-profile-form.tsx",
   "utf8",
 );
+const fields = readFileSync(
+  "src/frontend/features/screen-forms/components/screen-form-fields.tsx",
+  "utf8",
+);
+const command = readFileSync(
+  "src/frontend/features/screen-forms/components/screen-form-command.ts",
+  "utf8",
+);
+const formSurface = `${form}\n${fields}\n${command}`;
 const options = readFileSync(
   "src/frontend/features/screen-forms/components/screen-form-options.tsx",
   "utf8",
@@ -69,18 +78,27 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
       "Country",
       "Add internal note",
     ])
-      expect(form).toContain(label);
-    expect(form).not.toMatch(/AI Notes|create customer|infer.*company/i);
+      expect(formSurface).toContain(label);
+    expect(formSurface).not.toMatch(/AI Notes|create customer|infer.*company/i);
+  });
+
+  it("keeps reusable fields separate from transport and protected option state", () => {
+    expect(form).toContain('from "./screen-form-fields"');
+    expect(form).toContain('from "./screen-form-command"');
+    expect(fields).not.toMatch(/fetch\(|screen-form-options|contracts\//);
+    expect(fields).not.toContain("workspaceId");
+    expect(command).not.toMatch(/fetch\(|useState|useEffect|workspaceId/);
+    expect(command).toContain("buildScreenFormCommand");
   });
 
   it("uses strict server options and preserves their version or timestamp targets", () => {
     expect(options).toContain('endpoint(workspaceId, "screen-form-options")');
     expect(options).toContain("screenFormOptionsV1Schema.safeParse");
-    expect(form).toContain("selectedCompany.label");
+    expect(command).toContain("selectedCompany.label");
     expect(form).toContain("updatedAt: lead.base.stageUpdatedAt");
     expect(form).toContain('initial={stageOption}');
     expect(options).toContain('screen-form-options/selected');
-    expect(form).toContain("visibleTeamVersions");
+    expect(command).toContain("visibleTeamVersions");
   });
 
   it("treats labels as replaceable presentation, not selection authority", () => {
@@ -217,13 +235,13 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
   });
 
   it("links validation summaries and exposes stale reload and replay truth", () => {
-    expect(form).toContain("href={`#${id}`}");
-    expect(form).toContain("aria-invalid={Boolean(error)}");
+    expect(fields).toContain("href={`#${id}`}");
+    expect(fields).toContain("aria-invalid={Boolean(error)}");
     expect(form).toContain("Reload latest");
     expect(form).toContain("save was already applied");
     expect(form).toContain("Contact ambiguity remains pending Identity Review");
-    expect(form).toContain("linkedFields.has(id)");
-    expect(form).not.toContain("href={`#_form`}");
+    expect(fields).toContain("linkedFields.has(id)");
+    expect(formSurface).not.toContain("href={`#_form`}");
     expect(form).toContain('id="visibility"');
   });
 });

@@ -31,3 +31,84 @@ Status date: 2026-08-27
 - Notes: Contact internal Note add/list.
 
 Physical schema definitions remain centralized in `src/server/db/schema.ts`. Module public entries define logical ownership and participant boundaries.
+
+## Table ownership inventory
+
+This inventory records logical write ownership. Shared physical schema definitions do not create shared write authority.
+
+| Table | Single write owner | Current access posture |
+| --- | --- | --- |
+| `leads` | Leads | Current Lead root and profile |
+| `lead_lifecycle_definitions` | Leads | Canonical lifecycle definitions |
+| `lead_intakes` | Leads | Immutable intake provenance |
+| `lead_activities` | Leads | Legacy read-only compatibility |
+| `lead_visible_teams` | Leads | Lead Team visibility |
+| `pipeline_stages` | Leads | Operational Lead stages |
+| `contacts` | Customer Graph | Contact root |
+| `companies` | Customer Graph | Company root |
+| `lead_identity_reviews` | Identity Review | Review root |
+| `lead_identity_candidates` | Identity Review | Append-only candidates |
+| `lead_identity_decisions` | Identity Review | Append-only decisions |
+| `lead_identity_decision_heads` | Identity Review | Effective decision head |
+| `audit_events` | Platform Audit | Minimized governing evidence |
+| `outbox_messages` | Platform Outbox | Minimized domain events |
+| `idempotency_records` | Platform Idempotency | Target-bound mutation receipts |
+| `sales_pipelines` | Sales | Sales Pipeline authority |
+| `deal_stage_definitions` | Sales | Ordered Deal stages |
+| `deals` | Sales | Deal aggregate |
+| `deal_party_refs` | Sales | Typed Customer Graph references |
+| `deal_visible_teams` | Sales | Deal Team visibility |
+| `deal_stage_transitions` | Sales | Immutable transition history |
+| `lead_deal_conversion_lineage` | Sales | One-Deal conversion lineage |
+| `note_records` | Notes | Note root |
+| `note_revisions` | Notes | Append-only Note content |
+| `note_record_references` | Notes | Typed Contact references |
+| `activity_records` | Activities | Dormant runtime; DB-ready manual activity root |
+| `activity_record_references` | Activities | Dormant runtime; typed Lead target timeline |
+
+Workspace Administration owns `workspaces`, `users`, `sessions`, `roles`, `workspace_memberships`, `teams`, and `team_memberships`. Domain modules consume those facts through Platform authorization participants and do not become write owners.
+
+## Stable identity inventory
+
+| Kind | Identity | Owner |
+| --- | --- | --- |
+| operation | `lead-inquiry-intake.v1` | Leads |
+| operation | `lead-identity-review-decision.v1` | Leads orchestrator / Identity Review |
+| operation | `lead-operational-edit.v1` | Leads |
+| operation | `lead-stage-transition.v1` | Leads |
+| operation | `sales-deal-create.v1` | Sales |
+| operation | `sales-deal-update.v1` | Sales |
+| operation | `sales-deal-stage-transition.v1` | Sales |
+| operation | `sales-deal-archive.v1` | Sales |
+| operation | `sales-deal-restore.v1` | Sales |
+| operation | `contact-internal-note-add.v1` | Notes |
+| query | `lead-identity-review-detail.v1` | Leads presentation |
+| query | `lead-identity-review-queue.v1` | Leads presentation |
+| query | `listLeadSummaries.v1` | Leads presentation |
+| query | `getLeadDetail.v1` | Leads presentation |
+| query | `listLeadPipelineStagesV1` | Leads presentation |
+| query | `getLeadOperationalEdit.v1` | Leads presentation |
+| Audit | `crm.inquiry_created` | Leads governing writer |
+| Audit | `crm.inquiry_held_for_review` | Leads governing writer |
+| Audit | `crm.inquiry_review_resolved` | Leads governing writer |
+| Audit | `crm.lead_operational_updated` | Leads governing writer |
+| Audit | `crm.lead_stage_transitioned` | Leads governing writer |
+| Audit | `sales.deal_created` | Sales governing writer |
+| Audit | `sales.deal_updated` | Sales governing writer |
+| Audit | `sales.deal_stage_transitioned` | Sales governing writer |
+| Audit | `sales.deal_archived` | Sales governing writer |
+| Audit | `sales.deal_restored` | Sales governing writer |
+| event | `crm.inquiry.created.v1` | Leads |
+| event | `crm.inquiry.review_required.v1` | Identity Review |
+| event | `crm.inquiry.review_resolved.v1` | Identity Review |
+| event | `crm.inquiry.linked.v1` | Leads |
+| event | `crm.contact.created.v1` | Customer Graph |
+| event | `crm.company.created.v1` | Customer Graph |
+| event | `crm.lead.operational_updated.v1` | Leads |
+| event | `crm.lead.stage_transitioned.v1` | Leads |
+| event | `sales.deal.created.v1` | Sales |
+| event | `sales.deal.updated.v1` | Sales |
+| event | `sales.deal.stage_transitioned.v1` | Sales |
+| event | `sales.deal.archived.v1` | Sales |
+| event | `sales.deal.restored.v1` | Sales |
+| event | `crm.contact.internal_note_added.v1` | Notes |
