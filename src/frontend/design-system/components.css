@@ -159,8 +159,9 @@
 .lead-stage-unavailable { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
 .lead-activity { margin-top: var(--nf-space-5); }
 .lead-activity-capability { display: inline-flex; min-height: 44px; align-items: center; color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
-.lead-activity-layout { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); gap: var(--nf-space-5); align-items: start; }
+.lead-activity-layout { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(300px,100%),1fr)); gap: var(--nf-space-5); align-items: start; }
 .lead-activity-form,.lead-activity-timeline { min-width: 0; }
+.lead-activity-primary-fields { grid-template-columns: minmax(120px,.55fr) minmax(210px,1.45fr); }
 .lead-activity-form>section { padding-top: 0; border-top: 0; }
 .lead-activity-form h3,.lead-activity-timeline h3,.lead-activity-timeline p { margin: 0; }
 .lead-activity-timeline { display: grid; gap: var(--nf-space-3); }
@@ -191,6 +192,7 @@
   .deal-board { grid-template-columns: 1fr; }
   .lead-management-dialog { width: calc(100vw - 24px); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: var(--nf-space-4); }
   .lead-activity-layout { grid-template-columns: 1fr; }
+  .lead-activity-primary-fields { grid-template-columns: 1fr; }
   .lead-activity-timeline__header { align-items: stretch; flex-direction: column; }
   .lead-activity-timeline__header .field,.lead-activity-load-older,.lead-activity-load-older .ds-action { width: 100%; }
 }
