@@ -20,30 +20,38 @@ async function fixture(page: Page) {
 const row = (name: string, status: "active" | "archived", capabilities: { canArchive: boolean; canRestore: boolean }) => ({ id: randomUUID(), displayName: name, status, version: 1, updatedAt: "2026-08-27T01:00:00.000Z", capabilities: { canEdit: true, ...capabilities }, reconciliation: { required: false, action: "none" } });
 
 async function mock(page: Page, workspaceId: string) {
-  const active = row("Northwind Holdings", "active", { canArchive: true, canRestore: false }), archived = row("Retained Industries", "archived", { canArchive: false, canRestore: true });
+  const active = row("Northwind Holdings", "active", { canArchive: true, canRestore: false }), archived = row("Retained Industries", "archived", { canArchive: false, canRestore: true }), contact = row("Visible Contact", "active", { canArchive: false, canRestore: false });
   await page.route("**/api/workspaces/*/navigation-capabilities", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: "workspace-navigation-capabilities.v1", workspaceId, capabilities: { home: { canView: true }, companies: { canView: true, canCreate: true }, contacts: { canView: true, canCreate: true }, leads: { canView: false, canCreate: false }, identityReview: { canView: false }, deals: { canView: false, canCreate: false }, pipeline: { canView: false }, settings: { canViewPersonal: false, canViewWorkspace: false, canManagePeople: false, canManageInvitations: false, canManageTeams: false } }, requestId: randomUUID() } }) }));
   await page.route("**/api/workspaces/*/companies?*", route => {
     const status = new URL(route.request().url()).searchParams.get("status") as "active" | "archived";
     return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: "customer-graph-list.v1", kind: "company", capabilities: { canCreate: true }, items: [status === "archived" ? archived : active], nextCursor: null, requestId: randomUUID() } }) });
   });
-  await page.route("**/api/workspaces/*/contacts?*", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: "customer-graph-list.v1", kind: "contact", capabilities: { canCreate: true }, items: [row("Visible Contact", "active", { canArchive: false, canRestore: false })], nextCursor: null, requestId: randomUUID() } }) }));
+  await page.route("**/api/workspaces/*/contacts?*", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: "customer-graph-list.v1", kind: "contact", capabilities: { canCreate: true }, items: [contact], nextCursor: null, requestId: randomUUID() } }) }));
+  const detail = (kind: "company" | "contact", item: ReturnType<typeof row>) => ({ data: { contractVersion: "customer-graph-detail.v1", kind, record: { ...item, responsibleMembershipId: null, responsibleTeamId: null, visibility: "workspace", authorityContractVersion: "customer-graph-v1", visibleTeamIds: [], ...(kind === "company" ? { domain: "northwind.example", disclosure: { domain: "full" }, affiliations: [] } : { firstName: "Visible", lastName: "Contact", email: "visible@example.test", phone: null, maskedEmail: null, maskedPhone: null, disclosure: { channels: "full" }, affiliations: [] }), capabilities: { ...item.capabilities, canManageAffiliations: false, canManageAssignment: false } }, options: { responsibleMemberships: [], teams: [] }, requestId: randomUUID() } });
+  await page.route(`**/api/workspaces/*/companies/${active.id}`, route => route.fulfill({ contentType: "application/json", body: JSON.stringify(detail("company", active)) }));
+  await page.route(`**/api/workspaces/*/contacts/${contact.id}`, route => route.fulfill({ contentType: "application/json", body: JSON.stringify(detail("contact", contact)) }));
+  return { active, archived, contact };
 }
 
 test.afterAll(async () => database.end());
 
 test("Companies and Contacts use disclosure-safe responsive directories", async ({ page }) => {
-  const workspaceId = await fixture(page); await mock(page, workspaceId);
+  const workspaceId = await fixture(page), records = await mock(page, workspaceId);
   await page.goto("/crm/companies");
   await expect(page.getByRole("heading", { name: "Companies", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "Add company" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Northwind Holdings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Northwind Holdings", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View Northwind Holdings" })).toHaveAttribute("href", `/crm/companies/${records.active.id}`);
+  await expect(page.getByRole("link", { name: "Edit Northwind Holdings" })).toHaveAttribute("href", `/crm/companies/${records.active.id}/edit`);
   const archive = page.getByRole("button", { name: "Archive Northwind Holdings" });
   await archive.focus(); await archive.click();
   await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
   await page.keyboard.press("Escape"); await expect(archive).toBeFocused();
   await archive.click(); await page.getByRole("button", { name: "Cancel" }).click(); await expect(archive).toBeFocused();
   await page.getByRole("checkbox", { name: "Include archived" }).check();
-  await expect(page.getByRole("link", { name: "Retained Industries" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Retained Industries", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Retained Industries" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Restore Retained Industries" })).toBeVisible();
   await page.getByRole("searchbox", { name: "Search loaded companies" }).fill("missing");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByRole("heading", { name: /No loaded companies match/ })).toBeVisible();
@@ -51,8 +59,19 @@ test("Companies and Contacts use disclosure-safe responsive directories", async 
   await page.setViewportSize({ width: 320, height: 720 });
   await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 320);
   await page.goto("/crm/contacts");
-  await expect(page.getByText("Visible Contact")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Visible Contact", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Add contact" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View Visible Contact" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Visible Contact" })).toBeVisible();
+  await page.getByRole("link", { name: "View Visible Contact" }).click();
+  await expect(page.getByRole("link", { name: "Edit contact" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Archive Visible Contact" })).toHaveCount(0);
+  await page.goto(`/crm/companies/${records.active.id}`);
+  await expect(page.getByRole("link", { name: "Edit company" })).toBeVisible();
+  const detailArchive = page.getByRole("button", { name: "Archive Northwind Holdings" }); await expect(detailArchive).toBeVisible(); await detailArchive.click();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused(); await page.keyboard.press("Escape"); await expect(detailArchive).toBeFocused();
   await expect(page.getByText(/email|phone|company unavailable/i)).toHaveCount(0);
+  await expect(page.getByText(/delete|permanent|irreversible/i)).toHaveCount(0);
   await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 320);
 });
 
@@ -75,6 +94,28 @@ for (const scenario of [
   await expect(warning).toBeVisible(); await expect(page.getByRole("button", { name: `Retry archived ${scenario.plural}` })).toBeFocused();
   await expect(page.getByText(`No active or archived ${scenario.plural} are currently visible.`)).toHaveCount(0);
   await page.getByRole("button", { name: `Retry archived ${scenario.plural}` }).click();
-  if (scenario.recoveredName) await expect(page.getByRole("link", { name: scenario.recoveredName })).toBeVisible();
+  if (scenario.recoveredName) await expect(page.getByRole("link", { name: scenario.recoveredName, exact: true })).toBeVisible();
   else await expect(page.getByText(`No active or archived ${scenario.plural} are currently visible.`)).toBeVisible();
+});
+
+for (const scenario of [
+  { kind: "company", singular: "Company", plural: "companies", path: "/crm/companies" },
+  { kind: "contact", singular: "Contact", plural: "contacts", path: "/crm/contacts" },
+] as const) test(`${scenario.kind} archives and restores through capability actions`, async ({ page }) => {
+  const workspaceId = await fixture(page), id = randomUUID(); let status: "active" | "archived" = "active";
+  await page.route("**/api/workspaces/*/navigation-capabilities", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: "workspace-navigation-capabilities.v1", workspaceId, capabilities: { home: { canView: true }, companies: { canView: true, canCreate: true }, contacts: { canView: true, canCreate: true }, leads: { canView: false, canCreate: false }, identityReview: { canView: false }, deals: { canView: false, canCreate: false }, pipeline: { canView: false }, settings: { canViewPersonal: false, canViewWorkspace: false, canManagePeople: false, canManageInvitations: false, canManageTeams: false } }, requestId: randomUUID() } }) }));
+  await page.route("**/api/auth/csrf", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ token: "directory-csrf" }) }));
+  await page.route(`**/api/workspaces/*/${scenario.plural}?*`, route => {
+    const requested = new URL(route.request().url()).searchParams.get("status"), items = requested === status ? [{ ...row(`${scenario.singular} lifecycle`, status, { canArchive: status === "active", canRestore: status === "archived" }), id }] : [];
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: "customer-graph-list.v1", kind: scenario.kind, capabilities: { canCreate: true }, items, nextCursor: null, requestId: randomUUID() } }) });
+  });
+  await page.route(`**/api/workspaces/*/${scenario.plural}/${id}/archive`, route => { status = "archived"; return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: `${scenario.kind}-result.v1`, [`${scenario.kind}Id`]: id, version: 2, replayed: false, requestId: randomUUID() } }) }); });
+  await page.route(`**/api/workspaces/*/${scenario.plural}/${id}/restore`, route => { status = "active"; return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { contractVersion: `${scenario.kind}-result.v1`, [`${scenario.kind}Id`]: id, version: 3, replayed: true, requestId: randomUUID() } }) }); });
+  await page.goto(scenario.path);
+  const archive = page.getByRole("button", { name: `Archive ${scenario.singular} lifecycle` }); await archive.click();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused(); await page.getByRole("button", { name: "Archive record" }).click();
+  await expect(page.getByText(`${scenario.singular} archived.`)).toBeVisible(); await expect(page.getByRole("link", { name: `${scenario.singular} lifecycle`, exact: true })).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Include archived" }).check(); await expect(page.getByRole("link", { name: `${scenario.singular} lifecycle`, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: `Restore ${scenario.singular} lifecycle` }).click(); await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused(); await page.getByRole("button", { name: "Restore record" }).click();
+  await expect(page.getByText(`${scenario.singular} change was already applied.`)).toBeVisible(); await expect(page.getByRole("button", { name: `Archive ${scenario.singular} lifecycle` })).toBeVisible();
 });

@@ -29,6 +29,15 @@ describe("CUSTOMER-GRAPH-01 frontend boundaries", () => {
     expect(listComponent).toContain("Search applies only to the records currently loaded below.");
     expect(listComponent).not.toMatch(/maskedEmail|maskedPhone|companyName|industry|subsidiar|dealCount|contactCount/i);
   });
+  it("makes every directory action explicit and capability-derived", () => {
+    expect(listComponent).toContain("parsed.data.data.capabilities.canCreate");
+    expect(listComponent).toContain("item.capabilities.canEdit &&");
+    expect(listComponent).toContain("item.capabilities.canArchive");
+    expect(listComponent).toContain("item.capabilities.canRestore");
+    expect(listComponent).toContain("View<span className=\"sr-only\"");
+    expect(listComponent).toContain("Edit<span className=\"sr-only\"");
+    expect(listComponent).not.toMatch(/method:\s*["']DELETE["']|hard delete|permanently delete/i);
+  });
   it("keeps sensitive disclosure minimized and strict", () => {
     expect(component).toContain("maskedEmail"); expect(component).toContain("maskedPhone");
     expect(component).not.toContain("domainNormalized"); expect(component).not.toContain("emailNormalized");
