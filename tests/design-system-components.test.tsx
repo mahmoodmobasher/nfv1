@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionLink, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormWorkbench, LoadingState, Panel, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
+import { ActionLink, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, LoadingState, Panel, ProductPageHeader, RecordCard, RecordCards, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
 
 describe("CRM shared design-system components", () => {
   it("renders complete semantic state primitives without feature authority", () => {
@@ -30,5 +30,15 @@ describe("CRM shared design-system components", () => {
     expect(markup).toContain("ds-facts-grid");
     expect(markup).toContain("ds-section-panel--qualification");
     expect(markup).toContain('aria-label="Form sections"');
+  });
+
+  it("renders the shared Lead list and editor composition primitives", () => {
+    const markup = renderToStaticMarkup(<><ProductPageHeader marker="LD" context="Sales" title="Leads" description={<p>Authorized records.</p>} action={<ActionLink href="/crm/leads/new">Add lead</ActionLink>}/><RecordCards label="Loaded leads"><RecordCard title="Ada Lead" href="/crm/leads/1" secondary="a***@example.com" facts={[{label:"Stage",value:<StatusBadge tone="warning">New</StatusBadge>}]} actions={<ActionLink href="/crm/leads/1">View lead</ActionLink>}/></RecordCards><FormSection id="overview" number="01" title="Overview" description="Lead identity" tone="overview"><FormGrid><label>First name<input/></label></FormGrid></FormSection><FormActions><ActionLink href="/crm">Cancel</ActionLink></FormActions></>);
+    expect(markup).toContain("ds-page-header__marker");
+    expect(markup).toContain('role="list"');
+    expect(markup).toContain("ds-record-card");
+    expect(markup).toContain("ds-form-section");
+    expect(markup).toContain("ds-form-grid");
+    expect(markup).toContain("ds-form-actions");
   });
 });

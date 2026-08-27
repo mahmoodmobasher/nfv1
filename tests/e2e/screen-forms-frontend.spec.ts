@@ -939,7 +939,7 @@ for (const selectedOutcome of ["unchanged", "changed"] as const)
     const retry = page.getByRole("button", { name: "Retry checking status" });
     await expect(retry).toBeFocused();
     await page.getByLabel(/Job title/).fill("Mathematician");
-    const save = page.getByRole("button", { name: "Save Lead" });
+    const save = page.getByRole("button", { name: "Save changes" });
     await expect(save).toBeDisabled();
     await expect(retry).toBeVisible();
     expect(mutations).toBe(0);
@@ -1035,7 +1035,7 @@ test("submit reconciliation failure focuses targeted retry and preserves the dra
   });
 
   await page.goto(`/crm/leads/${leadId}/edit`);
-  const save = page.getByRole("button", { name: "Save Lead" });
+  const save = page.getByRole("button", { name: "Save changes" });
   await expect(save).toBeEnabled();
   await page.getByLabel(/Job title/).fill("Mathematician");
   await save.click();

@@ -523,8 +523,9 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .lead-profile-shell { max-width: 1080px; margin-inline: auto; border: 0; background: transparent; }
 .lead-profile-shell>.ds-panel__body { padding: 0; }
 .screen-profile-form { display: grid; gap: var(--nf-space-5); }
-.screen-profile-form>section { display: grid; gap: var(--nf-space-4); min-width: 0; padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-secondary); }
-.screen-profile-form>section h2 { margin: 0; color: var(--nx-text-strong); font-size: var(--nf-text-h3); overflow-wrap: anywhere; }
+.screen-profile-form>section:not(.ds-form-section) { display: grid; gap: var(--nf-space-4); min-width: 0; padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-secondary); }
+.screen-profile-form>section h2 { margin: 0; color: var(--nx-text-strong); overflow-wrap: anywhere; }
+.screen-profile-form>section:not(.ds-form-section) h2 { font-size: var(--nf-text-h3); }
 .screen-section-heading { display: grid; grid-template-columns: 40px minmax(0,1fr); gap: var(--nf-space-3); align-items: center; }
 .screen-section-heading p { margin: 3px 0 0; color: var(--nx-text-muted); }
 .screen-section-icon { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-primary); color: var(--nx-accent); }
@@ -537,37 +538,27 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .screen-option-search { display: grid; min-width: 0; grid-template-columns: minmax(0,1fr) auto; gap: var(--nf-space-2); align-items: end; }
 .screen-option-search>.field { min-width: 0; margin-block: 0; }
 .screen-option-search>.ds-action { align-self: end; margin: 0; }
-.lead-primary-grid { grid-template-areas: "first last" "company-search job" "company-select salutation"; align-items: start; }
-.lead-primary-grid>.field:has(#firstName) { grid-area: first; }
-.lead-primary-grid>.field:has(#lastName) { grid-area: last; }
-.lead-primary-grid>.field:has(#jobTitle) { grid-area: job; }
-.lead-primary-grid>.field:has(#salutation) { grid-area: salutation; }
+.lead-primary-grid { align-items: start; }
 .lead-primary-grid>.lead-company-option { display: contents; }
-.lead-primary-grid>.lead-company-option>.screen-option-search { grid-area: company-search; }
-.lead-primary-grid>.lead-company-option>.screen-option-selection { grid-area: company-select; }
 .company-empty-state { grid-column: 1/-1; display: grid; gap: var(--nf-space-3); padding: var(--nf-space-4); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); }
 .company-empty-state h3,.company-empty-state p { margin: 0; }
 .company-empty-actions { display: flex; flex-wrap: wrap; gap: var(--nf-space-3); align-items: center; }
 .quick-company-dialog { width: min(32rem, calc(100vw - 2rem)); max-width: 100%; }
 .screen-option-field select,.screen-profile-form input,.screen-profile-form textarea,.screen-profile-form select { min-width: 0; max-width: 100%; }
 .screen-profile-form :is(input,select,textarea,fieldset,summary) { scroll-margin-top: 96px; }
-.screen-profile-form .ds-page-actions { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nf-space-3); padding: var(--nf-space-5); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-secondary); }
 .screen-profile-form .ds-page-actions>* { min-height: 44px; }
 .product-shell--crm .screen-profile-form .ds-page-actions>* { width: auto; flex: 0 0 auto; }
 .screen-profile-form .form-grid>.field:has(#street) { grid-column: 1/-1; }
 @media (max-width: 640px) {
-  .screen-profile-form>section { padding: var(--nf-space-4); }
-  .screen-profile-form .form-grid { grid-template-columns: minmax(0,1fr); }
-  .lead-primary-grid { grid-template-areas: "first" "last" "company-search" "company-select" "job" "salutation"; }
+  .screen-profile-form>section:not(.ds-form-section) { padding: var(--nf-space-4); }
   .screen-option-search { grid-template-columns: minmax(0,1fr); }
   .screen-option-search>* { width: 100%; }
   .company-empty-actions { align-items: stretch; flex-direction: column; }
   .company-empty-actions>* { width: 100%; }
-  .screen-profile-form .ds-page-actions { flex-direction: column; }
   .product-shell--crm .screen-profile-form .ds-page-actions>* { width: 100%; }
 }
 @media (forced-colors: active) {
-  .screen-profile-form>section,.screen-profile-form fieldset,.screen-section-icon,.screen-profile-form .ds-page-actions { border-color: CanvasText; }
+  .screen-profile-form>section:not(.ds-form-section),.screen-profile-form fieldset,.screen-section-icon { border-color: CanvasText; }
   .screen-profile-form .required-marker { color: CanvasText; }
 }
 

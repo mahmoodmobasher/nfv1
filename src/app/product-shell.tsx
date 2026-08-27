@@ -54,28 +54,7 @@ const icons: Record<
   users: Users,
 };
 
-export function ProductPageHeader({
-  title,
-  description,
-  action,
-  context,
-}: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-  context?: string;
-}) {
-  return (
-    <header className="product-page-header ds-page-header">
-      <div>
-        {context && <p className="product-page-context">{context}</p>}
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
-      </div>
-      {action && <div className="product-page-actions">{action}</div>}
-    </header>
-  );
-}
+export { ProductPageHeader } from "@/frontend/design-system";
 
 type IsolationState = {
   element: HTMLElement;

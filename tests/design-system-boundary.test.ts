@@ -239,8 +239,10 @@ describe("design-system document boundary", () => {
         /data-theme|data-account-theme|--(?:nx|nf|spectrum)-|#[0-9a-f]{3,8}\b|rgba?\(/i,
       );
     }
+    expect(
+      readFileSync(new URL("../src/app/crm/page.tsx", import.meta.url), "utf8"),
+    ).toContain("ProductPageHeader");
     for (const file of [
-      "../src/app/crm/page.tsx",
       "../src/app/crm/home/page.tsx",
       "../src/app/crm/pipeline/page.tsx",
       "../src/frontend/features/leads/components/manual-lead-intake-page.tsx",

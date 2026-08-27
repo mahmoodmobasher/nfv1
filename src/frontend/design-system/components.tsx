@@ -9,6 +9,22 @@ export type FeedbackTone = "info" | "success" | "warning" | "danger" | "conflict
 export type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
 export type SectionTone = "overview" | "relationship" | "qualification" | "conversion" | "activity" | "access";
 
+export function ProductPageHeader({
+  title,
+  description,
+  action,
+  context,
+  marker,
+}: {
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  context?: string;
+  marker?: ReactNode;
+}) {
+  return <header className="product-page-header ds-page-header"><div className="ds-page-header__identity">{marker && <span className="ds-page-header__marker" aria-hidden="true">{marker}</span>}<div>{context && <p className="ds-page-header__eyebrow">{context}</p>}<h1>{title}</h1>{description && <div className="ds-page-header__description">{description}</div>}</div></div>{action && <div className="ds-page-header__actions product-page-actions">{action}</div>}</header>;
+}
+
 export function ActionLink({
   href,
   children,
@@ -89,6 +105,14 @@ export function DataTable({ caption, children }: { caption: string; children: Re
   return <div className="ds-table-wrap"><table className="ds-table"><caption>{caption}</caption>{children}</table></div>;
 }
 
+export function RecordCards({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="ds-record-cards" role="list" aria-label={label}>{children}</div>;
+}
+
+export function RecordCard({ title, href, secondary, facts, actions }: { title: string; href: string; secondary?: ReactNode; facts: Array<{ label: string; value: ReactNode }>; actions?: ReactNode }) {
+  return <article className="ds-record-card" role="listitem"><header><div><h2><Link href={href}>{title}</Link></h2>{secondary && <div className="ds-record-card__secondary">{secondary}</div>}</div></header><dl>{facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>{actions && <div className="ds-record-card__actions">{actions}</div>}</article>;
+}
+
 export function ViewTabs({
   label,
   items,
@@ -113,6 +137,18 @@ export function WorkflowSummaryGrid({ children }: { children: ReactNode }) {
 
 export function FormWorkbench({ children, label }: { children: ReactNode; label?: string }) {
   return <div className="ds-form-workbench" aria-label={label}>{children}</div>;
+}
+
+export function FormSection({ id, number, title, description, tone = "overview", children }: { id: string; number: string; title: string; description: string; tone?: SectionTone; children: ReactNode }) {
+  return <section className={classes("ds-form-section", `ds-section-panel--${tone}`)} aria-labelledby={id}><header className="ds-form-section__header"><span className="ds-form-section__number" aria-hidden="true">{number}</span><div><h2 id={id}>{title}</h2><p>{description}</p></div></header>{children}</section>;
+}
+
+export function FormGrid({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={classes("form-grid", "ds-form-grid", className)}>{children}</div>;
+}
+
+export function FormActions({ children }: { children: ReactNode }) {
+  return <div className="ds-page-actions ds-form-actions">{children}</div>;
 }
 
 export function SectionNav({ label, items }: { label: string; items: Array<{ href: string; label: string }> }) {

@@ -28,7 +28,10 @@ const leadOwner = readFileSync(
   "src/backend/modules/leads/application/orchestrators/screen-forms.owner.ts",
   "utf8",
 );
-const styles = readFileSync("src/app/globals.css", "utf8");
+const designStyles = readFileSync(
+  "src/frontend/design-system/components.css",
+  "utf8",
+);
 
 describe("SCREEN-FORMS-01 frontend boundary", () => {
   it("canonicalizes selected authority locks by owner and ID before acquisition", () => {
@@ -179,12 +182,12 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
   });
 
   it("uses explicit Lead Company search and selection rows without changing other option fields", () => {
-    expect(form).toContain('className="form-grid lead-primary-grid"');
+    expect(form).toContain('<FormGrid className="lead-primary-grid">');
     expect(form).toContain("leadCompanyLayout");
     expect(options).toContain('className="screen-option-search"');
     expect(options).toContain('className="screen-option-selection"');
-    expect(styles).toContain('grid-template-areas: "first last" "company-search job" "company-select salutation"');
-    expect(styles).toContain('grid-template-areas: "first" "last" "company-search" "company-select" "job" "salutation"');
+    expect(form).toContain("<FormGrid>");
+    expect(designStyles).toContain(".ds-form-grid { align-items: start; }");
   });
 
   it("blocks initial targeted reconciliation and exposes a truthful selected-endpoint retry", () => {

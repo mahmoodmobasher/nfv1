@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { Button, FieldMessage, FormWorkbench, Panel, SectionNav } from "@/frontend/design-system";
+import { FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { Button, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, Panel, ProductPageHeader, SectionNav } from "@/frontend/design-system";
 import type { ScreenFormOption } from "./quick-create-company";
 import { LeadSourceFields } from "./lead-source-fields";
 import { OptionChecks, OptionSelect } from "./screen-form-options";
@@ -12,7 +12,6 @@ import {
   ErrorSummary,
   Input,
   OptionalSection,
-  SectionHeading,
   Select,
   fieldId,
   linkedFields,
@@ -41,6 +40,12 @@ const plural = (kind: ScreenKind) =>
 const noun = (kind: ScreenKind) => kind[0].toUpperCase() + kind.slice(1);
 const endpoint = (workspaceId: string, suffix: string) =>
   `/api/workspaces/${workspaceId}/${suffix}`;
+function AssignmentSection({ lead, children }: { lead: boolean; children: ReactNode }) {
+  return lead ? <FormSection id="assignment-heading" number="04" title="Responsibility & visibility" description="Use only current server-authorized owners, Teams, and visibility." tone="access">{children}</FormSection> : <section aria-labelledby="assignment-heading"><h2 id="assignment-heading">Responsibility and visibility</h2>{children}</section>;
+}
+function ScreenFormActions({ lead, children }: { lead: boolean; children: ReactNode }) {
+  return lead ? <FormActions>{children}</FormActions> : <div className="ds-page-actions">{children}</div>;
+}
 const authorityCodes = new Set([
   "authentication_required",
   "permission_required",
@@ -581,7 +586,13 @@ export function ScreenProfileForm({
 
   return (
     <>
-      <header className="product-page-header">
+      {kind === "lead" ? (
+        <ProductPageHeader
+          context={`Leads / ${editing ? "Edit" : "New"}`}
+          title={editing ? "Edit lead" : "Add lead"}
+          description={<p>Required fields are identified in text. Protected choices come only from current server authority.</p>}
+        />
+      ) : <header className="product-page-header">
         <div>
           <p className="eyebrow">
             {noun(kind)} / {editing ? "Edit" : "New"}
@@ -592,7 +603,7 @@ export function ScreenProfileForm({
             from current server authority.
           </p>
         </div>
-      </header>
+      </header>}
       <FormWorkbench label={`${editing ? "Edit" : "Add"} ${noun(kind)}`}>
       <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-contact-heading",label:"Contact"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
       <Panel title={kind === "lead" ? undefined : `${noun(kind)} information`} className={kind === "lead" ? "lead-profile-shell" : undefined}>
@@ -883,9 +894,8 @@ export function ScreenProfileForm({
           )}
           {kind === "lead" && (
             <>
-              <section aria-labelledby="lead-essentials-heading">
-                <SectionHeading id="lead-essentials-heading" title="Primary Information" help="Start with the Lead’s identity and existing Company." />
-                <div className="form-grid lead-primary-grid">
+              <FormSection id="lead-essentials-heading" number="01" title="Overview" description="Start with the Lead’s identity and existing Company." tone="overview">
+                <FormGrid className="lead-primary-grid">
                   <Input
                     id="firstName"
                     label="First name"
@@ -945,11 +955,10 @@ export function ScreenProfileForm({
                     defaultValue={lead?.base.salutation ?? ""}
                     data-error={errors.salutation}
                   />
-                </div>
-              </section>
-              <section aria-labelledby="lead-channels-heading">
-                <SectionHeading id="lead-channels-heading" title="Contact Channels" help="Add current ways to reach this Lead." />
-                <div className="form-grid">
+                </FormGrid>
+              </FormSection>
+              <FormSection id="lead-channels-heading" number="02" title="Contact channels" description="Add current ways to reach this Lead." tone="overview">
+                <FormGrid>
                   <Input
                     id="primaryEmail"
                     label="Primary email"
@@ -959,10 +968,10 @@ export function ScreenProfileForm({
                     defaultValue={channel?.primaryEmail ?? ""}
                     data-error={errors.primaryEmail}
                   />
-                </div>
+                </FormGrid>
                 <details className="screen-disclosure" open={Boolean(errors.secondaryEmail || errors.officePhone || errors.mobilePhone || errors.fax || errors.website || errors.twitterHandle || errors.promotionalEmailOptOut)}>
                   <summary>Optional contact channels</summary>
-                  <div className="form-grid">
+                  <FormGrid>
                   <Input
                     id="secondaryEmail"
                     label="Secondary email"
@@ -1016,12 +1025,11 @@ export function ScreenProfileForm({
                     <option value="false">Can receive promotional email</option>
                     <option value="true">Opted out of promotional email</option>
                   </Select>
-                  </div>
+                  </FormGrid>
                 </details>
-              </section>
-              <section aria-labelledby="profiling-heading">
-                <SectionHeading id="profiling-heading" title="Lead &amp; Profiling" help="Status is operational and does not itself qualify the Lead." />
-                <div className="form-grid">
+              </FormSection>
+              <FormSection id="profiling-heading" number="03" title="Profiling" description="Status is operational and does not itself qualify the Lead." tone="relationship">
+                <FormGrid>
                   <LeadSourceFields
                     initialSource={lead?.base.source ?? "manual"}
                     initialPlatform={lead?.base.sourcePlatform}
@@ -1049,10 +1057,10 @@ export function ScreenProfileForm({
                     error={errors.stageId}
                     onAuthorityLoss={clearProtectedState}
                   />
-                </div>
+                </FormGrid>
                 <details className="screen-disclosure" open={Boolean(errors.rating || errors.industry || errors.annualRevenue || errors.employeeCount)}>
                   <summary>Optional profiling fields</summary>
-                  <div className="form-grid">
+                  <FormGrid>
                   <Select
                     id="rating"
                     label="Rating"
@@ -1093,22 +1101,13 @@ export function ScreenProfileForm({
                     defaultValue={lead?.base.employeeCount ?? ""}
                     data-error={errors.employeeCount}
                   />
-                  </div>
+                  </FormGrid>
                 </details>
-              </section>
-              <AddressFields
-                errors={errors}
-                defaults={addr ?? {}}
-                collapsible
-              />
+                <AddressFields errors={errors} defaults={addr ?? {}} collapsible />
+              </FormSection>
             </>
           )}
-          <section aria-labelledby="assignment-heading">
-            {kind === "lead" ? (
-              <SectionHeading id="assignment-heading" title="Responsibility &amp; Visibility" help="Use only current server-authorized owners, Teams, and visibility." />
-            ) : (
-              <h2 id="assignment-heading">Responsibility and visibility</h2>
-            )}
+          <AssignmentSection lead={kind === "lead"}>
             <OptionalSection enabled={kind === "lead"} open={Boolean(errors.responsibleMembershipId || errors.responsibleTeamId || errors.visibility || errors.visibleTeamIds)} summary="Responsibility and visibility fields — optional">
             <OptionSelect
               workspaceId={workspaceId}
@@ -1201,7 +1200,7 @@ export function ScreenProfileForm({
               onAuthorityLoss={clearProtectedState}
             />
             </OptionalSection>
-          </section>
+          </AssignmentSection>
           {stale && (
             <div className="alert error" role="alert" tabIndex={-1}>
               <p>{notice}</p>
@@ -1210,7 +1209,7 @@ export function ScreenProfileForm({
               </Button>
             </div>
           )}
-          <div className="ds-page-actions">
+          <ScreenFormActions lead={kind === "lead"}>
             <Link
               className="secondary link-button"
               href={editing ? `${basePath}/${recordId}` : basePath}
@@ -1218,9 +1217,9 @@ export function ScreenProfileForm({
               Cancel
             </Link>
             <Button variant="primary" disabled={busy || stale || selectionConflict !== null || unresolvedOptions.size > 0}>
-              {busy ? "Saving…" : `Save ${noun(kind)}`}
+              {busy ? "Saving…" : kind === "lead" && editing ? "Save changes" : `Save ${noun(kind)}`}
             </Button>
-          </div>
+          </ScreenFormActions>
         </form>
       </Panel>
       </FormWorkbench>
