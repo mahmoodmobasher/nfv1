@@ -15,10 +15,15 @@ export {
   ProductPageHeader,
   RecordCard,
   RecordCards,
+  RecordIdentity,
+  RecordWorkspace,
+  RelationshipRow,
+  ContentTabs,
   SectionNav,
   StageColumn,
   StatusBadge,
   ViewTabs,
   WorkflowSummaryGrid,
 } from "./components";
+export { ActionMenu } from "./action-menu";
 export type { FeedbackTone, SectionTone, StatusTone } from "./components";

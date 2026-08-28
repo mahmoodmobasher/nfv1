@@ -2,9 +2,9 @@
    Dark and interaction derivatives are reviewed extrapolations behind the same semantics. */
 :root,
 html[data-theme="light"] {
-  --nx-canvas: #f2f3f0;
+  --nx-canvas: #eef1f4;
   --nx-surface-primary: #ffffff;
-  --nx-surface-secondary: #f8f8f6;
+  --nx-surface-secondary: #f7f8fa;
   --nx-surface-raised: #ffffff;
   --nx-surface-navigation: #ffffff;
   --nx-surface-overlay: #ffffff;
@@ -42,25 +42,25 @@ html[data-theme="light"] {
   --nx-record-row: var(--nx-surface-primary);
   --nx-record-row-alternate: var(--nx-surface-secondary);
   --nx-record-row-hover: var(--nx-surface-raised);
-  --nx-section-overview: #edf3fb;
+  --nx-section-overview: var(--nx-surface-primary);
   --nx-section-overview-accent: #5179a8;
-  --nx-section-relationship: #eaf5f2;
+  --nx-section-relationship: var(--nx-surface-primary);
   --nx-section-relationship-accent: #397f73;
-  --nx-section-qualification: #edf6ed;
+  --nx-section-qualification: var(--nx-surface-primary);
   --nx-section-qualification-accent: #4f8254;
-  --nx-section-conversion: #f2effa;
+  --nx-section-conversion: var(--nx-surface-primary);
   --nx-section-conversion-accent: #7160a4;
-  --nx-section-activity: #fbf3e7;
+  --nx-section-activity: var(--nx-surface-primary);
   --nx-section-activity-accent: #986b2c;
-  --nx-section-access: #efeffb;
+  --nx-section-access: var(--nx-surface-primary);
   --nx-section-access-accent: #5e62a1;
-  --nx-stage-new-surface: #fbf3e7;
+  --nx-stage-new-surface: var(--nx-surface-secondary);
   --nx-stage-new-accent: #986b2c;
-  --nx-stage-contacted-surface: #edf3fb;
+  --nx-stage-contacted-surface: var(--nx-surface-secondary);
   --nx-stage-contacted-accent: #5179a8;
-  --nx-stage-qualified-surface: #edf6ed;
+  --nx-stage-qualified-surface: var(--nx-surface-secondary);
   --nx-stage-qualified-accent: #4f8254;
-  --nx-stage-proposal-surface: #f2effa;
+  --nx-stage-proposal-surface: var(--nx-surface-secondary);
   --nx-stage-proposal-accent: #7160a4;
 
   --nf-font-sans: var(--font-geist), Geist, system-ui, sans-serif;
@@ -99,6 +99,7 @@ html[data-theme="light"] {
   --nf-radius-major: 14px;
   --nf-radius-full: 999px;
   --nf-shadow-1: 0 1px 2px rgb(30 29 27 / 6%);
+  --nf-shadow-none: none;
   --nf-shadow-2: 0 8px 24px rgb(30 29 27 / 8%);
   --nf-shadow-3: 0 16px 40px rgb(30 29 27 / 12%);
   --nf-sidebar-width: 232px;
@@ -155,12 +156,12 @@ html[data-theme="light"] {
 }
 
 html[data-theme="dark"] {
-  --nx-canvas: #0e0f0d;
-  --nx-surface-primary: #1a1917;
-  --nx-surface-secondary: #22211e;
-  --nx-surface-raised: #262522;
-  --nx-surface-navigation: #171614;
-  --nx-surface-overlay: #262522;
+  --nx-canvas: #0e1218;
+  --nx-surface-primary: #151a22;
+  --nx-surface-secondary: #1b222c;
+  --nx-surface-raised: #202733;
+  --nx-surface-navigation: #12171f;
+  --nx-surface-overlay: #202733;
   --nx-text-strong: #f7f7f5;
   --nx-text: #d5d2cb;
   --nx-text-muted: #aaa59b;
@@ -192,27 +193,27 @@ html[data-theme="dark"] {
   --nx-disabled-surface: #22211e;
   --nx-disabled-border: #817d75;
   --nx-record-row: var(--nx-surface-primary);
-  --nx-record-row-alternate: #201f1c;
+  --nx-record-row-alternate: var(--nx-surface-secondary);
   --nx-record-row-hover: var(--nx-surface-raised);
-  --nx-section-overview: #202a35;
+  --nx-section-overview: var(--nx-surface-primary);
   --nx-section-overview-accent: #8ab0db;
-  --nx-section-relationship: #1c302c;
+  --nx-section-relationship: var(--nx-surface-primary);
   --nx-section-relationship-accent: #7fc0b4;
-  --nx-section-qualification: #233125;
+  --nx-section-qualification: var(--nx-surface-primary);
   --nx-section-qualification-accent: #91c495;
-  --nx-section-conversion: #2d293d;
+  --nx-section-conversion: var(--nx-surface-primary);
   --nx-section-conversion-accent: #b4a5df;
-  --nx-section-activity: #342b1f;
+  --nx-section-activity: var(--nx-surface-primary);
   --nx-section-activity-accent: #ddb77c;
-  --nx-section-access: #292a40;
+  --nx-section-access: var(--nx-surface-primary);
   --nx-section-access-accent: #adafe2;
-  --nx-stage-new-surface: #342b1f;
+  --nx-stage-new-surface: var(--nx-surface-secondary);
   --nx-stage-new-accent: #ddb77c;
-  --nx-stage-contacted-surface: #202a35;
+  --nx-stage-contacted-surface: var(--nx-surface-secondary);
   --nx-stage-contacted-accent: #8ab0db;
-  --nx-stage-qualified-surface: #233125;
+  --nx-stage-qualified-surface: var(--nx-surface-secondary);
   --nx-stage-qualified-accent: #91c495;
-  --nx-stage-proposal-surface: #2d293d;
+  --nx-stage-proposal-surface: var(--nx-surface-secondary);
   --nx-stage-proposal-accent: #b4a5df;
   --nx-overlay-shadow: 0 20px 54px rgb(0 0 0 / 42%);
   --nf-shadow-1: 0 1px 2px rgb(0 0 0 / 26%);

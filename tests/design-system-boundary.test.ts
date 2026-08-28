@@ -64,7 +64,7 @@ describe("design-system document boundary", () => {
     expect(tokens).toContain("--nf-sidebar-width: 232px");
     expect(tokens).toContain("--nf-content-max: 1400px");
     expect(tokens).toContain("--nf-content-padding: 28px");
-    expect(tokens).toContain("--nx-canvas: #f2f3f0");
+    expect(tokens).toContain("--nx-canvas: #eef1f4");
     expect(tokens).toContain("--nx-action-primary: #5b57d6");
     expect(tokens).toContain("--nf-radius-card: 14px");
     expect(tokens).toContain("--nf-form-workbench-max: 1040px");
@@ -199,7 +199,9 @@ describe("design-system document boundary", () => {
     const deals = readFileSync(new URL("../src/frontend/features/deals/components/deals.tsx", import.meta.url), "utf8");
     expect(leads).toContain("<StageColumn");
     expect(leads).toContain("<FactsGrid>");
-    expect(leads).toContain("<WorkflowSummaryGrid>");
+    expect(leads).toContain("<RecordWorkspace");
+    expect(leads).toContain('tone="neutral"');
+    expect(leads).not.toContain("stage.name.trim().toLowerCase()");
     expect(forms).toContain("<FormWorkbench");
     expect(forms).toContain("<SectionNav");
     expect(components).toContain(".ds-table tbody tr:nth-child(even)");
@@ -255,10 +257,8 @@ describe("design-system document boundary", () => {
       "../src/frontend/features/leads/components/manual-lead-intake-page.tsx",
       "../src/frontend/features/leads/components/lead-presentation.tsx",
     ]) {
-      expect(
-        readFileSync(new URL(file, import.meta.url), "utf8"),
-        file,
-      ).toContain("product-page-header");
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source, file).toMatch(/ProductPageHeader|product-page-header/);
     }
   });
 

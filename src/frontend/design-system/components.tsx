@@ -113,6 +113,23 @@ export function RecordCard({ title, href, secondary, facts, actions }: { title: 
   return <article className="ds-record-card" role="listitem"><header><div><h2><Link href={href}>{title}</Link></h2>{secondary && <div className="ds-record-card__secondary">{secondary}</div>}</div></header><dl>{facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>{actions && <div className="ds-record-card__actions">{actions}</div>}</article>;
 }
 
+export function RecordIdentity({ title, href, secondary, marker, meta }: { title: string; href?: string; secondary?: ReactNode; marker?: ReactNode; meta?: ReactNode }) {
+  const heading = href ? <Link href={href}>{title}</Link> : title;
+  return <div className="ds-record-identity">{marker && <span className="ds-record-identity__marker" aria-hidden="true">{marker}</span>}<div><h2>{heading}</h2>{secondary && <div className="ds-record-identity__secondary">{secondary}</div>}{meta && <div className="ds-record-identity__meta">{meta}</div>}</div></div>;
+}
+
+export function RecordWorkspace({ summary, children }: { summary: ReactNode; children: ReactNode }) {
+  return <div className="ds-record-workspace"><aside className="ds-record-workspace__summary">{summary}</aside><div className="ds-record-workspace__content">{children}</div></div>;
+}
+
+export function ContentTabs({ label, items }: { label: string; items: Array<{ href: string; label: string; active?: boolean }> }) {
+  return <nav className="ds-content-tabs" aria-label={label}>{items.map(item => <a key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</a>)}</nav>;
+}
+
+export function RelationshipRow({ label, value, action }: { label: ReactNode; value: ReactNode; action?: ReactNode }) {
+  return <div className="ds-relationship-row"><div><span>{label}</span><strong>{value}</strong></div>{action && <div className="ds-relationship-row__action">{action}</div>}</div>;
+}
+
 export function ViewTabs({
   label,
   items,

@@ -41,6 +41,11 @@ test("Companies and Contacts use disclosure-safe responsive directories", async 
   await expect(page.getByRole("heading", { name: "Companies", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "Add company" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Northwind Holdings", exact: true })).toBeVisible();
+  const northwindActions = page.getByRole("button", { name: "Actions for Northwind Holdings" }).first();
+  await northwindActions.click();
+  await page.keyboard.press("Escape");
+  await expect(northwindActions).toBeFocused();
+  await northwindActions.click();
   await expect(page.getByRole("link", { name: "View Northwind Holdings" })).toHaveAttribute("href", `/crm/companies/${records.active.id}`);
   await expect(page.getByRole("link", { name: "Edit Northwind Holdings" })).toHaveAttribute("href", `/crm/companies/${records.active.id}/edit`);
   const archive = page.getByRole("button", { name: "Archive Northwind Holdings" });
@@ -50,6 +55,7 @@ test("Companies and Contacts use disclosure-safe responsive directories", async 
   await archive.click(); await page.getByRole("button", { name: "Cancel" }).click(); await expect(archive).toBeFocused();
   await page.getByRole("checkbox", { name: "Include archived" }).check();
   await expect(page.getByRole("link", { name: "Retained Industries", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Actions for Retained Industries" }).first().click();
   await expect(page.getByRole("link", { name: "Edit Retained Industries" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Restore Retained Industries" })).toBeVisible();
   await page.getByRole("searchbox", { name: "Search loaded companies" }).fill("missing");
@@ -61,6 +67,7 @@ test("Companies and Contacts use disclosure-safe responsive directories", async 
   await page.goto("/crm/contacts");
   await expect(page.getByRole("link", { name: "Visible Contact", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Add contact" })).toBeVisible();
+  await page.getByRole("button", { name: "Actions for Visible Contact" }).last().click();
   await expect(page.getByRole("link", { name: "View Visible Contact" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Edit Visible Contact" })).toBeVisible();
   await page.getByRole("link", { name: "View Visible Contact" }).click();

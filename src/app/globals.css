@@ -331,7 +331,7 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-mobile { display: none; }
 .skip-link { position: fixed; z-index: 100; top: 8px; left: 8px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-control); background: var(--nx-surface-overlay); color: var(--nx-link); transform: translateY(calc(-100% - 16px)); }
 .skip-link:focus-visible { transform: translateY(0); }
-.product-page-header { display: flex; align-items: end; justify-content: space-between; gap: var(--nf-space-6); padding: var(--nf-space-5) var(--nf-space-6); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-major); background: var(--nx-surface-raised); box-shadow: var(--nf-shadow-2); }
+.product-page-header { display: flex; align-items: end; justify-content: space-between; gap: var(--nf-space-6); padding: var(--nf-space-6) 0 var(--nf-space-5); border: 0; border-bottom: 1px solid var(--nx-border-strong); background: transparent; box-shadow: var(--nf-shadow-none); }
 .product-page-header h1 { margin: 4px 0 0; }
 .product-page-header p { margin: 6px 0 0; color: var(--nx-text-muted); }
 .product-page-context { color: var(--nx-text-muted); font-size: 13px; font-weight: 500; }
@@ -681,9 +681,9 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-shell--crm .dashboard-welcome {
   margin-block: var(--nf-space-6);
   padding: var(--nf-space-5) var(--nf-space-6);
-  border: 1px solid var(--nx-accent-border);
+  border: 1px solid var(--nx-border-strong);
   border-radius: var(--nf-radius-card);
-  background: var(--nx-accent-surface);
+  background: var(--nx-surface-primary);
   color: var(--nx-text-strong);
   box-shadow: var(--nf-shadow-1);
 }
@@ -694,10 +694,10 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   width: 112px;
   aspect-ratio: auto;
   padding: var(--nf-space-3);
-  border: 1px solid var(--nx-accent-border);
+  border: 1px solid var(--nx-border-strong);
   border-radius: var(--nf-radius-card);
   background: var(--nx-surface-primary);
-  color: var(--nx-selected-text);
+  color: var(--nx-text-strong);
 }
 .product-shell--crm .welcome-stat strong { align-self: auto; font-size: 26px; }
 .product-shell--crm .welcome-stat span { align-self: auto; margin-top: 3px; font-size: var(--nf-text-meta); }
@@ -734,6 +734,13 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
 .product-shell--crm .dashboard-activity li>div { border-color: var(--nx-border-subtle); }
 .product-shell--crm .activity-dot { border-color: var(--nx-action-primary); background: var(--nx-surface-primary); }
 
+.ds-review-workspace { display: grid; gap: var(--nf-space-5); }
+.ds-review-list { display: grid; gap: var(--nf-space-3); }
+.ds-review-row { display: grid; grid-template-columns: minmax(220px,1fr) minmax(240px,.8fr) auto; min-width: 0; align-items: center; gap: var(--nf-space-4); padding: var(--nf-space-4); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-card); background: var(--nx-surface-primary); }
+.ds-review-row:nth-child(even) { background: var(--nx-record-row-alternate); }
+.ds-review-row:hover,.ds-review-row:focus-within { border-color: var(--nx-border-emphasis); background: var(--nx-record-row-hover); }
+.ds-review-row__facts { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--nf-space-2); color: var(--nx-text-muted); font-size: var(--nf-text-caption); }
+
 .product-shell--crm .table-wrap {
   border: 1px solid var(--nx-border-subtle);
   border-radius: var(--nf-radius-card);
@@ -761,6 +768,8 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   .product-shell--crm .admin-content { padding-block-end: var(--nf-space-12); }
 }
 @media (max-width: 700px) {
+  .ds-review-row { grid-template-columns: minmax(0,1fr); }
+  .ds-review-row>.ds-action { width: 100%; }
   .product-shell--crm .product-page-header .primary { width: 100%; }
   .product-shell--crm .dashboard-welcome,
   .product-shell--crm .dashboard-card { padding: var(--nf-space-4); }

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionLink, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, LoadingState, Panel, ProductPageHeader, RecordCard, RecordCards, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
+import { ActionLink, ActionMenu, ContentTabs, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, LoadingState, Panel, ProductPageHeader, RecordCard, RecordCards, RecordIdentity, RecordWorkspace, RelationshipRow, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
 
 describe("CRM shared design-system components", () => {
   it("renders complete semantic state primitives without feature authority", () => {
@@ -40,5 +40,14 @@ describe("CRM shared design-system components", () => {
     expect(markup).toContain("ds-form-section");
     expect(markup).toContain("ds-form-grid");
     expect(markup).toContain("ds-form-actions");
+  });
+
+  it("renders the Structured Workspace identity, content, relationship, and compact-action foundations", () => {
+    const markup = renderToStaticMarkup(<RecordWorkspace summary={<RecordIdentity marker="CT" title="Ada Lovelace" secondary="Masked contact"/>}><ContentTabs label="Contact sections" items={[{href:"#overview",label:"Overview",active:true},{href:"#company",label:"Company"}]}/><RelationshipRow label="Company" value="Analytical Engines" action={<ActionMenu label="Actions for Ada Lovelace"><ActionLink href="/crm/contacts/1/edit">Edit</ActionLink></ActionMenu>}/></RecordWorkspace>);
+    expect(markup).toContain("ds-record-workspace");
+    expect(markup).toContain("ds-record-identity");
+    expect(markup).toContain('aria-label="Contact sections"');
+    expect(markup).toContain("ds-relationship-row");
+    expect(markup).toContain('aria-label="Actions for Ada Lovelace"');
   });
 });

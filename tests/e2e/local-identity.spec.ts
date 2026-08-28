@@ -1264,7 +1264,7 @@ test("CRM Home preview is semantically contained and reflows without clipping", 
       await page.setViewportSize(viewport);
       await page.goto("/crm/home");
       await expect(
-        page.getByRole("heading", { name: "CRM home" }),
+        page.getByRole("heading", { name: "Welcome to your workspace" }),
       ).toBeVisible();
       const region = page.locator(".demo-region");
       const card = region.locator("article").first();
@@ -1593,7 +1593,7 @@ test("Spectrum shell honors forced colours and reduced motion", async ({
   ).not.toBe("none");
 });
 
-test("Pipeline semantic surfaces retain paired contrast, interaction, and responsive behavior", async ({
+test("Pipeline neutral surfaces retain contrast, interaction, and responsive behavior", async ({
   page,
 }) => {
   const fixture = await tenantBrowserFixture(page);
@@ -1608,10 +1608,12 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
     const populatedStage = page.getByRole("region", { name: /New/ });
     const emptyStage = page.getByRole("region", { name: /Proposal/ });
-    await expect(populatedStage).toHaveClass(/ds-stage-column--new/);
-    await expect(emptyStage).toHaveClass(/ds-stage-column--proposal/);
+    await expect(populatedStage).toHaveClass(/ds-stage-column--neutral/);
+    await expect(emptyStage).toHaveClass(/ds-stage-column--neutral/);
     const card = populatedStage.locator(".ds-lead-card");
     const count = populatedStage.getByText("1 lead", { exact: true });
+    const actionMenu = card.getByRole("button", { name: "Actions for Jordan Lee" });
+    await actionMenu.click();
     const viewLead = card.getByRole("link", { name: "View lead" });
     expect(
       await renderedTextContrast(
@@ -1676,13 +1678,8 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     await visualBaseline(page, `design-system-pipeline-${theme}.png`);
 
     await page.goto("/crm/pipeline?q=not-a-real-lead");
-    const empty = page.locator(".ds-empty");
-    await expect(
-      page.getByRole("heading", { name: "No matching leads" }),
-    ).toBeVisible();
-    expect(
-      await renderedTextContrast(empty.getByRole("heading"), empty),
-    ).toBeGreaterThanOrEqual(4.5);
+    await expect(page.getByText("0 leads shown across 3 stages.", { exact: true })).toBeVisible();
+    await expect(page.getByText("No leads in this stage.")).toHaveCount(3);
 
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto("/crm/pipeline");
@@ -1696,6 +1693,7 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     const mobileBox = await mobileCard.boundingBox();
     expect(mobileBox!.x).toBeGreaterThanOrEqual(0);
     expect(mobileBox!.x + mobileBox!.width).toBeLessThanOrEqual(320);
+    await mobileCard.getByRole("button", { name: "Actions for Jordan Lee" }).click();
     const mobileAction = mobileCard.getByRole("link", { name: "View lead" });
     expect((await mobileAction.boundingBox())!.height).toBeGreaterThanOrEqual(
       44,
@@ -1705,10 +1703,9 @@ test("Pipeline semantic surfaces retain paired contrast, interaction, and respon
     await page.setViewportSize({ width: 640, height: 720 });
     await page.goto("/crm/pipeline");
     await expect(page.getByRole("link", { name: "Jordan Lee" })).toBeVisible();
-    const zoomAction = page
-      .locator(".ds-lead-card")
-      .first()
-      .getByRole("link", { name: "View lead" });
+    const zoomCard = page.locator(".ds-lead-card").first();
+    await zoomCard.getByRole("button", { name: "Actions for Jordan Lee" }).click();
+    const zoomAction = zoomCard.getByRole("link", { name: "View lead" });
     await tabTo(page, zoomAction);
     await zoomAction.scrollIntoViewIfNeeded();
     await expectVisibleFocus(

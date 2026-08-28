@@ -294,17 +294,18 @@ test("shared Nexa Spectrum form foundation raises hierarchy and preserves narrow
     sections.map((section) => ({
       title: section.querySelector("h2")?.textContent,
       background: getComputedStyle(section).backgroundColor,
-      edge: getComputedStyle(section).borderInlineStartColor,
+      edge: getComputedStyle(section).borderTopColor,
+      accent: getComputedStyle(section).getPropertyValue("--ds-section-accent").trim(),
     })),
   );
   const byTitle = new Map(surfaces.map((surface) => [surface.title, surface]));
-  expect(byTitle.get("Contact overview")?.background).not.toBe(byTitle.get("Company affiliation")?.background);
-  expect(byTitle.get("Company affiliation")?.background).not.toBe(byTitle.get("Internal notes")?.background);
-  expect(byTitle.get("Internal notes")?.background).not.toBe(byTitle.get("Responsibility & visibility")?.background);
-  expect(byTitle.get("Contact overview")?.edge).not.toBe(byTitle.get("Company affiliation")?.edge);
-  expect(await header.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
-  expect(await page.locator(".ds-section-nav").evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
-  expect(await page.locator(".ds-form-actions").evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+  expect(new Set(surfaces.map((surface) => surface.background)).size).toBe(1);
+  expect(byTitle.get("Contact overview")?.accent).not.toBe(byTitle.get("Company affiliation")?.accent);
+  expect(byTitle.get("Company affiliation")?.accent).not.toBe(byTitle.get("Internal notes")?.accent);
+  expect(byTitle.get("Internal notes")?.accent).not.toBe(byTitle.get("Responsibility & visibility")?.accent);
+  expect(await header.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  expect(await page.locator(".ds-section-nav").evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
+  expect(await page.locator(".ds-form-actions").evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
   await page.screenshot({ path: test.info().outputPath("slice1-contact-form-light.png"), fullPage: true });
 
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
