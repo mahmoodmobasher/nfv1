@@ -138,8 +138,11 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
     },
     async canDiscloseLead(actor: TrustedActor, lead: { id: string; owner_membership_id: string | null; visibility: string }) {
       if (actor.role !== "member") return true;
-      if (lead.owner_membership_id !== actor.membershipId) return false;
+      // Must mirror visibleLeadIds and WORKSPACE_LEAD_DISCLOSURE_SQL_PREDICATE_V1 exactly:
+      // workspace visibility OR ownership OR active-team share. Testing ownership first
+      // made workspace-visible leads owned by another member undisclosable.
       if (lead.visibility === "workspace") return true;
+      if (lead.owner_membership_id === actor.membershipId) return true;
       return Boolean((await tx.query(
         `select 1 from lead_visible_teams lvt join team_memberships tm on tm.workspace_id=lvt.workspace_id and tm.team_id=lvt.team_id
           where lvt.workspace_id=$1 and lvt.lead_id=$2 and tm.workspace_membership_id=$3`,
