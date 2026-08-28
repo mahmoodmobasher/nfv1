@@ -1,8 +1,16 @@
 import Link from "next/link";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { nexaCrm } from "./nexa-crm-variants";
 
 function classes(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
+  const base = values.filter(Boolean).join(" ");
+  const variant = [
+    base.includes("ds-action") && nexaCrm.action,
+    base.includes("ds-panel") && nexaCrm.panel,
+    base.includes("ds-stage-column") && nexaCrm.stage,
+    base.includes("ds-form-section") && nexaCrm.formSection,
+  ].filter(Boolean).join(" ");
+  return `${base} ${variant}`.trim();
 }
 
 export type FeedbackTone = "info" | "success" | "warning" | "danger" | "conflict";
@@ -22,7 +30,7 @@ export function ProductPageHeader({
   context?: string;
   marker?: ReactNode;
 }) {
-  return <header className="product-page-header ds-page-header"><div className="ds-page-header__identity">{marker && <span className="ds-page-header__marker" aria-hidden="true">{marker}</span>}<div>{context && <p className="ds-page-header__eyebrow">{context}</p>}<h1>{title}</h1>{description && <div className="ds-page-header__description">{description}</div>}</div></div>{action && <div className="ds-page-header__actions product-page-actions">{action}</div>}</header>;
+  return <header className={classes("product-page-header", "ds-page-header", nexaCrm.pageHeader)}><div className="ds-page-header__identity">{marker && <span className="ds-page-header__marker" aria-hidden="true">{marker}</span>}<div>{context && <p className="ds-page-header__eyebrow">{context}</p>}<h1>{title}</h1>{description && <div className="ds-page-header__description">{description}</div>}</div></div>{action && <div className="ds-page-header__actions product-page-actions">{action}</div>}</header>;
 }
 
 export function ActionLink({
@@ -86,15 +94,15 @@ export function FeedbackState({
   autoFocus?: boolean;
 }) {
   const urgent = tone === "danger" || tone === "conflict";
-  return <section className={`ds-feedback ds-feedback--${tone}`} role={urgent ? "alert" : "status"} tabIndex={autoFocus ? -1 : undefined} autoFocus={autoFocus || undefined}><div><h2>{title}</h2>{children && <div className="ds-feedback__description">{children}</div>}</div>{action && <div className="ds-feedback__actions">{action}</div>}</section>;
+  return <section className={classes("ds-feedback", `ds-feedback--${tone}`, nexaCrm.feedback)} role={urgent ? "alert" : "status"} tabIndex={autoFocus ? -1 : undefined} autoFocus={autoFocus || undefined}><div><h2>{title}</h2>{children && <div className="ds-feedback__description">{children}</div>}</div>{action && <div className="ds-feedback__actions">{action}</div>}</section>;
 }
 
 export function EmptyState({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
-  return <section className="ds-empty"><h2>{title}</h2>{children && <div>{children}</div>}{action && <div className="ds-empty__actions">{action}</div>}</section>;
+  return <section className={classes("ds-empty", nexaCrm.feedback)}><h2>{title}</h2>{children && <div>{children}</div>}{action && <div className="ds-empty__actions">{action}</div>}</section>;
 }
 
 export function LoadingState({ label = "Loading…", rows = 3 }: { label?: string; rows?: number }) {
-  return <div className="ds-loading" role="status" aria-label={label}><span className="sr-only">{label}</span>{Array.from({ length: rows }, (_, index) => <span className="ds-loading__row" aria-hidden="true" key={index} />)}</div>;
+  return <div className={classes("ds-loading", nexaCrm.feedback)} role="status" aria-label={label}><span className="sr-only">{label}</span>{Array.from({ length: rows }, (_, index) => <span className="ds-loading__row" aria-hidden="true" key={index} />)}</div>;
 }
 
 export function FieldMessage({ id, children, tone = "help" }: { id: string; children: ReactNode; tone?: "help" | "error" }) {
@@ -102,12 +110,12 @@ export function FieldMessage({ id, children, tone = "help" }: { id: string; chil
 }
 
 export function DataTable({ caption, children }: { caption: string; children: ReactNode }) {
-  return <div className="ds-table-wrap"><table className="ds-table"><caption>{caption}</caption>{children}</table></div>;
+  return <div className={classes("ds-table-wrap", nexaCrm.tableWrap)}><table className="ds-table"><caption>{caption}</caption>{children}</table></div>;
 }
 
 export function DataToolbar({ label, htmlFor, children, helper, status }: { label: string; htmlFor?: string; children: ReactNode; helper?: ReactNode; status?: ReactNode }) {
   const heading = htmlFor ? <label className="ds-data-toolbar__label" htmlFor={htmlFor}>{label}</label> : <div className="ds-data-toolbar__label">{label}</div>;
-  return <section className="ds-data-toolbar ds-list-toolbar" aria-label={`${label} controls`}>{heading}<div className="ds-data-toolbar__controls">{children}</div>{helper && <div className="ds-data-toolbar__helper">{helper}</div>}{status && <div className="ds-data-toolbar__status">{status}</div>}</section>;
+  return <section className={classes("ds-data-toolbar", "ds-list-toolbar", nexaCrm.toolbar)} aria-label={`${label} controls`}>{heading}<div className="ds-data-toolbar__controls">{children}</div>{helper && <div className="ds-data-toolbar__helper">{helper}</div>}{status && <div className="ds-data-toolbar__status">{status}</div>}</section>;
 }
 
 export function RecordCards({ label, children }: { label: string; children: ReactNode }) {
@@ -115,7 +123,7 @@ export function RecordCards({ label, children }: { label: string; children: Reac
 }
 
 export function RecordCard({ title, href, secondary, facts, actions }: { title: string; href: string; secondary?: ReactNode; facts: Array<{ label: string; value: ReactNode }>; actions?: ReactNode }) {
-  return <article className="ds-record-card" role="listitem"><header><div><h2><Link href={href}>{title}</Link></h2>{secondary && <div className="ds-record-card__secondary">{secondary}</div>}</div></header><dl>{facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>{actions && <div className="ds-record-card__actions">{actions}</div>}</article>;
+  return <article className={classes("ds-record-card", nexaCrm.recordCard)} role="listitem"><header><div><h2><Link href={href}>{title}</Link></h2>{secondary && <div className="ds-record-card__secondary">{secondary}</div>}</div></header><dl>{facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>{actions && <div className="ds-record-card__actions">{actions}</div>}</article>;
 }
 
 export function RecordIdentity({ title, href, secondary, marker, meta }: { title: string; href?: string; secondary?: ReactNode; marker?: ReactNode; meta?: ReactNode }) {
@@ -124,7 +132,7 @@ export function RecordIdentity({ title, href, secondary, marker, meta }: { title
 }
 
 export function RecordWorkspace({ summary, children }: { summary: ReactNode; children: ReactNode }) {
-  return <div className="ds-record-workspace"><aside className="ds-record-workspace__summary">{summary}</aside><div className="ds-record-workspace__content">{children}</div></div>;
+  return <div className={classes("ds-record-workspace", nexaCrm.recordWorkspace)}><aside className={classes("ds-record-workspace__summary", nexaCrm.panel)}>{summary}</aside><div className={classes("ds-record-workspace__content", nexaCrm.panel)}>{children}</div></div>;
 }
 
 export function ContentTabs({ label, items }: { label: string; items: Array<{ href: string; label: string; active?: boolean }> }) {
@@ -142,7 +150,7 @@ export function ViewTabs({
   label: string;
   items: Array<{ href: string; label: string; active: boolean }>;
 }) {
-  return <nav className="ds-view-tabs" aria-label={label}>{items.map(item => <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</Link>)}</nav>;
+  return <nav className={classes("ds-view-tabs", nexaCrm.viewTabs)} aria-label={label}>{items.map(item => <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</Link>)}</nav>;
 }
 
 export function StageColumn({ title, count, children, tone = "neutral", id, position }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string; position?: number }) {
@@ -159,7 +167,7 @@ export function WorkflowSummaryGrid({ children }: { children: ReactNode }) {
 }
 
 export function FormWorkbench({ children, label }: { children: ReactNode; label?: string }) {
-  return <div className="ds-form-workbench" aria-label={label}>{children}</div>;
+  return <div className={classes("ds-form-workbench", nexaCrm.formWorkbench)} aria-label={label}>{children}</div>;
 }
 
 export function FormSection({ id, number, title, description, tone = "overview", children }: { id: string; number: string; title: string; description: string; tone?: SectionTone; children: ReactNode }) {
@@ -171,11 +179,11 @@ export function FormGrid({ children, className }: { children: ReactNode; classNa
 }
 
 export function FormActions({ children }: { children: ReactNode }) {
-  return <div className="ds-page-actions ds-form-actions">{children}</div>;
+  return <div className={classes("ds-page-actions", "ds-form-actions", nexaCrm.formActions)}>{children}</div>;
 }
 
 export function SectionNav({ label, items }: { label: string; items: Array<{ href: string; label: string }> }) {
-  return <nav className="ds-section-nav" aria-label={label}>{items.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}</nav>;
+  return <nav className={classes("ds-section-nav", nexaCrm.sectionNav)} aria-label={label}>{items.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}</nav>;
 }
 
 export function ReviewWorkspace({ evidence, children }: { evidence: ReactNode; children: ReactNode }) {

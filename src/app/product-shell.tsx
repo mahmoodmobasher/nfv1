@@ -37,6 +37,7 @@ import { AccountThemeSync } from "./account-theme-sync";
 import { Brand } from "./onboarding/components";
 import { securePost } from "./onboarding/api";
 import { WorkspaceControl } from "./workspace/workspace-control";
+import { nexaCrm } from "@/frontend/design-system/nexa-crm-variants";
 
 type ShellKind = "crm" | "admin";
 const icons: Record<
@@ -283,6 +284,7 @@ export function ProductShell({
     return (
       <Link
         href={entry.href}
+        className={nexaCrm.navItem}
         aria-current={active && (drawer ? open : !open) ? "page" : undefined}
         onClick={() => open && close(false)}
       >
@@ -309,15 +311,15 @@ export function ProductShell({
           const expanded = expandedGroups.has(group.id), groupActive = activeNavigation?.groupId === group.id;
           return (
           <section
-            className="product-nav-group"
+            className={`product-nav-group ${nexaCrm.navGroup}`}
             key={group.label}
             data-active={groupActive || undefined}
           >
-            <h2><button type="button" aria-expanded={expanded} aria-controls={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`}
+            <h2><button className={nexaCrm.navHeading} type="button" aria-expanded={expanded} aria-controls={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`}
               onClick={() => setExpandedGroups((current) => { const next = new Set(current); if (next.has(group.id)) next.delete(group.id); else next.add(group.id); return next; })}>
               <span>{group.label}</span><ChevronDown aria-hidden="true" />
             </button></h2>
-            <div id={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`} hidden={!expanded}>
+            <div className={nexaCrm.navList} id={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`} hidden={!expanded}>
               {group.items.map((entry) => <div key={entry.href}>{item(entry, drawer)}</div>)}
             </div>
           </section>
@@ -330,18 +332,18 @@ export function ProductShell({
     menuId = kind === "crm" ? "crm-menu" : "workspace-menu";
   return (
     <div
-      className={`product-shell experience-product ${shellVariant}`}
+      className={`product-shell experience-product ${shellVariant} ${nexaCrm.shell}`}
       data-drawer-open={open || undefined}
     >
       <a ref={skip} className="skip-link" href="#product-main">
         Skip to main content
       </a>
       <AccountThemeSync />
-      <aside ref={rail} className="product-rail">
+      <aside ref={rail} className={`product-rail ${nexaCrm.rail}`}>
         <Brand />
         {navigationState === "ready" && navigationContent()}
       </aside>
-      <header ref={topbar} className="product-topbar">
+      <header ref={topbar} className={`product-topbar ${nexaCrm.topbar}`}>
         <nav className="product-breadcrumbs" aria-label="Breadcrumb">
           <Link href={kind === "crm" ? "/crm/home" : "/crm"}>
             {breadcrumbGroup}
@@ -351,14 +353,14 @@ export function ProductShell({
         </nav>
         <div className="product-topbar-actions">
           {kind === "crm" && canAddLead && (
-            <Link className="product-create-action" href="/crm/leads/new">
+            <Link className={`product-create-action ${nexaCrm.action}`} href="/crm/leads/new">
               <Plus aria-hidden="true" />
               <span>Add lead</span>
             </Link>
           )}
           {kind === "crm" && canViewLeads && (
             <form
-              className="product-global-search"
+              className={`product-global-search ${nexaCrm.search}`}
               action="/crm"
               role="search"
             >
@@ -427,7 +429,7 @@ export function ProductShell({
           </div>
         )}
       </header>
-      <main ref={main} id="product-main" tabIndex={-1} className="product-main">
+      <main ref={main} id="product-main" tabIndex={-1} className={`product-main ${nexaCrm.main}`}>
         {navigationState !== "ready" ? <section className="admin-content narrow-admin product-navigation-state" tabIndex={-1}>
           <div className={`alert ${navigationState === "cleared" ? "error" : ""}`} role={navigationState === "loading" ? "status" : "alert"}>
             <h1>{navigationState === "loading" ? "Loading workspace" : navigationState === "retry" ? "Navigation is temporarily unavailable" : "Workspace access is unavailable"}</h1>
