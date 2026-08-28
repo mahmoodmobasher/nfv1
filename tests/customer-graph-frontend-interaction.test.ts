@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const component = readFileSync("src/frontend/features/customer-graph/components/customer-graph.tsx", "utf8");
-const styles = readFileSync("src/frontend/design-system/components.css", "utf8");
+const globals = readFileSync("src/app/globals.css", "utf8");
 
 describe("CUSTOMER-GRAPH-01 protected interactions", () => {
   it("fails closed before collecting create-route PII and clears protected mutation state", () => {
@@ -32,12 +32,11 @@ describe("CUSTOMER-GRAPH-01 protected interactions", () => {
     expect(component).toContain('href={`#${name}`}');
   });
 
-  it("retains responsive, high-contrast, and reduced-motion protections", () => {
-    expect(styles).toContain("@media (max-width: 520px)");
-    expect(styles).toContain(".ds-page-actions,.ds-page-actions>* { width: 100%; }");
-    expect(styles).toContain("overflow-wrap: anywhere");
-    expect(styles).toContain("@media (forced-colors: active)");
-    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(styles).toContain(".lead-management-dialog");
+  it("retains responsive Tailwind composition and global accessibility protections", () => {
+    expect(component).toContain("flex flex-wrap");
+    expect(component).toContain("w-[min(36rem,calc(100%-2rem))]");
+    expect(globals).toContain("overflow-wrap: anywhere");
+    expect(globals).toContain("@media (forced-colors: active)");
+    expect(globals).toContain("@media (prefers-reduced-motion: reduce)");
   });
 });

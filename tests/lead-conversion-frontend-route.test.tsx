@@ -6,7 +6,7 @@ import { LeadDetailWithConversion } from "@/frontend/features/leads";
 import { safeLeadSummaryFixture } from "@/frontend/features/leads/testing/lead-presentation.fixtures";
 
 const component = readFileSync("src/frontend/features/leads/components/lead-conversion.tsx", "utf8");
-const styles = readFileSync("src/frontend/design-system/components.css", "utf8");
+const globals = readFileSync("src/app/globals.css", "utf8");
 describe("LEAD-CONVERSION-01 frontend route and states", () => {
   it("mounts only a truthful preview status before server authority resolves", () => {
     const lead = { ...safeLeadSummaryFixture, capabilities: { ...safeLeadSummaryFixture.capabilities, canMoveStage: false } };
@@ -38,11 +38,11 @@ describe("LEAD-CONVERSION-01 frontend route and states", () => {
   it("composes the conversion wrapper through the public Lead feature entry", () => {
     const route = readFileSync("src/app/crm/leads/[leadId]/page.tsx", "utf8"); expect(route).toContain('from "@/frontend/features/leads"'); expect(route).toContain("<LeadDetailWithConversion"); expect(route).not.toContain("lead-conversion/");
   });
-  it("inherits the accepted responsive, forced-colour and reduced-motion boundaries", () => {
-    expect(styles).toContain("min-height: 44px");
-    expect(styles).toContain("width: min(520px,calc(100vw - 32px))");
-    expect(styles).toContain("@media (max-width: 520px)");
-    expect(styles).toContain("@media (forced-colors: active)");
-    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+  it("inherits responsive Tailwind controls and global accessibility boundaries", () => {
+    expect(component).toContain("min-h-11");
+    expect(component).toContain("w-[min(36rem,calc(100%-2rem))]");
+    expect(component).toContain("flex flex-wrap");
+    expect(globals).toContain("@media (forced-colors: active)");
+    expect(globals).toContain("@media (prefers-reduced-motion: reduce)");
   });
 });

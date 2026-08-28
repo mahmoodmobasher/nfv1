@@ -6,7 +6,7 @@ import { LeadActivityPanel, activityMatchesFilter, compareActivityDescending, me
 import { leadActivityFixture } from "@/frontend/features/leads/testing/lead-activity.fixtures";
 
 const component = readFileSync("src/frontend/features/leads/components/lead-activity.tsx", "utf8");
-const styles = readFileSync("src/frontend/design-system/components.css", "utf8");
+const globals = readFileSync("src/app/globals.css", "utf8");
 
 describe("ACTIVITY-01A frontend states and boundaries", () => {
   it("mounts a truthful protected loading state before capabilities resolve", () => {
@@ -63,11 +63,12 @@ describe("ACTIVITY-01A frontend states and boundaries", () => {
     expect(component).toContain('data-feedback-kind={feedbackKind}'); expect(component).toContain('feedbackKind === "validation" || feedbackKind === "error" || feedbackKind === "conflict" ? "alert" : "status"');
   });
 
-  it("inherits Nexa Spectrum responsive, forced-colour and reduced-motion boundaries", () => {
-    expect(styles).toContain("grid-template-columns: repeat(auto-fit,minmax(min(300px,100%),1fr))");
-    expect(styles).toContain(".lead-activity-layout { grid-template-columns: 1fr; }"); expect(styles).toContain("overflow-anchor: none");
-    expect(styles).toContain("@media (forced-colors: active)"); expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(styles).toContain("min-height: 44px");
+  it("uses discoverable responsive Tailwind composition and global accessibility foundations", () => {
+    expect(component).toContain("lg:grid-cols-[minmax(0,1fr)_20rem]");
+    expect(component).toContain("min-h-11");
+    expect(component).toContain("md:grid-cols-12");
+    expect(globals).toContain("@media (forced-colors: active)");
+    expect(globals).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
   it("integrates through the Lead public entry without adding routes or global navigation", () => {

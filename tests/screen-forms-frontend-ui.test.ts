@@ -28,8 +28,8 @@ const leadOwner = readFileSync(
   "src/backend/modules/leads/application/orchestrators/screen-forms.owner.ts",
   "utf8",
 );
-const designStyles = readFileSync(
-  "src/frontend/design-system/components.css",
+const sharedComponents = readFileSync(
+  "src/frontend/design-system/components.tsx",
   "utf8",
 );
 
@@ -182,12 +182,13 @@ describe("SCREEN-FORMS-01 frontend boundary", () => {
   });
 
   it("uses explicit Lead Company search and selection rows without changing other option fields", () => {
-    expect(form).toContain('<FormGrid className="lead-primary-grid">');
+    expect(form).toContain("<FormGrid");
     expect(form).toContain("leadCompanyLayout");
-    expect(options).toContain('className="screen-option-search"');
-    expect(options).toContain('className="screen-option-selection"');
-    expect(form).toContain("<FormGrid>");
-    expect(designStyles).toContain(".ds-form-grid { align-items: start; }");
+    expect(options).toContain('layoutSpan === "full" ? "md:col-span-12"');
+    expect(options).toContain('layoutSpan === "half" ? "md:col-span-6"');
+    expect(options).toContain('"md:col-span-8"');
+    expect(options).toContain("md:col-start-1");
+    expect(sharedComponents).toContain("md:grid-cols-12");
   });
 
   it("blocks initial targeted reconciliation and exposes a truthful selected-endpoint retry", () => {
