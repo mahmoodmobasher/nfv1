@@ -341,7 +341,7 @@ html[data-workspace-layout="command-center"] .p1a-hold { border-radius: var(--nf
 .product-global-search { display: flex; min-width: 190px; min-height: 44px; align-items: center; gap: var(--nf-space-2); padding: 0 var(--nf-space-3); border: 1px solid var(--nx-border-subtle); border-radius: var(--nf-radius-control); background: var(--nx-surface-secondary); color: var(--nx-text-muted); }
 .product-global-search:focus-within { border-color: var(--nx-focus); box-shadow: var(--nx-focus-ring); }
 .product-global-search svg { width: 15px; height: 15px; flex: none; }
-.product-global-search input { width: 150px; min-height: 42px; padding: 0; border: 0; outline: 0!important; background: transparent; color: var(--nx-text-strong); font-size: var(--nf-text-body-sm); box-shadow: var(--nf-shadow-1)!important; }
+.product-global-search input { width: 150px; min-height: var(--nf-control-min); padding: 0; border: 0; outline: 0!important; background: transparent; color: var(--nx-text-strong); font-size: var(--nf-text-body-sm); box-shadow: var(--nf-shadow-1)!important; }
 .product-global-search input::placeholder { color: var(--nx-text-muted); }
 .product-icon-action { display: grid; width: 44px; min-height: 44px; place-items: center; border-radius: var(--nf-radius-control); color: var(--nx-text); }
 .product-icon-action:visited { color: var(--nx-text); }

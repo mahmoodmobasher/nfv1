@@ -207,6 +207,11 @@ describe("design-system document boundary", () => {
     expect(components).toContain(".ds-table tbody tr:nth-child(even)");
     expect(components).not.toContain(".cg-directory-table");
     expect(components).toContain(".ds-stage-column--new");
+    expect(components).toContain(".pipeline-board>.ds-stage-column--neutral:nth-child(4n+1)");
+    expect(components).toContain(".ds-stage-column__identifier");
+    expect(leads).toContain("position={index + 1}");
+    expect(leads).toContain("Lead lifecycle");
+    expect(leads).toContain("Pipeline stage");
     expect(components).toContain(".ds-form-section.ds-section-panel--overview");
     expect(components).toContain(".ds-form-section.ds-section-panel--relationship");
     expect(components).toContain(".ds-form-section.ds-section-panel--activity");
@@ -305,6 +310,8 @@ describe("design-system document boundary", () => {
     expect(shell).toContain('className="product-global-search"');
     expect(shell).toContain('action="/crm"');
     expect(shell).toContain('name="q"');
+    expect(css).toMatch(/\.product-global-search input[^{}]*\{[^}]*min-height:\s*var\(--nf-control-min\)/);
+    expect(css).not.toMatch(/\.product-global-search input[^{}]*\{[^}]*min-height:\s*42px/);
     expect(css).toMatch(/\.product-shell>\.product-topbar\s*\{[\s\S]*?position:\s*sticky/);
     expect(css).toMatch(
       /\.product-shell--crm>\.product-topbar>\.product-breadcrumbs[^{}]*\{[^}]*display:\s*flex[^}]*margin:\s*0/,

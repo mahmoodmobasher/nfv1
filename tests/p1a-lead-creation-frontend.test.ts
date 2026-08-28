@@ -21,11 +21,16 @@ describe("P1A Lead creation frontend integration", () => {
   });
   it("renders nullable canonical presentation without legacy editing", () => {
     const html=renderToStaticMarkup(React.createElement(LeadReadOnlyDetail,{lead:safeLeadSummaryFixture}));
-    expect(html).toContain("Taylor Example");expect(html).toContain("No company provided");expect(html).toContain("Unassigned");expect(html).not.toContain("Save changes");expect(leadAssignmentLabel(safeLeadSummaryFixture)).toBe("Unassigned");
+    expect(html).toContain("Taylor Example");expect(html).toContain("No company provided");expect(html).toContain("Unassigned");expect(html).toContain("Lead lifecycle");expect(html).toContain("Pipeline stage");expect(html).not.toContain("Save changes");expect(leadAssignmentLabel(safeLeadSummaryFixture)).toBe("Unassigned");
   });
   it("preserves empty server-defined Pipeline stages", () => {
     const stages=pipelineStagesFixture.items.map((stage,index)=>({stage,view:{...leadSummariesFixture,items:index?[]:[safeLeadSummaryFixture]}}));
-    const html=renderToStaticMarkup(React.createElement(LeadPipeline,{stages}));expect(html).toContain("New");expect(html).toContain("Working");expect(html).toContain("No leads in this stage");
+    const html=renderToStaticMarkup(React.createElement(LeadPipeline,{stages}));expect(html).toContain("Pipeline stage 1");expect(html).toContain("Pipeline stage 2");expect(html).toContain("New");expect(html).toContain("Working");expect(html).toContain("No leads in this stage");
+  });
+  it("labels lifecycle and Pipeline stage as separate server facts when their values differ", () => {
+    const lead={...safeLeadSummaryFixture,stage:{...safeLeadSummaryFixture.stage,name:"Qualified"}};
+    const html=renderToStaticMarkup(React.createElement(LeadSummaryCard,{lead}));
+    expect(html).toMatch(/Lead lifecycle[\s\S]*New[\s\S]*Pipeline stage[\s\S]*Qualified/);
   });
   it("uses canonical working detail navigation", () => {
     expect(renderToStaticMarkup(React.createElement(LeadSummaryCard,{lead:safeLeadSummaryFixture}))).toContain(`/crm/leads/${safeLeadSummaryFixture.leadId}`);

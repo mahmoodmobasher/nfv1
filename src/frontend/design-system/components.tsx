@@ -140,8 +140,9 @@ export function ViewTabs({
   return <nav className="ds-view-tabs" aria-label={label}>{items.map(item => <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</Link>)}</nav>;
 }
 
-export function StageColumn({ title, count, children, tone = "neutral", id }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string }) {
-  return <section className={classes("ds-stage-column", `ds-stage-column--${tone}`)} aria-labelledby={id}><div className="pipeline-stage ds-stage-column__content"><header><h2 id={id} tabIndex={-1}>{title}</h2>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></div></section>;
+export function StageColumn({ title, count, children, tone = "neutral", id, position }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string; position?: number }) {
+  const positionId = id && position !== undefined ? `${id}-position` : undefined;
+  return <section className={classes("ds-stage-column", `ds-stage-column--${tone}`)} aria-labelledby={[positionId,id].filter(Boolean).join(" ") || undefined}><div className="pipeline-stage ds-stage-column__content"><header><div className="ds-stage-column__heading">{position !== undefined && <span id={positionId} className="ds-stage-column__identifier">Pipeline stage {position}</span>}<h2 id={id} tabIndex={-1}>{title}</h2></div>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></div></section>;
 }
 
 export function FactsGrid({ children }: { children: ReactNode }) {
