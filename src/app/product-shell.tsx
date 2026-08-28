@@ -33,11 +33,9 @@ import {
   workspaceNavigationCapabilitiesV1Schema,
   workspaceNavigationErrorEnvelopeV1Schema,
 } from "@/frontend/shared/contracts/workspace-navigation";
-import { AccountThemeSync } from "./account-theme-sync";
 import { Brand } from "./onboarding/components";
 import { securePost } from "./onboarding/api";
 import { WorkspaceControl } from "./workspace/workspace-control";
-import { nexaCrm } from "@/frontend/design-system/nexa-crm-variants";
 
 type ShellKind = "crm" | "admin";
 const icons: Record<
@@ -270,10 +268,10 @@ export function ProductShell({
     }
   }
   const accountActions = (<>
-    <Link className="product-theme-action" href="/settings#preferences">
-      <span>Theme and appearance</span>
+    <Link className="flex min-h-11 items-center rounded-control px-3 text-xs font-semibold text-ink-muted hover:bg-surface-muted hover:text-ink" href="/settings#preferences">
+      <span>Personal settings</span>
     </Link>
-    <button className="product-signout" onClick={logout} disabled={busy}>
+    <button className="flex min-h-11 w-full items-center gap-2 rounded-control border-0 bg-transparent px-3 text-left text-xs font-semibold text-danger hover:bg-danger-soft disabled:bg-disabled disabled:text-disabled-text" onClick={logout} disabled={busy}>
       <LogOut aria-hidden="true" />
       <span>{busy ? "Signing out…" : "Sign out"}</span>
     </button>
@@ -284,7 +282,7 @@ export function ProductShell({
     return (
       <Link
         href={entry.href}
-        className={nexaCrm.navItem}
+        className="flex min-h-11 items-center gap-2 rounded-control px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-muted hover:text-ink aria-[current=page]:bg-accent-soft aria-[current=page]:font-semibold aria-[current=page]:text-accent-ink [&_svg]:size-4"
         aria-current={active && (drawer ? open : !open) ? "page" : undefined}
         onClick={() => open && close(false)}
       >
@@ -299,27 +297,25 @@ export function ProductShell({
     breadcrumbPage = activeNavigation?.entry.label ?? "Current page";
   const navigationContent = (drawer = false) => (
     <div
-      className={
-        drawer ? "product-drawer-content" : "product-navigation-content"
-      }
+      className="grid gap-3"
     >
       {drawer && <WorkspaceControl name={workspace} role={role} accountAction={accountActions} />}
       <nav
-        aria-label={kind === "crm" ? "CRM navigation" : "Workspace navigation"}
+        className="grid gap-3" aria-label={kind === "crm" ? "CRM navigation" : "Workspace navigation"}
       >
         {navigation.map((group) => {
           const expanded = expandedGroups.has(group.id), groupActive = activeNavigation?.groupId === group.id;
           return (
           <section
-            className={`product-nav-group ${nexaCrm.navGroup}`}
+            className="grid gap-0.5"
             key={group.label}
             data-active={groupActive || undefined}
           >
-            <h2><button className={nexaCrm.navHeading} type="button" aria-expanded={expanded} aria-controls={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`}
+            <h2><button className="flex min-h-8 w-full items-center justify-between rounded-control px-2 text-left text-[10.5px] font-bold uppercase tracking-[.07em] text-ink-faint hover:bg-surface-muted" type="button" aria-expanded={expanded} aria-controls={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`}
               onClick={() => setExpandedGroups((current) => { const next = new Set(current); if (next.has(group.id)) next.delete(group.id); else next.add(group.id); return next; })}>
               <span>{group.label}</span><ChevronDown aria-hidden="true" />
             </button></h2>
-            <div className={nexaCrm.navList} id={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`} hidden={!expanded}>
+            <div className="grid gap-0.5" id={`product-nav-${drawer ? "drawer" : "rail"}-${group.id}`} hidden={!expanded}>
               {group.items.map((entry) => <div key={entry.href}>{item(entry, drawer)}</div>)}
             </div>
           </section>
@@ -327,40 +323,35 @@ export function ProductShell({
       </nav>
     </div>
   );
-  const shellVariant = `product-shell--${kind}`,
-    menuName = kind === "crm" ? "CRM navigation" : "workspace navigation",
+  const menuName = kind === "crm" ? "CRM navigation" : "workspace navigation",
     menuId = kind === "crm" ? "crm-menu" : "workspace-menu";
   return (
-    <div
-      className={`product-shell experience-product ${shellVariant} ${nexaCrm.shell}`}
-      data-drawer-open={open || undefined}
-    >
-      <a ref={skip} className="skip-link" href="#product-main">
+    <div className="min-h-screen bg-canvas text-ink lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:grid-rows-[60px_minmax(0,1fr)]" data-drawer-open={open || undefined}>
+      <a ref={skip} className="fixed left-3 top-3 z-[100] -translate-y-24 rounded-control bg-accent px-4 py-3 font-semibold text-on-accent focus:translate-y-0" href="#product-main">
         Skip to main content
       </a>
-      <AccountThemeSync />
-      <aside ref={rail} className={`product-rail ${nexaCrm.rail}`}>
+      <aside ref={rail} className="hidden min-h-screen border-r border-line bg-surface p-4 lg:row-span-2 lg:block">
         <Brand />
         {navigationState === "ready" && navigationContent()}
       </aside>
-      <header ref={topbar} className={`product-topbar ${nexaCrm.topbar}`}>
-        <nav className="product-breadcrumbs" aria-label="Breadcrumb">
+      <header ref={topbar} className="hidden min-h-[60px] items-center justify-between gap-4 border-b border-line bg-surface px-6 lg:flex">
+        <nav className="flex items-center gap-2 text-xs text-ink-faint [&_svg]:size-4" aria-label="Breadcrumb">
           <Link href={kind === "crm" ? "/crm/home" : "/crm"}>
             {breadcrumbGroup}
           </Link>
           <ChevronRight aria-hidden="true" />
           <span aria-current="page">{breadcrumbPage}</span>
         </nav>
-        <div className="product-topbar-actions">
+        <div className="flex items-center gap-2">
           {kind === "crm" && canAddLead && (
-            <Link className={`product-create-action ${nexaCrm.action}`} href="/crm/leads/new">
+            <Link className="inline-flex min-h-11 items-center gap-2 rounded-control border border-accent bg-accent px-3.5 text-xs font-semibold text-on-accent hover:bg-accent-ink [&_svg]:size-4" href="/crm/leads/new">
               <Plus aria-hidden="true" />
               <span>Add lead</span>
             </Link>
           )}
           {kind === "crm" && canViewLeads && (
             <form
-              className={`product-global-search ${nexaCrm.search}`}
+              className="flex min-h-11 min-w-60 items-center gap-2 rounded-control border border-line bg-surface-muted px-3 text-ink-faint [&_svg]:size-4 [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:outline-none"
               action="/crm"
               role="search"
             >
@@ -380,15 +371,15 @@ export function ProductShell({
           {navigationState === "ready" && <WorkspaceControl name={workspace} role={role} accountAction={accountActions} />}
         </div>
       </header>
-      <header className="product-mobile">
-        <div ref={mobileContext}>
+      <header className="flex min-h-[60px] items-center justify-between gap-3 border-b border-line bg-surface px-4 lg:hidden">
+        <div ref={mobileContext} className="flex min-w-0 items-center gap-3">
           <Brand />
           <span>{navigationState === "ready" ? workspace : "Workspace"}</span>
         </div>
-        <div ref={mobileAccount} className="product-mobile-account" />
+        <div ref={mobileAccount} />
         <button
           ref={trigger}
-          className="menu-button"
+          className="grid size-11 place-items-center rounded-control border border-line bg-surface [&_svg]:size-5"
           aria-label={`${open ? "Close" : "Open"} ${menuName}`}
           aria-expanded={open}
           aria-controls={menuId}
@@ -401,23 +392,23 @@ export function ProductShell({
           {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
         </button>
         {open && (
-          <div id={menuId} className="mobile-menu product-drawer">
+          <div id={menuId} className="fixed inset-0 z-50 lg:hidden">
             <button
-              className="menu-backdrop"
+              className="absolute inset-0 h-full w-full border-0 bg-ink/35"
               aria-label={`Close ${menuName}`}
               onClick={() => close()}
             />
             <div
               ref={panel}
-              className="mobile-menu-panel"
+              className="absolute inset-y-0 left-0 w-[min(88vw,320px)] overflow-y-auto border-r border-line bg-surface p-4 shadow-xl"
               role="dialog"
               aria-modal="true"
               aria-labelledby={`${menuId}-title`}
             >
-              <div className="product-drawer-header">
+              <div className="mb-4 flex min-h-11 items-center justify-between border-b border-line pb-3">
                 <h2 id={`${menuId}-title`}>{menuName}</h2>
                 <button
-                  className="product-drawer-close"
+                  className="grid size-11 place-items-center rounded-control border border-line bg-surface"
                   aria-label={`Close ${menuName}`}
                   onClick={() => close()}
                 >
@@ -429,16 +420,16 @@ export function ProductShell({
           </div>
         )}
       </header>
-      <main ref={main} id="product-main" tabIndex={-1} className={`product-main ${nexaCrm.main}`}>
-        {navigationState !== "ready" ? <section className="admin-content narrow-admin product-navigation-state" tabIndex={-1}>
-          <div className={`alert ${navigationState === "cleared" ? "error" : ""}`} role={navigationState === "loading" ? "status" : "alert"}>
+      <main ref={main} id="product-main" tabIndex={-1} className="min-w-0 px-4 pb-10 sm:px-5 lg:px-7">
+        {navigationState !== "ready" ? <section className="mx-auto mt-8 max-w-2xl" tabIndex={-1}>
+          <div className={`rounded-panel border p-5 ${navigationState === "cleared" ? "border-danger/30 bg-danger-soft text-danger" : "border-accent/30 bg-accent-soft text-accent-ink"}`} role={navigationState === "loading" ? "status" : "alert"}>
             <h1>{navigationState === "loading" ? "Loading workspace" : navigationState === "retry" ? "Navigation is temporarily unavailable" : "Workspace access is unavailable"}</h1>
             <p>{navigationState === "loading" ? "Checking the latest workspace access…" : navigationState === "retry" ? "No workspace navigation or protected page details are shown. Try again safely." : "No workspace navigation or protected page details are shown. Sign in again or return to a safe page."}</p>
-            {navigationState === "retry" && <button className="secondary" onClick={() => setReloadNavigation((value) => value + 1)}>Retry navigation</button>}
-            {navigationState === "cleared" && <Link className="secondary link-button" href="/login">Return to sign in</Link>}
+            {navigationState === "retry" && <button className="mt-3 inline-flex min-h-11 items-center rounded-control border border-line bg-surface px-3.5 font-semibold text-ink" onClick={() => setReloadNavigation((value) => value + 1)}>Retry navigation</button>}
+            {navigationState === "cleared" && <Link className="mt-3 inline-flex min-h-11 items-center rounded-control border border-line bg-surface px-3.5 font-semibold text-ink" href="/login">Return to sign in</Link>}
           </div>
         </section> : <>{error && (
-          <div className="alert error" role="alert">
+          <div className="my-3 rounded-panel border border-danger/30 bg-danger-soft p-4 text-danger" role="alert">
             {error}
           </div>
         )}{children}</>}

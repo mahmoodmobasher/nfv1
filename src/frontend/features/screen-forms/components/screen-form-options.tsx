@@ -292,9 +292,9 @@ export function OptionSelect({
     retryItem = reconciliation?.submitted ?? initial ?? null;
   const companyRecovery = kind === "lead" && optionKind === "company" && !loading && items.length === 0;
   return (
-    <div className={`screen-option-field${leadCompanyLayout ? " lead-company-option" : ""}${layoutSpan ? ` ds-field-span--${layoutSpan}` : ""}`}>
-      <div className="screen-option-search">
-        <label className="field" htmlFor={`${id}-search`}>
+    <div className={`grid min-w-0 gap-2 ${layoutSpan === "full" ? "md:col-span-12" : layoutSpan === "half" ? "md:col-span-6" : "md:col-span-8"} ${leadCompanyLayout ? "md:col-start-1" : ""}`}>
+      <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink" htmlFor={`${id}-search`}>
           <span>Search {label.toLowerCase()}</span>
           <input
             id={`${id}-search`}
@@ -308,12 +308,12 @@ export function OptionSelect({
           {loading ? "Searching…" : "Search"}
         </Button>
       </div>
-      <div className="screen-option-selection">
-        <label className="field" htmlFor={id}>
+      <div className="min-w-0">
+        <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink" htmlFor={id}>
         <span>
           {label}
           {required ? (
-            <strong className="required-marker"> required</strong>
+            <strong className="font-semibold text-danger"> required</strong>
           ) : (
             <small> optional</small>
           )}
@@ -354,14 +354,14 @@ export function OptionSelect({
         )}
         </label>
         {companyRecovery && (
-        <div className="company-empty-state" aria-describedby={`${id}-empty-copy ${id}-status`}>
+        <div className="grid gap-3 rounded-card border border-dashed border-control bg-surface-muted p-4" aria-describedby={`${id}-empty-copy ${id}-status`}>
           <h3>Create a Company first</h3>
           <p id={`${id}-empty-copy`}>
             Every Lead must be linked to an existing Company. No Companies are
             available to select.
           </p>
           {canCreateCompany ? (
-            <div className="company-empty-actions">
+            <div className="flex flex-wrap items-center gap-2">
               <QuickCreateCompany
                 workspaceId={workspaceId}
                 onAuthorityLoss={onAuthorityLoss}
@@ -378,7 +378,7 @@ export function OptionSelect({
                 }}
               />
               <Link
-                className="secondary link-button"
+                className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted"
                 href="/crm/companies/new"
                 target="_blank"
                 rel="noopener"
@@ -422,7 +422,7 @@ export function OptionSelect({
         {checkFailed && retryItem && (
           <button
             ref={retry}
-            className="ds-action ds-action--secondary"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
             type="button"
             onClick={() => void loadSelected(retryItem)}
             disabled={loading}
@@ -431,7 +431,7 @@ export function OptionSelect({
           </button>
         )}
         {message && (
-        <p ref={status} id={`${id}-status`} className="helper" role="status" aria-live="polite" tabIndex={-1}>
+        <p ref={status} id={`${id}-status`} className="text-xs leading-5 text-ink-faint" role="status" aria-live="polite" tabIndex={-1}>
           {message}
         </p>
         )}
@@ -573,7 +573,7 @@ export function OptionChecks({
       {items.length ? (
         <>
           {items.map((item) => (
-            <label className="check" key={optionIdentity(item)}>
+            <label className="flex min-h-11 items-center gap-2 text-xs text-ink-muted [&_input]:size-4 [&_input]:accent-accent" key={optionIdentity(item)}>
               <input
                 type="checkbox"
                 name="visibleTeamIds"
@@ -596,10 +596,10 @@ export function OptionChecks({
           ))}
         </>
       ) : (
-        <p className="helper">No authorized Teams are available.</p>
+        <p className="text-xs leading-5 text-ink-faint">No authorized Teams are available.</p>
       )}
       {message && (
-        <p className="helper" role="status">
+        <p className="text-xs leading-5 text-ink-faint" role="status">
           {message}
         </p>
       )}

@@ -1,1 +1,1 @@
-import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="admin-content" aria-busy="true"><LoadingState label="Loading authorized identity-review information" rows={4}/></section>}
+import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="mx-auto grid w-full max-w-[1400px] gap-5 py-5" aria-busy="true"><LoadingState label="Loading authorized identity-review information" rows={4}/></section>}

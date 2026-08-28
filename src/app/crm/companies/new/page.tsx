@@ -9,7 +9,7 @@ export default async function Page() {
   try {
     return (
       <CrmShell workspace={workspace.name} role={context.role}>
-        <section className="admin-content narrow-admin">
+        <section className="mx-auto grid w-full max-w-4xl gap-5 py-5">
           <CustomerGraphFormPage workspaceId={workspace.id} kind="company" />
         </section>
       </CrmShell>

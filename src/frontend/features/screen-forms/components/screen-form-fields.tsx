@@ -50,7 +50,7 @@ export function ErrorSummary({
   return (
     <div
       ref={summary}
-      className="alert error error-summary"
+      className="grid gap-2 rounded-card border border-danger bg-danger-soft p-4 text-danger"
       role="alert"
       tabIndex={-1}
     >
@@ -78,7 +78,7 @@ export function ErrorSummary({
           ),
         )}
       </ul>
-      {reference && <p className="helper">Reference: {reference}</p>}
+      {reference && <p className="text-xs leading-5 text-ink-faint">Reference: {reference}</p>}
     </div>
   );
 }
@@ -93,8 +93,8 @@ export function SectionHeading({
   help: string;
 }) {
   return (
-    <header className="screen-section-heading">
-      <span className="screen-section-icon" aria-hidden="true">
+    <header className="flex items-start gap-3 border-b border-line pb-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent-ink" aria-hidden="true">
         <svg viewBox="0 0 24 24" focusable="false">
           <path d="M5 5h14v14H5zM8 9h8M8 13h8M8 17h5" />
         </svg>
@@ -119,7 +119,7 @@ export function OptionalSection({
   children: React.ReactNode;
 }) {
   return enabled ? (
-    <details className="screen-disclosure" open={open}>
+    <details className="rounded-card border border-line bg-surface p-4 [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary]:text-ink" open={open}>
       <summary>{summary}</summary>
       {children}
     </details>
@@ -215,11 +215,11 @@ export function Input({
       .filter(Boolean)
       .join(" ") || undefined;
   return (
-    <label className={`field${layoutSpan ? ` ds-field-span--${layoutSpan}` : ""}`} htmlFor={id}>
+    <label className={`grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink ${layoutSpan === "full" ? "md:col-span-12" : layoutSpan === "wide" ? "md:col-span-8" : layoutSpan === "half" ? "md:col-span-6" : "md:col-span-4"}`} htmlFor={id}>
       <span>
         {label}
         {required ? (
-          <strong className="required-marker"> required</strong>
+          <strong className="font-semibold text-danger"> required</strong>
         ) : (
           <small> optional</small>
         )}
@@ -262,11 +262,11 @@ export function Select({
   layoutSpan?: "half" | "wide" | "full";
 }) {
   return (
-    <label className={`field${layoutSpan ? ` ds-field-span--${layoutSpan}` : ""}`} htmlFor={id}>
+    <label className={`grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink ${layoutSpan === "full" ? "md:col-span-12" : layoutSpan === "wide" ? "md:col-span-8" : layoutSpan === "half" ? "md:col-span-6" : "md:col-span-4"}`} htmlFor={id}>
       <span>
         {label}
         {required ? (
-          <strong className="required-marker"> required</strong>
+          <strong className="font-semibold text-danger"> required</strong>
         ) : (
           <small> optional</small>
         )}

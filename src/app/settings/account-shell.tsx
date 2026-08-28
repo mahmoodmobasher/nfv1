@@ -10,11 +10,7 @@ export function AccountShell({
   children: React.ReactNode;
 }) {
   return (
-    <ProductShell
-      kind="crm"
-      workspace={workspace}
-      role={role}
-    >
+    <ProductShell kind="crm" workspace={workspace} role={role}>
       {children}
     </ProductShell>
   );

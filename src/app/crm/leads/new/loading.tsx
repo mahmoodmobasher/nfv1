@@ -1,1 +1,1 @@
-import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="admin-content narrow-admin" aria-busy="true"><h1>Preparing Add lead</h1><LoadingState label="Preparing the Lead form" rows={6}/></section>}
+import{LoadingState}from"@/frontend/design-system";export default function Loading(){return <section className="mx-auto grid w-full max-w-[1400px] gap-5 py-5" aria-busy="true"><h1 className="text-2xl font-semibold tracking-tight text-ink">Preparing Add lead</h1><LoadingState label="Preparing the Lead form" rows={6}/></section>}

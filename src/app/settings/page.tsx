@@ -19,28 +19,54 @@ export default async function Page() {
   const { pool } = createDb();
 
   try {
-    const identity = await resolveIdentityContext(pool, token, env.SESSION_SECRET, new Date(), {
-      idleMinutes: env.SESSION_IDLE_MINUTES,
-      touchIntervalSeconds: env.SESSION_TOUCH_INTERVAL_SECONDS,
-    });
+    const identity = await resolveIdentityContext(
+      pool,
+      token,
+      env.SESSION_SECRET,
+      new Date(),
+      {
+        idleMinutes: env.SESSION_IDLE_MINUTES,
+        touchIntervalSeconds: env.SESSION_TOUCH_INTERVAL_SECONDS,
+      },
+    );
     if (!identity) redirect("/login?next=/settings");
-    const user = (await pool.query<{ display_name: string; primary_email_display: string | null }>(
-      "select display_name, primary_email_display from users where id = $1 and status = 'active'",
-      [identity.userId],
-    )).rows[0];
+    const user = (
+      await pool.query<{
+        display_name: string;
+        primary_email_display: string | null;
+      }>(
+        "select display_name, primary_email_display from users where id = $1 and status = 'active'",
+        [identity.userId],
+      )
+    ).rows[0];
     if (!user) redirect("/login?next=/settings");
     const preferences = await accountPreferences(pool, identity);
-    let workspace = await workspaceSummary(pool, identity.userId, identity.activeWorkspaceId);
+    let workspace = await workspaceSummary(
+      pool,
+      identity.userId,
+      identity.activeWorkspaceId,
+    );
     if (!workspace) {
-      const selected = (await selectableWorkspaces(pool, {
-        ...identity,
-        activeWorkspaceId: identity.activeWorkspaceId ?? null,
-      })).find(
-        (option) => option.current,
-      );
-      if (selected) workspace = await workspaceSummary(pool, identity.userId, selected.id);
+      const selected = (
+        await selectableWorkspaces(pool, {
+          ...identity,
+          activeWorkspaceId: identity.activeWorkspaceId ?? null,
+        })
+      ).find((option) => option.current);
+      if (selected)
+        workspace = await workspaceSummary(pool, identity.userId, selected.id);
     }
-    const settings = <AccountSettingsClient initialName={user.display_name} initialPreferences={{ theme: preferences.appearance, locale: preferences.locale ?? "en-CA", timezone: preferences.timeZone ?? "America/Toronto", version: preferences.version }} />;
+    const settings = (
+      <AccountSettingsClient
+        initialName={user.display_name}
+        initialPreferences={{
+          theme: preferences.appearance,
+          locale: preferences.locale ?? "en-CA",
+          timezone: preferences.timeZone ?? "America/Toronto",
+          version: preferences.version,
+        }}
+      />
+    );
     return workspace ? (
       <AccountShell workspace={workspace.name} role={workspace.role}>
         {settings}

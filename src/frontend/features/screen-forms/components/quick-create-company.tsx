@@ -41,8 +41,8 @@ async function csrf() {
 
 function QuickField({ id, label, required, error }: { id: string; label: string; required?: boolean; error?: string }) {
   return (
-    <label className="field" htmlFor={id}>
-      <span>{label}{required ? <strong className="required-marker"> required</strong> : <small> optional</small>}</span>
+    <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink" htmlFor={id}>
+      <span>{label}{required ? <strong className="font-semibold text-danger"> required</strong> : <small> optional</small>}</span>
       <input id={id} name={id} required={required} aria-required={required || undefined} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined} autoComplete={id === "quickCompanyName" ? "organization" : undefined} inputMode={id === "quickCompanyDomain" ? "url" : undefined} />
       {error && <FieldMessage id={`${id}-error`} tone="error">{error}</FieldMessage>}
     </label>
@@ -153,17 +153,17 @@ export function QuickCreateCompany({ workspaceId, onCreated, onAuthorityLoss }: 
   }
 
   return <>
-    <button ref={trigger} className="ds-action ds-action--secondary" type="button" onClick={() => setOpen(true)}>Quick create company</button>
+    <button ref={trigger} className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45" type="button" onClick={() => setOpen(true)}>Quick create company</button>
     {open && createPortal(
-      <dialog ref={dialog} className="lead-management-dialog quick-company-dialog" aria-labelledby="quick-company-title" aria-describedby="quick-company-description" onCancel={(event) => { event.preventDefault(); close(); }}>
+      <dialog ref={dialog} className="m-auto w-[min(36rem,calc(100%-2rem))] rounded-card border border-line bg-surface p-5 text-ink shadow-e3 backdrop:bg-blanket" aria-labelledby="quick-company-title" aria-describedby="quick-company-description" onCancel={(event) => { event.preventDefault(); close(); }}>
         <h2 id="quick-company-title">Quick create company</h2>
         <p id="quick-company-description">This creates a Company now. It does not save your Lead.</p>
         {message && <p role="status">{message}</p>}
-        <form className="ds-form" noValidate onSubmit={submit}>
+        <form className="grid gap-4" noValidate onSubmit={submit}>
           <QuickField id="quickCompanyName" label="Company name" required error={errors.quickCompanyName} />
           <QuickField id="quickCompanyDomain" label="Domain" error={errors.quickCompanyDomain} />
-          <div className="ds-page-actions">
-            <button ref={cancel} className="ds-action ds-action--secondary" type="button" onClick={close}>Cancel</button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button ref={cancel} className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45" type="button" onClick={close}>Cancel</button>
             <Button variant="primary" disabled={busy}>{busy ? "Creating company…" : "Create company"}</Button>
           </div>
         </form>

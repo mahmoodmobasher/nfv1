@@ -1,1 +1,48 @@
-import{AdminShell,WorkspaceAdminPage}from"../admin-shell";import{TransferClient}from"../admin-client";import{adminPageContext}from"@/server/tenant-admin/page";import{peopleModel}from"@/server/tenant-admin/read-models";import{redirect}from"next/navigation";export const dynamic="force-dynamic";export const metadata={title:"Transfer workspace ownership | NexaFlow"};export default async function Page({searchParams}:{searchParams:Promise<{recent?:string}>}){const{pool,workspace,context}=await adminPageContext();try{if(context.role!=="owner")redirect("/workspace/settings");const people=await peopleModel(pool,context),actor=people.find(row=>row.id===context.membershipId);if(!actor)redirect("/workspace/settings");return <AdminShell workspace={workspace.name} role={context.role}><WorkspaceAdminPage marker="OW" activeView="overview" title="Transfer workspace ownership" description={<p>Choose an active workspace member to become the new Workspace Owner.</p>} narrow><TransferClient workspaceId={workspace.id} actor={actor} eligible={people.filter(row=>row.id!==context.membershipId&&row.status==="active")} recentConfirmed={(await searchParams).recent==="confirmed"}/></WorkspaceAdminPage></AdminShell>}finally{await pool.end()}}
+import { AdminShell, WorkspaceAdminPage } from "../admin-shell";
+import { TransferClient } from "../admin-client";
+import { adminPageContext } from "@/server/tenant-admin/page";
+import { peopleModel } from "@/server/tenant-admin/read-models";
+import { redirect } from "next/navigation";
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Transfer workspace ownership | NexaFlow" };
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ recent?: string }>;
+}) {
+  const { pool, workspace, context } = await adminPageContext();
+  try {
+    if (context.role !== "owner") redirect("/workspace/settings");
+    const people = await peopleModel(pool, context),
+      actor = people.find((row) => row.id === context.membershipId);
+    if (!actor) redirect("/workspace/settings");
+    return (
+      <AdminShell workspace={workspace.name} role={context.role}>
+        <WorkspaceAdminPage
+          marker="OW"
+          activeView="overview"
+          title="Transfer workspace ownership"
+          description={
+            <p>
+              Choose an active workspace member to become the new Workspace
+              Owner.
+            </p>
+          }
+          narrow
+        >
+          <TransferClient
+            workspaceId={workspace.id}
+            actor={actor}
+            eligible={people.filter(
+              (row) =>
+                row.id !== context.membershipId && row.status === "active",
+            )}
+            recentConfirmed={(await searchParams).recent === "confirmed"}
+          />
+        </WorkspaceAdminPage>
+      </AdminShell>
+    );
+  } finally {
+    await pool.end();
+  }
+}

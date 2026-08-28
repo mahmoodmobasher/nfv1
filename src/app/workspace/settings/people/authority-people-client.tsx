@@ -1,11 +1,475 @@
 "use client";
-import {useEffect,useRef,useState} from "react";
-import {Button,DataTable,FeedbackState,StatusBadge} from "@/frontend/design-system";
-type R="admin"|"member";type Status="active"|"suspended"|"removed";type P={id:string;display_name:string;email:string;role:"owner"|R;status:string;version:number;teams:Array<{id:string;name:string}>;capabilities:{roleOptions:R[];canManageLifecycle:boolean}};type Pending={kind:"role";row:P;role:R;trigger:HTMLElement}|{kind:"lifecycle";row:P;status:Status;trigger:HTMLElement};
-async function mutate(workspaceId:string,row:P,body:{roleCode?:R;status?:Status}){const csrf=await fetch("/api/auth/csrf",{cache:"no-store"}),{token}=await csrf.json()as{token:string},response=await fetch(`/api/workspaces/${workspaceId}/memberships/${row.id}`,{method:"PATCH",headers:{"content-type":"application/json","x-csrf-token":token,"idempotency-key":crypto.randomUUID()},body:JSON.stringify({...body,expectedVersion:row.version})});return{response,payload:await response.json()as{data?:{role:P["role"];status?:Status;version:number;capabilities?:P["capabilities"]}}}}
-function Dialog({pending,onCancel,onConfirm}:{pending:Pending;onCancel:()=>void;onConfirm:()=>void}){const box=useRef<HTMLDivElement>(null),cancel=useRef<HTMLButtonElement>(null);useEffect(()=>{cancel.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==="Escape")onCancel();if(event.key!=="Tab")return;const nodes=box.current?.querySelectorAll<HTMLElement>("button");if(!nodes?.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}};document.addEventListener("keydown",key);return()=>document.removeEventListener("keydown",key)},[onCancel]);const role=pending.kind==="role",name=pending.row.display_name,title=role?`Change ${name} to Admin?`:pending.status==="suspended"?`Suspend ${name}?`:pending.status==="active"?`Restore ${name}’s access?`:`Remove ${name} from this workspace?`,body=role?"This changes what they can access and manage in the workspace.":pending.status==="suspended"?"They will lose access immediately. You can restore access later.":pending.status==="active"?"They will be able to use this workspace again with their current role.":"They will lose access to this workspace. Their account is not deleted.",confirm=role?"Save role":pending.status==="suspended"?"Suspend member":pending.status==="active"?"Restore access":"Remove from workspace";return <div className="confirm-layer"><div ref={box} className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="authority-title" aria-describedby="authority-body"><h2 id="authority-title">{title}</h2><p id="authority-body">{body}</p><div className="row-actions"><button ref={cancel} className="secondary" onClick={onCancel}>Cancel</button><button className="danger" onClick={onConfirm}>{confirm}</button></div></div></div>}
-export function AuthorityPeopleClient({workspaceId,people}:{workspaceId:string;people:P[]}){const[rows,setRows]=useState(people),[message,setMessage]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState<string|null>(null),[reloadNeeded,setReloadNeeded]=useState(false),[pending,setPending]=useState<Pending|null>(null),[query,setQuery]=useState(""),[statusFilter,setStatusFilter]=useState("all"),trigger=useRef<HTMLElement|null>(null);const visible=rows.filter(row=>(!query||`${row.display_name} ${row.email}`.toLowerCase().includes(query.toLowerCase()))&&(statusFilter==="all"||row.status===statusFilter));function close(){setPending(null);setTimeout(()=>trigger.current?.focus())}
- async function reload(success="Latest values loaded.",preserveError=false){setMessage("Loading the latest roles and permissions…");const response=await fetch(`/api/workspaces/${workspaceId}/people?limit=100`,{cache:"no-store"}),payload=await response.json()as{data?:{items:Array<Omit<P,"teams">>}};if(response.ok&&payload.data){setRows(current=>payload.data!.items.map(item=>({...item,teams:current.find(row=>row.id===item.id)?.teams??[]})));setReloadNeeded(false);if(!preserveError)setError("");setMessage(success);setTimeout(()=>trigger.current?.focus());return true}setError("We couldn’t load the latest roles and permissions. Try again.");return false}
- async function save(item:Pending){setPending(null);trigger.current=item.trigger;const row=item.row;setBusy(row.id);setError("");setMessage(item.kind==="role"?"Saving role…":item.status==="suspended"?"Suspending member…":item.status==="active"?"Restoring access…":"Removing member…");const{response,payload}=await mutate(workspaceId,row,item.kind==="role"?{roleCode:item.role}:{status:item.status});if(!response.ok||!payload.data){setBusy(null);if(response.status===404){setError("Your permissions changed while you were viewing this page. Reloading the latest roles and permissions.");await reload("Latest roles and permissions loaded.",true);return}if(response.status===409){setReloadNeeded(true);setError("This membership changed while you were viewing it. Reload the latest roles and permissions before retrying.");return}setError("We couldn’t update this person. No changes were saved.");return}const success=item.kind==="role"?`${row.display_name}’s role changed to ${item.role==="admin"?"Admin":"Member"}.`:item.status==="suspended"?`${row.display_name} was suspended.`:item.status==="active"?`${row.display_name}’s access was restored.`:`${row.display_name} was removed from the workspace.`;await reload(success);setBusy(null)}
- function ask(item:Pending){trigger.current=item.trigger;setPending(item)}
- return <><div className="admin-toolbar ds-list-toolbar ds-admin-toolbar"><label>Search people<input type="search" value={query} onChange={e=>setQuery(e.target.value)}/></label><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="removed">Removed</option></select></label></div><p className="ds-admin-result-count" role="status" aria-live="polite">{visible.length} {visible.length===1?"person":"people"} shown.</p>{message&&<p id="people-message" role="status">{message}</p>}{error&&<FeedbackState tone="danger" title="People and roles need attention"><p id="people-error">{error}</p></FeedbackState>}{reloadNeeded&&<Button variant="primary" onClick={()=>void reload()}>Reload latest</Button>}<DataTable caption="People and server-authorized role controls"><thead><tr><th scope="col">Person</th><th scope="col">Status</th><th scope="col">Role</th><th scope="col">Teams</th><th scope="col">Actions</th></tr></thead><tbody>{visible.map(row=>{const isBusy=busy===row.id;return <tr key={row.id} aria-busy={isBusy} aria-describedby={error?"people-error":"people-message"}><th scope="row" data-label="Person"><span className="ds-admin-record-identity"><b>{row.display_name}</b><span className="wrap-email">{row.email}</span></span></th><td data-label="Status"><StatusBadge tone={row.status==="active"?"success":row.status==="suspended"?"warning":"neutral"}>{row.status}</StatusBadge></td><td data-label="Role">{row.role==="owner"?<><b>Owner</b><small>Transfer ownership to change this role.</small></>:row.capabilities.roleOptions.length>1?<label>Role for {row.display_name}<select value={row.role} disabled={isBusy} onChange={event=>{const role=event.target.value as R;if(row.role==="member"&&role==="admin")ask({kind:"role",row,role,trigger:event.currentTarget});else void save({kind:"role",row,role,trigger:event.currentTarget})}}>{row.capabilities.roleOptions.map(option=><option key={option} value={option}>{option==="admin"?"Admin":"Member"}</option>)}</select></label>:<><b>{row.role}</b><small>{row.status!=="active"?"Role changes require an active membership.":"Your current authority does not allow a role change."}</small></>}</td><td data-label="Teams">{row.teams.map(team=>team.name).join(", ")||"No team"}</td><td data-label="Actions"><div className="membership-actions ds-admin-row-actions">{row.status==="active"&&<><Button disabled={!row.capabilities.canManageLifecycle||isBusy} onClick={event=>ask({kind:"lifecycle",row,status:"suspended",trigger:event.currentTarget})}>Suspend</Button><Button variant="danger" disabled={!row.capabilities.canManageLifecycle||isBusy} onClick={event=>ask({kind:"lifecycle",row,status:"removed",trigger:event.currentTarget})}>Remove</Button></>}{row.status==="suspended"&&<><Button variant="primary" disabled={!row.capabilities.canManageLifecycle||isBusy} onClick={event=>ask({kind:"lifecycle",row,status:"active",trigger:event.currentTarget})}>Restore access</Button><Button variant="danger" disabled={!row.capabilities.canManageLifecycle||isBusy} onClick={event=>ask({kind:"lifecycle",row,status:"removed",trigger:event.currentTarget})}>Remove</Button></>}{row.status==="removed"&&<small>Invite this person again to restore access.</small>}</div></td></tr>})}</tbody></DataTable>{pending&&<Dialog pending={pending} onCancel={close} onConfirm={()=>void save(pending)}/>}</>}
+import { useEffect, useRef, useState } from "react";
+import {
+  Button,
+  DataTable,
+  FeedbackState,
+  StatusBadge,
+} from "@/frontend/design-system";
+type R = "admin" | "member";
+type Status = "active" | "suspended" | "removed";
+type P = {
+  id: string;
+  display_name: string;
+  email: string;
+  role: "owner" | R;
+  status: string;
+  version: number;
+  teams: Array<{ id: string; name: string }>;
+  capabilities: { roleOptions: R[]; canManageLifecycle: boolean };
+};
+type Pending =
+  | { kind: "role"; row: P; role: R; trigger: HTMLElement }
+  | { kind: "lifecycle"; row: P; status: Status; trigger: HTMLElement };
+async function mutate(
+  workspaceId: string,
+  row: P,
+  body: { roleCode?: R; status?: Status },
+) {
+  const csrf = await fetch("/api/auth/csrf", { cache: "no-store" }),
+    { token } = (await csrf.json()) as { token: string },
+    response = await fetch(
+      `/api/workspaces/${workspaceId}/memberships/${row.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": token,
+          "idempotency-key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({ ...body, expectedVersion: row.version }),
+      },
+    );
+  return {
+    response,
+    payload: (await response.json()) as {
+      data?: {
+        role: P["role"];
+        status?: Status;
+        version: number;
+        capabilities?: P["capabilities"];
+      };
+    },
+  };
+}
+function Dialog({
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  pending: Pending;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null),
+    cancel = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    cancel.current?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+      if (event.key !== "Tab") return;
+      const nodes = box.current?.querySelectorAll<HTMLElement>("button");
+      if (!nodes?.length) return;
+      const first = nodes[0],
+        last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onCancel]);
+  const role = pending.kind === "role",
+    name = pending.row.display_name,
+    title = role
+      ? `Change ${name} to Admin?`
+      : pending.status === "suspended"
+        ? `Suspend ${name}?`
+        : pending.status === "active"
+          ? `Restore ${name}’s access?`
+          : `Remove ${name} from this workspace?`,
+    body = role
+      ? "This changes what they can access and manage in the workspace."
+      : pending.status === "suspended"
+        ? "They will lose access immediately. You can restore access later."
+        : pending.status === "active"
+          ? "They will be able to use this workspace again with their current role."
+          : "They will lose access to this workspace. Their account is not deleted.",
+    confirm = role
+      ? "Save role"
+      : pending.status === "suspended"
+        ? "Suspend member"
+        : pending.status === "active"
+          ? "Restore access"
+          : "Remove from workspace";
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
+      <div
+        ref={box}
+        className="grid w-full max-w-md gap-4 rounded-panel border border-line bg-surface p-5 text-ink shadow-[0_4px_16px_rgb(0_0_0/.25)]"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="authority-title"
+        aria-describedby="authority-body"
+      >
+        <h2 id="authority-title">{title}</h2>
+        <p id="authority-body">{body}</p>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            ref={cancel}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-danger bg-danger px-3.5 py-2 text-[12.5px] font-semibold text-surface disabled:opacity-45"
+            onClick={onConfirm}
+          >
+            {confirm}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+export function AuthorityPeopleClient({
+  workspaceId,
+  people,
+}: {
+  workspaceId: string;
+  people: P[];
+}) {
+  const [rows, setRows] = useState(people),
+    [message, setMessage] = useState(""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState<string | null>(null),
+    [reloadNeeded, setReloadNeeded] = useState(false),
+    [pending, setPending] = useState<Pending | null>(null),
+    [query, setQuery] = useState(""),
+    [statusFilter, setStatusFilter] = useState("all"),
+    trigger = useRef<HTMLElement | null>(null);
+  const visible = rows.filter(
+    (row) =>
+      (!query ||
+        `${row.display_name} ${row.email}`
+          .toLowerCase()
+          .includes(query.toLowerCase())) &&
+      (statusFilter === "all" || row.status === statusFilter),
+  );
+  function close() {
+    setPending(null);
+    setTimeout(() => trigger.current?.focus());
+  }
+  async function reload(
+    success = "Latest values loaded.",
+    preserveError = false,
+  ) {
+    setMessage("Loading the latest roles and permissions…");
+    const response = await fetch(
+        `/api/workspaces/${workspaceId}/people?limit=100`,
+        { cache: "no-store" },
+      ),
+      payload = (await response.json()) as {
+        data?: { items: Array<Omit<P, "teams">> };
+      };
+    if (response.ok && payload.data) {
+      setRows((current) =>
+        payload.data!.items.map((item) => ({
+          ...item,
+          teams: current.find((row) => row.id === item.id)?.teams ?? [],
+        })),
+      );
+      setReloadNeeded(false);
+      if (!preserveError) setError("");
+      setMessage(success);
+      setTimeout(() => trigger.current?.focus());
+      return true;
+    }
+    setError("We couldn’t load the latest roles and permissions. Try again.");
+    return false;
+  }
+  async function save(item: Pending) {
+    setPending(null);
+    trigger.current = item.trigger;
+    const row = item.row;
+    setBusy(row.id);
+    setError("");
+    setMessage(
+      item.kind === "role"
+        ? "Saving role…"
+        : item.status === "suspended"
+          ? "Suspending member…"
+          : item.status === "active"
+            ? "Restoring access…"
+            : "Removing member…",
+    );
+    const { response, payload } = await mutate(
+      workspaceId,
+      row,
+      item.kind === "role" ? { roleCode: item.role } : { status: item.status },
+    );
+    if (!response.ok || !payload.data) {
+      setBusy(null);
+      if (response.status === 404) {
+        setError(
+          "Your permissions changed while you were viewing this page. Reloading the latest roles and permissions.",
+        );
+        await reload("Latest roles and permissions loaded.", true);
+        return;
+      }
+      if (response.status === 409) {
+        setReloadNeeded(true);
+        setError(
+          "This membership changed while you were viewing it. Reload the latest roles and permissions before retrying.",
+        );
+        return;
+      }
+      setError("We couldn’t update this person. No changes were saved.");
+      return;
+    }
+    const success =
+      item.kind === "role"
+        ? `${row.display_name}’s role changed to ${item.role === "admin" ? "Admin" : "Member"}.`
+        : item.status === "suspended"
+          ? `${row.display_name} was suspended.`
+          : item.status === "active"
+            ? `${row.display_name}’s access was restored.`
+            : `${row.display_name} was removed from the workspace.`;
+    await reload(success);
+    setBusy(null);
+  }
+  function ask(item: Pending) {
+    trigger.current = item.trigger;
+    setPending(item);
+  }
+  return (
+    <>
+      <div className="flex flex-wrap items-end gap-3 rounded-panel border border-line bg-surface p-4 [&_label]:grid [&_label]:min-w-48 [&_label]:gap-1.5 [&_label]:text-xs [&_label]:font-semibold [&_input]:min-h-11 [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_select]:min-h-11 [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3">
+        <label>
+          Search people
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <label>
+          Status
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="removed">Removed</option>
+          </select>
+        </label>
+      </div>
+      <p className="text-xs text-ink-faint" role="status" aria-live="polite">
+        {visible.length} {visible.length === 1 ? "person" : "people"} shown.
+      </p>
+      {message && (
+        <p id="people-message" role="status">
+          {message}
+        </p>
+      )}
+      {error && (
+        <FeedbackState tone="danger" title="People and roles need attention">
+          <p id="people-error">{error}</p>
+        </FeedbackState>
+      )}
+      {reloadNeeded && (
+        <Button variant="primary" onClick={() => void reload()}>
+          Reload latest
+        </Button>
+      )}
+      <DataTable caption="People and server-authorized role controls">
+        <thead>
+          <tr>
+            <th scope="col">Person</th>
+            <th scope="col">Status</th>
+            <th scope="col">Role</th>
+            <th scope="col">Teams</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((row) => {
+            const isBusy = busy === row.id;
+            return (
+              <tr
+                key={row.id}
+                aria-busy={isBusy}
+                aria-describedby={error ? "people-error" : "people-message"}
+              >
+                <th scope="row" data-label="Person">
+                  <span className="grid min-w-0 gap-0.5">
+                    <b>{row.display_name}</b>
+                    <span className="break-all text-ink-muted">
+                      {row.email}
+                    </span>
+                  </span>
+                </th>
+                <td data-label="Status">
+                  <StatusBadge
+                    tone={
+                      row.status === "active"
+                        ? "success"
+                        : row.status === "suspended"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {row.status}
+                  </StatusBadge>
+                </td>
+                <td data-label="Role">
+                  {row.role === "owner" ? (
+                    <>
+                      <b>Owner</b>
+                      <small>Transfer ownership to change this role.</small>
+                    </>
+                  ) : row.capabilities.roleOptions.length > 1 ? (
+                    <label>
+                      Role for {row.display_name}
+                      <select
+                        value={row.role}
+                        disabled={isBusy}
+                        onChange={(event) => {
+                          const role = event.target.value as R;
+                          if (row.role === "member" && role === "admin")
+                            ask({
+                              kind: "role",
+                              row,
+                              role,
+                              trigger: event.currentTarget,
+                            });
+                          else
+                            void save({
+                              kind: "role",
+                              row,
+                              role,
+                              trigger: event.currentTarget,
+                            });
+                        }}
+                      >
+                        {row.capabilities.roleOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option === "admin" ? "Admin" : "Member"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <>
+                      <b>{row.role}</b>
+                      <small>
+                        {row.status !== "active"
+                          ? "Role changes require an active membership."
+                          : "Your current authority does not allow a role change."}
+                      </small>
+                    </>
+                  )}
+                </td>
+                <td data-label="Teams">
+                  {row.teams.map((team) => team.name).join(", ") || "No team"}
+                </td>
+                <td data-label="Actions">
+                  <div className="flex flex-wrap gap-2">
+                    {row.status === "active" && (
+                      <>
+                        <Button
+                          disabled={
+                            !row.capabilities.canManageLifecycle || isBusy
+                          }
+                          onClick={(event) =>
+                            ask({
+                              kind: "lifecycle",
+                              row,
+                              status: "suspended",
+                              trigger: event.currentTarget,
+                            })
+                          }
+                        >
+                          Suspend
+                        </Button>
+                        <Button
+                          variant="danger"
+                          disabled={
+                            !row.capabilities.canManageLifecycle || isBusy
+                          }
+                          onClick={(event) =>
+                            ask({
+                              kind: "lifecycle",
+                              row,
+                              status: "removed",
+                              trigger: event.currentTarget,
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                    {row.status === "suspended" && (
+                      <>
+                        <Button
+                          variant="primary"
+                          disabled={
+                            !row.capabilities.canManageLifecycle || isBusy
+                          }
+                          onClick={(event) =>
+                            ask({
+                              kind: "lifecycle",
+                              row,
+                              status: "active",
+                              trigger: event.currentTarget,
+                            })
+                          }
+                        >
+                          Restore access
+                        </Button>
+                        <Button
+                          variant="danger"
+                          disabled={
+                            !row.capabilities.canManageLifecycle || isBusy
+                          }
+                          onClick={(event) =>
+                            ask({
+                              kind: "lifecycle",
+                              row,
+                              status: "removed",
+                              trigger: event.currentTarget,
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                    {row.status === "removed" && (
+                      <small>Invite this person again to restore access.</small>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
+      {pending && (
+        <Dialog
+          pending={pending}
+          onCancel={close}
+          onConfirm={() => void save(pending)}
+        />
+      )}
+    </>
+  );
+}

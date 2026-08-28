@@ -1,1 +1,96 @@
-import {AdminShell,WorkspaceAdminPage}from"./admin-shell";import{ActionLink,AdminPanel,StatusBadge}from"@/frontend/design-system";import{adminPageContext}from"@/server/tenant-admin/page";import{settingsModel}from"@/server/tenant-admin/read-models";export const dynamic="force-dynamic";export const metadata={title:"Workspace settings | NexaFlow"};export default async function Page(){const{pool,workspace,context}=await adminPageContext();try{const data=await settingsModel(pool,context);return <AdminShell workspace={workspace.name} role={context.role}><WorkspaceAdminPage marker="WS" activeView="overview" title="Workspace settings" description={<p>Manage your workspace details, people, roles, and teams.</p>}><AdminPanel title="Workspace details" wide action={<ActionLink href="/select-plan">Change plan</ActionLink>}><dl className="ds-admin-facts"><div><dt>Name</dt><dd>{data.name}</dd></div><div><dt>Plan</dt><dd>{data.plan_code} · {data.billing_cadence}</dd></div><div><dt>Seats</dt><dd>{data.active_members} of {data.seat_limit} active</dd></div></dl></AdminPanel><AdminPanel title="People and roles" action={<ActionLink variant="primary" href="/workspace/settings/people">Manage people</ActionLink>}><p>{data.active_members} active · {data.pending_invitations} pending</p></AdminPanel><AdminPanel title="Invitations" action={<ActionLink href="/workspace/settings/invitations">View invitations</ActionLink>}><p>{data.pending_invitations} pending invitation(s)</p></AdminPanel><AdminPanel title="Teams" action={<ActionLink href="/workspace/settings/teams">Manage teams</ActionLink>}><p>{data.team_count} team(s). Teams are optional.</p></AdminPanel>{context.role==="owner"&&<AdminPanel title="Ownership" action={<ActionLink href="/workspace/settings/transfer-ownership">Transfer ownership</ActionLink>}><StatusBadge tone="accent">Workspace Owner</StatusBadge><p>You are the current Workspace Owner.</p></AdminPanel>}</WorkspaceAdminPage></AdminShell>}finally{await pool.end()}}
+import { AdminShell, WorkspaceAdminPage } from "./admin-shell";
+import { ActionLink, AdminPanel, StatusBadge } from "@/frontend/design-system";
+import { adminPageContext } from "@/server/tenant-admin/page";
+import { settingsModel } from "@/server/tenant-admin/read-models";
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Workspace settings | NexaFlow" };
+export default async function Page() {
+  const { pool, workspace, context } = await adminPageContext();
+  try {
+    const data = await settingsModel(pool, context);
+    return (
+      <AdminShell workspace={workspace.name} role={context.role}>
+        <WorkspaceAdminPage
+          marker="WS"
+          activeView="overview"
+          title="Workspace settings"
+          description={
+            <p>Manage your workspace details, people, roles, and teams.</p>
+          }
+        >
+          <AdminPanel
+            title="Workspace details"
+            wide
+            action={<ActionLink href="/select-plan">Change plan</ActionLink>}
+          >
+            <dl className="grid gap-px overflow-hidden rounded-card border border-line-soft bg-line-soft sm:grid-cols-3 [&>div]:bg-surface [&>div]:p-3 [&_dt]:text-[10.5px] [&_dt]:font-bold [&_dt]:uppercase [&_dt]:tracking-wide [&_dt]:text-ink-faint [&_dd]:mt-1 [&_dd]:font-semibold">
+              <div>
+                <dt>Name</dt>
+                <dd>{data.name}</dd>
+              </div>
+              <div>
+                <dt>Plan</dt>
+                <dd>
+                  {data.plan_code} · {data.billing_cadence}
+                </dd>
+              </div>
+              <div>
+                <dt>Seats</dt>
+                <dd>
+                  {data.active_members} of {data.seat_limit} active
+                </dd>
+              </div>
+            </dl>
+          </AdminPanel>
+          <AdminPanel
+            title="People and roles"
+            action={
+              <ActionLink variant="primary" href="/workspace/settings/people">
+                Manage people
+              </ActionLink>
+            }
+          >
+            <p>
+              {data.active_members} active · {data.pending_invitations} pending
+            </p>
+          </AdminPanel>
+          <AdminPanel
+            title="Invitations"
+            action={
+              <ActionLink href="/workspace/settings/invitations">
+                View invitations
+              </ActionLink>
+            }
+          >
+            <p>{data.pending_invitations} pending invitation(s)</p>
+          </AdminPanel>
+          <AdminPanel
+            title="Teams"
+            action={
+              <ActionLink href="/workspace/settings/teams">
+                Manage teams
+              </ActionLink>
+            }
+          >
+            <p>{data.team_count} team(s). Teams are optional.</p>
+          </AdminPanel>
+          {context.role === "owner" && (
+            <AdminPanel
+              title="Ownership"
+              action={
+                <ActionLink href="/workspace/settings/transfer-ownership">
+                  Transfer ownership
+                </ActionLink>
+              }
+            >
+              <StatusBadge tone="accent">Workspace Owner</StatusBadge>
+              <p>You are the current Workspace Owner.</p>
+            </AdminPanel>
+          )}
+        </WorkspaceAdminPage>
+      </AdminShell>
+    );
+  } finally {
+    await pool.end();
+  }
+}

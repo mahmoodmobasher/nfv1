@@ -50,9 +50,9 @@ export function LeadSourceFields({
 
   return (
     <>
-      <label className="field" htmlFor="source">
+      <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink" htmlFor="source">
         <span>
-          Source<strong className="required-marker"> required</strong>
+          Source<strong className="font-semibold text-danger"> required</strong>
         </span>
         <select
           id="source"
@@ -81,9 +81,9 @@ export function LeadSourceFields({
         )}
       </label>
       {source === "social_media" && (
-        <label className="field" htmlFor="sourcePlatform">
+        <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink" htmlFor="sourcePlatform">
           <span>
-            Platform<strong className="required-marker"> required</strong>
+            Platform<strong className="font-semibold text-danger"> required</strong>
           </span>
           <select
             id="sourcePlatform"

@@ -2,52 +2,485 @@
 import Link from "next/link";
 import { FormEvent, RefObject, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Alert, Field, PlanSummary, ProviderControl, query, Requirements, Shell, type PlanPresentation } from "./components";
+import {
+  Alert,
+  Field,
+  PlanSummary,
+  ProviderControl,
+  query,
+  Requirements,
+  Shell,
+  type PlanPresentation,
+} from "./components";
 import { validEmail, validPassword } from "./logic";
 import { securePost } from "./api";
 
 type Errors = Record<string, string>;
-function focusSummary(ref: RefObject<HTMLDivElement | null>): void { setTimeout(() => ref.current?.focus()); }
-function Summary({ errors, summary }: { errors: Errors; summary: RefObject<HTMLDivElement | null> }) {
+function focusSummary(ref: RefObject<HTMLDivElement | null>): void {
+  setTimeout(() => ref.current?.focus());
+}
+function Summary({
+  errors,
+  summary,
+}: {
+  errors: Errors;
+  summary: RefObject<HTMLDivElement | null>;
+}) {
   if (!Object.keys(errors).length) return null;
-  return <div ref={summary} className="alert error error-summary" tabIndex={-1} role="alert"><div><b>Please correct the following:</b><ul>{Object.entries(errors).map(([id, message]) => <li key={id}><a href={`#${id}`}>{message}</a></li>)}</ul></div></div>;
+  return (
+    <div
+      ref={summary}
+      className="rounded-control border border-danger bg-danger-soft p-3 text-sm text-danger outline-none focus:ring-2 focus:ring-danger"
+      tabIndex={-1}
+      role="alert"
+    >
+      <div>
+        <b>Please correct the following:</b>
+        <ul>
+          {Object.entries(errors).map(([id, message]) => (
+            <li key={id}>
+              <a href={`#${id}`}>{message}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
 }
 
-export function RegisterForm({provider,presentation}:{provider:{mode:"disabled"|"fixture"};presentation?:PlanPresentation}) {
-  const params=useSearchParams(),router=useRouter(),continuation=params.get("next")==="/workspace/invitations/accept"?"/workspace/invitations/accept":null, summary = useRef<HTMLDivElement>(null);
-  const invitationRegistration=continuation!==null;
-  const [busy, setBusy] = useState(false), [password, setPassword] = useState(""), [errors, setErrors] = useState<Errors>({});
+export function RegisterForm({
+  provider,
+  presentation,
+}: {
+  provider: { mode: "disabled" | "fixture" };
+  presentation?: PlanPresentation;
+}) {
+  const params = useSearchParams(),
+    router = useRouter(),
+    continuation =
+      params.get("next") === "/workspace/invitations/accept"
+        ? "/workspace/invitations/accept"
+        : null,
+    summary = useRef<HTMLDivElement>(null);
+  const invitationRegistration = continuation !== null;
+  const [busy, setBusy] = useState(false),
+    [password, setPassword] = useState(""),
+    [errors, setErrors] = useState<Errors>({});
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault(); const data = new FormData(event.currentTarget), next: Errors = {}, email = String(data.get("email"));
+    event.preventDefault();
+    const data = new FormData(event.currentTarget),
+      next: Errors = {},
+      email = String(data.get("email"));
     if (!String(data.get("name")).trim()) next.name = "Enter your full name.";
     if (!validEmail(email)) next.email = "Enter a valid work email address.";
-    if (!validPassword(password)) next.password = "Use at least 12 characters, including a number and a symbol.";
-    setErrors(next); if (Object.keys(next).length) return focusSummary(summary);
-    if (!presentation&&!invitationRegistration) { setErrors({form:"Choose a currently available plan before registering."}); return focusSummary(summary); }
-    setBusy(true); try { const { response } = await securePost("/api/auth/register", { email, displayName: String(data.get("name")), password, ...(presentation?{planCode:presentation.plan,cadence:presentation.cadence}:{}),...(continuation?{continuation}:{}) }); if (!response.ok) throw new Error("registration_failed"); sessionStorage.setItem("nexaDemoEmail", email); router.push(invitationRegistration?`/verify-email?next=${encodeURIComponent(continuation)}`:`/verify-email?${query(presentation!.plan, presentation!.cadence)}`); } catch { setErrors({ form: "We couldn’t create your account. Try again." }); focusSummary(summary); setBusy(false); }
+    if (!validPassword(password))
+      next.password =
+        "Use at least 12 characters, including a number and a symbol.";
+    setErrors(next);
+    if (Object.keys(next).length) return focusSummary(summary);
+    if (!presentation && !invitationRegistration) {
+      setErrors({
+        form: "Choose a currently available plan before registering.",
+      });
+      return focusSummary(summary);
+    }
+    setBusy(true);
+    try {
+      const { response } = await securePost("/api/auth/register", {
+        email,
+        displayName: String(data.get("name")),
+        password,
+        ...(presentation
+          ? { planCode: presentation.plan, cadence: presentation.cadence }
+          : {}),
+        ...(continuation ? { continuation } : {}),
+      });
+      if (!response.ok) throw new Error("registration_failed");
+      sessionStorage.setItem("nexaDemoEmail", email);
+      router.push(
+        invitationRegistration
+          ? `/verify-email?next=${encodeURIComponent(continuation)}`
+          : `/verify-email?${query(presentation!.plan, presentation!.cadence)}`,
+      );
+    } catch {
+      setErrors({ form: "We couldn’t create your account. Try again." });
+      focusSummary(summary);
+      setBusy(false);
+    }
   }
-  const invitationAside=<aside className="plan-summary"><p className="eyebrow">Workspace invitation</p><h2>Join an invited Workspace</h2><p>Your account will only continue to the invitation you received after email verification.</p><p>No Workspace, Owner role, subscription, or plan selection is created by this account registration.</p></aside>;
-  return <Shell step={2} aside={invitationRegistration?invitationAside:<PlanSummary presentation={presentation} />}><p className="eyebrow">{invitationRegistration?"Workspace invitation":"Company account"}</p><h1>{invitationRegistration?"Create your account to join a Workspace":"Create your company account"}</h1><p className="lead">{invitationRegistration?"Verify the email address that received the invitation, then sign in to review and accept it.":"After your work email is verified, you’ll create the one company Workspace included with this subscription and become its sole initial Owner."}</p><ProviderControl mode={provider.mode} /><Summary errors={errors} summary={summary} />{errors.form&&<Alert kind="error">{errors.form}</Alert>}<form onSubmit={submit} noValidate aria-busy={busy}><Field label="Full name" name="name" error={errors.name} autoComplete="name" /><Field label="Work email" name="email" type="email" error={errors.email} autoComplete="email" /><Field label="Password" name="password" type="password" error={errors.password} onChange={setPassword} autoComplete="new-password" /><Requirements value={password} /><button className="primary" disabled={busy||(!presentation&&!invitationRegistration)}>{busy ? "Creating account…" : "Create account"}</button></form><p className="helper">No payment is collected in this environment. Production billing and plan changes are not connected.</p><p className="below">Already have an account? <Link href={invitationRegistration?`/login?next=${encodeURIComponent(continuation)}`:"/login"}>Sign in</Link></p></Shell>;
+  const invitationAside = (
+    <aside className="sticky top-5 rounded-panel border border-line bg-surface p-5">
+      <p className="text-[10.5px] font-bold uppercase tracking-[.08em] text-ink-faint">
+        Workspace invitation
+      </p>
+      <h2>Join an invited Workspace</h2>
+      <p>
+        Your account will only continue to the invitation you received after
+        email verification.
+      </p>
+      <p>
+        No Workspace, Owner role, subscription, or plan selection is created by
+        this account registration.
+      </p>
+    </aside>
+  );
+  return (
+    <Shell
+      step={2}
+      aside={
+        invitationRegistration ? (
+          invitationAside
+        ) : (
+          <PlanSummary presentation={presentation} />
+        )
+      }
+    >
+      <p className="text-[10.5px] font-bold uppercase tracking-[.08em] text-ink-faint">
+        {invitationRegistration ? "Workspace invitation" : "Company account"}
+      </p>
+      <h1>
+        {invitationRegistration
+          ? "Create your account to join a Workspace"
+          : "Create your company account"}
+      </h1>
+      <p className="mt-2 max-w-3xl text-[13px] leading-6 text-ink-muted">
+        {invitationRegistration
+          ? "Verify the email address that received the invitation, then sign in to review and accept it."
+          : "After your work email is verified, you’ll create the one company Workspace included with this subscription and become its sole initial Owner."}
+      </p>
+      <ProviderControl mode={provider.mode} />
+      <Summary errors={errors} summary={summary} />
+      {errors.form && <Alert kind="error">{errors.form}</Alert>}
+      <form onSubmit={submit} noValidate aria-busy={busy}>
+        <Field
+          label="Full name"
+          name="name"
+          error={errors.name}
+          autoComplete="name"
+        />
+        <Field
+          label="Work email"
+          name="email"
+          type="email"
+          error={errors.email}
+          autoComplete="email"
+        />
+        <Field
+          label="Password"
+          name="password"
+          type="password"
+          error={errors.password}
+          onChange={setPassword}
+          autoComplete="new-password"
+        />
+        <Requirements value={password} />
+        <button
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+          disabled={busy || (!presentation && !invitationRegistration)}
+        >
+          {busy ? "Creating account…" : "Create account"}
+        </button>
+      </form>
+      <p className="text-xs leading-5 text-ink-faint">
+        No payment is collected in this environment. Production billing and plan
+        changes are not connected.
+      </p>
+      <p className="text-center text-xs text-ink-muted [&_a]:font-semibold [&_a]:text-accent-ink">
+        Already have an account?{" "}
+        <Link
+          href={
+            invitationRegistration
+              ? `/login?next=${encodeURIComponent(continuation)}`
+              : "/login"
+          }
+        >
+          Sign in
+        </Link>
+      </p>
+    </Shell>
+  );
 }
 
-export function LoginForm({provider}:{provider:{mode:"disabled"|"fixture"}}) {
-  const params=useSearchParams(),summary = useRef<HTMLDivElement>(null); const [busy, setBusy] = useState(false), [errors, setErrors] = useState<Errors>({});
-  const continuation=params.get("next")==="/workspace/invitations/accept"?"/workspace/invitations/accept":undefined;
-  const notice=params.get("oidc")==="cancelled"?"Google sign-in was cancelled. No changes were made.":params.get("oidc")==="link_conflict"?"This Google account can’t be linked automatically. Sign in with your existing method or contact support.":params.get("oidc")==="failed"?"Google sign-in couldn’t be completed. Try again or use email and password.":params.get("reason")==="session_expired"?"Your session expired. Sign in again to continue.":params.get("reason")==="access_changed"?"Your access changed. Sign in again to continue safely.":params.get("signedOut")==="1"?"You’re signed out.":null;
+export function LoginForm({
+  provider,
+}: {
+  provider: { mode: "disabled" | "fixture" };
+}) {
+  const params = useSearchParams(),
+    summary = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false),
+    [errors, setErrors] = useState<Errors>({});
+  const continuation =
+    params.get("next") === "/workspace/invitations/accept"
+      ? "/workspace/invitations/accept"
+      : undefined;
+  const notice =
+    params.get("oidc") === "cancelled"
+      ? "Google sign-in was cancelled. No changes were made."
+      : params.get("oidc") === "link_conflict"
+        ? "This Google account can’t be linked automatically. Sign in with your existing method or contact support."
+        : params.get("oidc") === "failed"
+          ? "Google sign-in couldn’t be completed. Try again or use email and password."
+          : params.get("reason") === "session_expired"
+            ? "Your session expired. Sign in again to continue."
+            : params.get("reason") === "access_changed"
+              ? "Your access changed. Sign in again to continue safely."
+              : params.get("signedOut") === "1"
+                ? "You’re signed out."
+                : null;
   // A full navigation ensures the newly issued HttpOnly session cookie reaches the protected server page.
-  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> { event.preventDefault(); const data = new FormData(event.currentTarget), next: Errors = {}, email = String(data.get("email")), password = String(data.get("password")); if (!validEmail(email)) next.email = "Enter a valid email address."; if (!password) next.password = "Enter your password."; setErrors(next); if (Object.keys(next).length) return focusSummary(summary); setBusy(true); try { const { response,data:payload } = await securePost<{next?:string}>("/api/auth/login", { email, password, ...(continuation?{next:continuation}:{}) }); if (!response.ok) { setErrors({ form: "The email or password is incorrect." }); setBusy(false); return focusSummary(summary); } const destination=typeof payload.next==="string"&&payload.next.startsWith("/")&&!payload.next.startsWith("//")?payload.next:"/workspace/switch"; window.location.replace(destination); } catch { setErrors({ form: "Sign-in is unavailable. Try again." }); focusSummary(summary); setBusy(false); } }
-  return <Shell authLink={false}><p className="eyebrow">Account access</p><h1>Welcome back</h1><p className="lead">Sign in to continue to your authorized Workspace or finish initial setup.</p>{notice&&<Alert kind={params.get("signedOut")==="1"?"success":"info"}>{notice}</Alert>}<ProviderControl mode={provider.mode} /><Summary errors={errors} summary={summary} />{errors.form&&<Alert kind="error">{errors.form}</Alert>}<form onSubmit={submit} noValidate aria-busy={busy}><Field label="Email" name="email" type="email" error={errors.email} autoComplete="email" /><div className="field-row"><span /><Link href="/forgot-password">Forgot password?</Link></div><Field label="Password" name="password" type="password" autoComplete="current-password" error={errors.password} /><button className="primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button></form><p className="below">New to NexaFlow? <Link href="/select-plan">Choose a plan</Link></p></Shell>;
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget),
+      next: Errors = {},
+      email = String(data.get("email")),
+      password = String(data.get("password"));
+    if (!validEmail(email)) next.email = "Enter a valid email address.";
+    if (!password) next.password = "Enter your password.";
+    setErrors(next);
+    if (Object.keys(next).length) return focusSummary(summary);
+    setBusy(true);
+    try {
+      const { response, data: payload } = await securePost<{ next?: string }>(
+        "/api/auth/login",
+        { email, password, ...(continuation ? { next: continuation } : {}) },
+      );
+      if (!response.ok) {
+        setErrors({ form: "The email or password is incorrect." });
+        setBusy(false);
+        return focusSummary(summary);
+      }
+      const destination =
+        typeof payload.next === "string" &&
+        payload.next.startsWith("/") &&
+        !payload.next.startsWith("//")
+          ? payload.next
+          : "/workspace/switch";
+      window.location.replace(destination);
+    } catch {
+      setErrors({ form: "Sign-in is unavailable. Try again." });
+      focusSummary(summary);
+      setBusy(false);
+    }
+  }
+  return (
+    <Shell authLink={false}>
+      <p className="text-[10.5px] font-bold uppercase tracking-[.08em] text-ink-faint">
+        Account access
+      </p>
+      <h1>Welcome back</h1>
+      <p className="mt-2 max-w-3xl text-[13px] leading-6 text-ink-muted">
+        Sign in to continue to your authorized Workspace or finish initial
+        setup.
+      </p>
+      {notice && (
+        <Alert kind={params.get("signedOut") === "1" ? "success" : "info"}>
+          {notice}
+        </Alert>
+      )}
+      <ProviderControl mode={provider.mode} />
+      <Summary errors={errors} summary={summary} />
+      {errors.form && <Alert kind="error">{errors.form}</Alert>}
+      <form onSubmit={submit} noValidate aria-busy={busy}>
+        <Field
+          label="Email"
+          name="email"
+          type="email"
+          error={errors.email}
+          autoComplete="email"
+        />
+        <div className="flex items-center justify-end text-xs [&_a]:font-semibold [&_a]:text-accent-ink">
+          <span />
+          <Link href="/forgot-password">Forgot password?</Link>
+        </div>
+        <Field
+          label="Password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          error={errors.password}
+        />
+        <button
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+          disabled={busy}
+        >
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+      <p className="text-center text-xs text-ink-muted [&_a]:font-semibold [&_a]:text-accent-ink">
+        New to NexaFlow? <Link href="/select-plan">Choose a plan</Link>
+      </p>
+    </Shell>
+  );
 }
 
 export function ForgotForm() {
-  const summary = useRef<HTMLDivElement>(null); const [sent, setSent] = useState(false), [busy, setBusy] = useState(false), [errors, setErrors] = useState<Errors>({});
-  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> { event.preventDefault(); const email = String(new FormData(event.currentTarget).get("email")), next: Errors = {}; if (!validEmail(email)) next.email = "Enter a valid email address."; setErrors(next); if (Object.keys(next).length) return focusSummary(summary); setBusy(true); try { const {response}=await securePost("/api/auth/reset-request", { email }); if(!response.ok)throw new Error("recovery_unavailable"); setSent(true); } catch { setErrors({ form: "The recovery service is unavailable. Check your connection and try again." }); focusSummary(summary); } finally { setBusy(false); } }
-  return <Shell authLink={false}><p className="eyebrow">Account recovery</p><h1>Reset your password</h1><p className="lead">Enter your email. The response is identical whether or not an account exists.</p>{sent ? <Alert kind="success"><b>Check your email.</b> If a matching active account exists, a recovery message was queued.</Alert> : <><Summary errors={errors} summary={summary} />{errors.form&&<Alert kind="error">{errors.form}</Alert>}<form onSubmit={submit} noValidate aria-busy={busy}><Field label="Email" name="email" type="email" error={errors.email} autoComplete="email" /><button className="primary" disabled={busy}>{busy ? "Submitting…" : "Send reset link"}</button></form></>}<p className="below"><Link href="/login">Back to sign in</Link></p></Shell>;
+  const summary = useRef<HTMLDivElement>(null);
+  const [sent, setSent] = useState(false),
+    [busy, setBusy] = useState(false),
+    [errors, setErrors] = useState<Errors>({});
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const email = String(new FormData(event.currentTarget).get("email")),
+      next: Errors = {};
+    if (!validEmail(email)) next.email = "Enter a valid email address.";
+    setErrors(next);
+    if (Object.keys(next).length) return focusSummary(summary);
+    setBusy(true);
+    try {
+      const { response } = await securePost("/api/auth/reset-request", {
+        email,
+      });
+      if (!response.ok) throw new Error("recovery_unavailable");
+      setSent(true);
+    } catch {
+      setErrors({
+        form: "The recovery service is unavailable. Check your connection and try again.",
+      });
+      focusSummary(summary);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Shell authLink={false}>
+      <p className="text-[10.5px] font-bold uppercase tracking-[.08em] text-ink-faint">
+        Account recovery
+      </p>
+      <h1>Reset your password</h1>
+      <p className="mt-2 max-w-3xl text-[13px] leading-6 text-ink-muted">
+        Enter your email. The response is identical whether or not an account
+        exists.
+      </p>
+      {sent ? (
+        <Alert kind="success">
+          <b>Check your email.</b> If a matching active account exists, a
+          recovery message was queued.
+        </Alert>
+      ) : (
+        <>
+          <Summary errors={errors} summary={summary} />
+          {errors.form && <Alert kind="error">{errors.form}</Alert>}
+          <form onSubmit={submit} noValidate aria-busy={busy}>
+            <Field
+              label="Email"
+              name="email"
+              type="email"
+              error={errors.email}
+              autoComplete="email"
+            />
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+              disabled={busy}
+            >
+              {busy ? "Submitting…" : "Send reset link"}
+            </button>
+          </form>
+        </>
+      )}
+      <p className="text-center text-xs text-ink-muted [&_a]:font-semibold [&_a]:text-accent-ink">
+        <Link href="/login">Back to sign in</Link>
+      </p>
+    </Shell>
+  );
 }
 
-export function ResetForm({hasIntent}:{hasIntent:boolean}) {
-  const summary = useRef<HTMLDivElement>(null),form=useRef<HTMLFormElement>(null); const [done, setDone] = useState(false), [busy,setBusy]=useState(false), [password, setPassword] = useState(""), [errors, setErrors] = useState<Errors>({});
-  if (!hasIntent) return <Shell authLink={false}><h1>This reset link is no longer valid</h1><Alert kind="error">A valid reset link is required.</Alert><Link className="primary link-button" href="/forgot-password">Request a new link</Link></Shell>;
-  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> { event.preventDefault(); const confirm = String(new FormData(event.currentTarget).get("confirm")), next: Errors = {}; if (!validPassword(password)) next.password = "Use at least 12 characters, including a number and a symbol."; if (password !== confirm) next.confirm = "Passwords do not match."; setErrors(next); if (Object.keys(next).length) return focusSummary(summary); setBusy(true); try { const {response}=await securePost("/reset-password/complete",{password}); if(!response.ok){form.current?.reset();setPassword("");setErrors({form:"This reset link is invalid, expired, replaced, or already used."});return focusSummary(summary)}setDone(true)}catch{setErrors({form:"The recovery service is unavailable. Try again."});focusSummary(summary)}finally{setBusy(false)} }
-  return <Shell authLink={false}><p className="eyebrow">Account recovery</p><h1>Choose a new password</h1><p className="lead">Use a unique password. A successful reset revokes existing sessions.</p>{done ? <><Alert kind="success">Password updated. Existing sessions were revoked.</Alert><Link className="primary link-button" href="/login">Continue to sign in</Link></> : <><Summary errors={errors} summary={summary} />{errors.form&&<Alert kind="error">{errors.form}</Alert>}<form ref={form} onSubmit={submit} noValidate aria-busy={busy}><Field label="New password" name="password" type="password" error={errors.password} onChange={setPassword} autoComplete="new-password" /><Requirements value={password} /><Field label="Confirm new password" name="confirm" type="password" error={errors.confirm} autoComplete="new-password" /><button className="primary" disabled={busy}>{busy?"Saving…":"Save new password"}</button></form></>}</Shell>;
+export function ResetForm({ hasIntent }: { hasIntent: boolean }) {
+  const summary = useRef<HTMLDivElement>(null),
+    form = useRef<HTMLFormElement>(null);
+  const [done, setDone] = useState(false),
+    [busy, setBusy] = useState(false),
+    [password, setPassword] = useState(""),
+    [errors, setErrors] = useState<Errors>({});
+  if (!hasIntent)
+    return (
+      <Shell authLink={false}>
+        <h1>This reset link is no longer valid</h1>
+        <Alert kind="error">A valid reset link is required.</Alert>
+        <Link className="inline-flex min-h-11 items-center justify-center rounded-control border border-accent bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-ink" href="/forgot-password">
+          Request a new link
+        </Link>
+      </Shell>
+    );
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const confirm = String(new FormData(event.currentTarget).get("confirm")),
+      next: Errors = {};
+    if (!validPassword(password))
+      next.password =
+        "Use at least 12 characters, including a number and a symbol.";
+    if (password !== confirm) next.confirm = "Passwords do not match.";
+    setErrors(next);
+    if (Object.keys(next).length) return focusSummary(summary);
+    setBusy(true);
+    try {
+      const { response } = await securePost("/reset-password/complete", {
+        password,
+      });
+      if (!response.ok) {
+        form.current?.reset();
+        setPassword("");
+        setErrors({
+          form: "This reset link is invalid, expired, replaced, or already used.",
+        });
+        return focusSummary(summary);
+      }
+      setDone(true);
+    } catch {
+      setErrors({ form: "The recovery service is unavailable. Try again." });
+      focusSummary(summary);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Shell authLink={false}>
+      <p className="text-[10.5px] font-bold uppercase tracking-[.08em] text-ink-faint">
+        Account recovery
+      </p>
+      <h1>Choose a new password</h1>
+      <p className="mt-2 max-w-3xl text-[13px] leading-6 text-ink-muted">
+        Use a unique password. A successful reset revokes existing sessions.
+      </p>
+      {done ? (
+        <>
+          <Alert kind="success">
+            Password updated. Existing sessions were revoked.
+          </Alert>
+          <Link className="inline-flex min-h-11 items-center justify-center rounded-control border border-accent bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-ink" href="/login">
+            Continue to sign in
+          </Link>
+        </>
+      ) : (
+        <>
+          <Summary errors={errors} summary={summary} />
+          {errors.form && <Alert kind="error">{errors.form}</Alert>}
+          <form ref={form} onSubmit={submit} noValidate aria-busy={busy}>
+            <Field
+              label="New password"
+              name="password"
+              type="password"
+              error={errors.password}
+              onChange={setPassword}
+              autoComplete="new-password"
+            />
+            <Requirements value={password} />
+            <Field
+              label="Confirm new password"
+              name="confirm"
+              type="password"
+              error={errors.confirm}
+              autoComplete="new-password"
+            />
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+              disabled={busy}
+            >
+              {busy ? "Saving…" : "Save new password"}
+            </button>
+          </form>
+        </>
+      )}
+    </Shell>
+  );
 }

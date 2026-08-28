@@ -211,20 +211,20 @@ export function ScreenProfileForm({
   }, [denied]);
   if (denied)
     return (
-      <div ref={safeAlert} className="alert error" role="alert" tabIndex={-1}>
+      <div ref={safeAlert} className="grid gap-2 rounded-card border border-danger bg-danger-soft p-4 text-danger" role="alert" tabIndex={-1}>
         <h1>{noun(kind)} form unavailable</h1>
         <p>
           Current authority no longer permits this form. Protected fields,
           options, and drafts were cleared.
         </p>
-        <Link className="secondary link-button" href={basePath}>
+        <Link className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted" href={basePath}>
           Back to {plural(kind)}
         </Link>
       </div>
     );
   if (loadError)
     return (
-      <div className="alert error" role="alert" tabIndex={-1} autoFocus>
+      <div className="grid gap-2 rounded-card border border-danger bg-danger-soft p-4 text-danger" role="alert" tabIndex={-1} autoFocus>
         <h1>Form temporarily unavailable</h1>
         <p>No protected fields or options are shown.</p>
         {safeReference && <p>Reference: {safeReference}</p>}
@@ -235,7 +235,7 @@ export function ScreenProfileForm({
   if (result)
     return (
       <div
-        className="ds-feedback ds-feedback--success"
+        className="grid gap-3 rounded-card border border-success bg-success-soft p-4 text-success"
         role="status"
         tabIndex={-1}
         autoFocus
@@ -256,7 +256,7 @@ export function ScreenProfileForm({
         )}
         {noteFailed && (
           <>
-            <p className="alert error">
+            <p className="grid gap-2 rounded-card border border-danger bg-danger-soft p-4 text-danger">
               Contact saved; internal note was not saved.
             </p>
             <Button
@@ -276,7 +276,7 @@ export function ScreenProfileForm({
           </>
         )}
         <Link
-          className="primary link-button"
+          className="inline-flex min-h-11 items-center justify-center rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink"
           href={`${basePath}/${result.recordId}`}
         >
           View {noun(kind)}
@@ -295,14 +295,14 @@ export function ScreenProfileForm({
       detail.assignment.disclosure === "full");
   if (editing && !protectedFull)
     return (
-      <div className="alert info" role="status">
+      <div className="grid gap-2 rounded-card border border-accent bg-accent-soft p-4 text-accent-ink" role="status">
         <h1>{noun(kind)} is read-only</h1>
         <p>
           Some protected profile categories are masked or unavailable. NexaFlow
           will not collect replacement values or overwrite retained data.
         </p>
         <Link
-          className="secondary link-button"
+          className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted"
           href={`${basePath}/${recordId}`}
         >
           Back to {noun(kind)}
@@ -597,16 +597,16 @@ export function ScreenProfileForm({
       <FormWorkbench label={`${editing ? "Edit" : "Add"} ${noun(kind)}`}>
       <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-hierarchy-heading",label:"Hierarchy"},{href:"#company-contact-heading",label:"Contact & address"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#affiliation-heading",label:"Company affiliation"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#address-heading",label:"Address"},{href:"#notes-heading",label:"Notes"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
         <form
-          className={`ds-form screen-profile-form${commandEditor ? " ds-command-form-workspace" : ""}${kind === "lead" ? " lead-profile-shell" : ""}`}
+          className={commandEditor ? "grid gap-5" : "grid gap-4"}
           noValidate
           onSubmit={submit}
           aria-busy={busy}
         >
-          {commandEditor && <div className="ds-command-band" role="region" aria-label={`${noun(kind)} save controls`}>
-            <p className="ds-command-band__status" role="status">{notice || (editing ? "Ready to save changes." : `Ready to create ${noun(kind).toLowerCase()}.`)}</p>
-            <div className="ds-command-band__actions"><ScreenFormActions>
+          {commandEditor && <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-3 shadow-e1" role="region" aria-label={`${noun(kind)} save controls`}>
+            <p className="text-xs leading-5 text-ink-muted" role="status">{notice || (editing ? "Ready to save changes." : `Ready to create ${noun(kind).toLowerCase()}.`)}</p>
+            <div className="flex flex-wrap items-center gap-2"><ScreenFormActions>
               <Link
-                className="secondary link-button"
+                className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted"
                 href={editing ? `${basePath}/${recordId}` : basePath}
               >
                 Cancel
@@ -623,7 +623,7 @@ export function ScreenProfileForm({
             reference={safeReference || undefined}
           />
           {!commandEditor && notice && (
-            <p className="alert info" role="status">
+            <p className="grid gap-2 rounded-card border border-accent bg-accent-soft p-4 text-accent-ink" role="status">
               {notice}
             </p>
           )}
@@ -887,7 +887,7 @@ export function ScreenProfileForm({
                 <AddressFields errors={errors} defaults={addr ?? {}} embedded />
               </FormSection>
               <FormSection id="notes-heading" number="06" title="Internal notes" description="Optionally record a separate Notes-owned entry after the Contact saves." tone="activity">
-                <label className="field" htmlFor="internalNote">
+                <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink" htmlFor="internalNote">
                   <span>
                     Add internal note <small>optional, separate save</small>
                   </span>
@@ -909,7 +909,7 @@ export function ScreenProfileForm({
           {kind === "lead" && (
             <>
               <FormSection id="lead-essentials-heading" number="01" title="Overview" description="Start with the Lead’s identity and existing Company." tone="overview">
-                <FormGrid className="lead-primary-grid">
+                <FormGrid className="grid gap-4 md:grid-cols-12">
                   <Input
                     id="firstName"
                     label="First name"
@@ -985,7 +985,7 @@ export function ScreenProfileForm({
                     data-error={errors.primaryEmail}
                   />
                 </FormGrid>
-                <details className="screen-disclosure" open={Boolean(errors.secondaryEmail || errors.officePhone || errors.mobilePhone || errors.fax || errors.website || errors.twitterHandle || errors.promotionalEmailOptOut)}>
+                <details className="rounded-card border border-line bg-surface p-4 [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary]:text-ink" open={Boolean(errors.secondaryEmail || errors.officePhone || errors.mobilePhone || errors.fax || errors.website || errors.twitterHandle || errors.promotionalEmailOptOut)}>
                   <summary>Optional contact channels</summary>
                   <FormGrid>
                   <Input
@@ -1074,7 +1074,7 @@ export function ScreenProfileForm({
                     onAuthorityLoss={clearProtectedState}
                   />
                 </FormGrid>
-                <details className="screen-disclosure" open={Boolean(errors.rating || errors.industry || errors.annualRevenue || errors.employeeCount)}>
+                <details className="rounded-card border border-line bg-surface p-4 [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary]:text-ink" open={Boolean(errors.rating || errors.industry || errors.annualRevenue || errors.employeeCount)}>
                   <summary>Optional profiling fields</summary>
                   <FormGrid>
                   <Select
@@ -1172,7 +1172,7 @@ export function ScreenProfileForm({
               aria-describedby={described("visibility")}
             >
               <legend>Visibility</legend>
-              <label className="check">
+              <label className="flex min-h-11 items-center gap-2 text-xs text-ink-muted [&_input]:size-4 [&_input]:accent-accent">
                 <input
                   type="radio"
                   name="visibility"
@@ -1184,7 +1184,7 @@ export function ScreenProfileForm({
                 />
                 Workspace
               </label>
-              <label className="check">
+              <label className="flex min-h-11 items-center gap-2 text-xs text-ink-muted [&_input]:size-4 [&_input]:accent-accent">
                 <input
                   type="radio"
                   name="visibility"
@@ -1218,7 +1218,7 @@ export function ScreenProfileForm({
             </OptionalSection>
           </AssignmentSection>
           {stale && (
-            <div className="alert error" role="alert" tabIndex={-1}>
+            <div className="grid gap-2 rounded-card border border-danger bg-danger-soft p-4 text-danger" role="alert" tabIndex={-1}>
               <p>{notice}</p>
               <Button type="button" onClick={() => void load()}>
                 Reload latest
@@ -1227,7 +1227,7 @@ export function ScreenProfileForm({
           )}
           {!commandEditor && <ScreenFormActions>
             <Link
-              className="secondary link-button"
+              className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted"
               href={editing ? `${basePath}/${recordId}` : basePath}
             >
               Cancel

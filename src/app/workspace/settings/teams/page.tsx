@@ -1,1 +1,34 @@
-import{AdminShell,WorkspaceAdminPage}from"../admin-shell";import{TeamsClient}from"../admin-client";import{adminPageContext}from"@/server/tenant-admin/page";import{peopleModel,teamsModel}from"@/server/tenant-admin/read-models";export const dynamic="force-dynamic";export const metadata={title:"Teams | NexaFlow"};export default async function Page(){const{pool,workspace,context}=await adminPageContext();try{return <AdminShell workspace={workspace.name} role={context.role}><WorkspaceAdminPage marker="TM" activeView="teams" title="Teams" description={<p>Organize people for routing, visibility, and collaboration. Teams are optional.</p>}><TeamsClient workspaceId={workspace.id} initial={await teamsModel(pool,context)} people={await peopleModel(pool,context)}/></WorkspaceAdminPage></AdminShell>}finally{await pool.end()}}
+import { AdminShell, WorkspaceAdminPage } from "../admin-shell";
+import { TeamsClient } from "../admin-client";
+import { adminPageContext } from "@/server/tenant-admin/page";
+import { peopleModel, teamsModel } from "@/server/tenant-admin/read-models";
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Teams | NexaFlow" };
+export default async function Page() {
+  const { pool, workspace, context } = await adminPageContext();
+  try {
+    return (
+      <AdminShell workspace={workspace.name} role={context.role}>
+        <WorkspaceAdminPage
+          marker="TM"
+          activeView="teams"
+          title="Teams"
+          description={
+            <p>
+              Organize people for routing, visibility, and collaboration. Teams
+              are optional.
+            </p>
+          }
+        >
+          <TeamsClient
+            workspaceId={workspace.id}
+            initial={await teamsModel(pool, context)}
+            people={await peopleModel(pool, context)}
+          />
+        </WorkspaceAdminPage>
+      </AdminShell>
+    );
+  } finally {
+    await pool.end();
+  }
+}

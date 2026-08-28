@@ -1,211 +1,47 @@
 import Link from "next/link";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { nexaCrm } from "./nexa-crm-variants";
 
-function classes(...values: Array<string | false | null | undefined>) {
-  const base = values.filter(Boolean).join(" ");
-  const variant = [
-    base.includes("ds-action") && nexaCrm.action,
-    base.includes("ds-panel") && nexaCrm.panel,
-    base.includes("ds-stage-column") && nexaCrm.stage,
-    base.includes("ds-form-section") && nexaCrm.formSection,
-  ].filter(Boolean).join(" ");
-  return `${base} ${variant}`.trim();
-}
-
+const cx = (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(" ");
+const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-control border px-3.5 py-2 text-[12.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:border-control disabled:bg-disabled disabled:text-disabled-text";
+const buttonTone = { primary: "border-accent bg-accent text-on-accent hover:bg-accent-ink hover:text-surface", secondary: "border-control bg-surface text-ink hover:bg-surface-muted", tertiary: "border-transparent bg-transparent text-accent-ink hover:bg-accent-soft", danger: "border-danger bg-danger text-white hover:brightness-90" } as const;
+const surface = "min-w-0 rounded-panel border border-line bg-surface";
+const eyebrow = "text-[10.5px] font-bold uppercase tracking-[.08em] text-ink-faint";
 export type FeedbackTone = "info" | "success" | "warning" | "danger" | "conflict";
 export type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
 export type SectionTone = "overview" | "relationship" | "qualification" | "conversion" | "activity" | "access";
 
-export function ProductPageHeader({
-  title,
-  description,
-  action,
-  context,
-  marker,
-}: {
-  title: string;
-  description?: ReactNode;
-  action?: ReactNode;
-  context?: string;
-  marker?: ReactNode;
-}) {
-  return <header className={classes("product-page-header", "ds-page-header", nexaCrm.pageHeader)}><div className="ds-page-header__identity">{marker && <span className="ds-page-header__marker" aria-hidden="true">{marker}</span>}<div>{context && <p className="ds-page-header__eyebrow">{context}</p>}<h1>{title}</h1>{description && <div className="ds-page-header__description">{description}</div>}</div></div>{action && <div className="ds-page-header__actions product-page-actions">{action}</div>}</header>;
-}
-
-export function ActionLink({
-  href,
-  children,
-  variant = "secondary",
-  className,
-}: {
-  href: string;
-  children: ReactNode;
-  variant?: "primary" | "secondary" | "tertiary";
-  className?: string;
-}) {
-  return <Link href={href} className={classes("ds-action", `ds-action--${variant}`, className)}>{children}</Link>;
-}
-
-export function Button({
-  variant = "secondary",
-  className,
-  children,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "tertiary" | "danger";
-}) {
-  return <button className={classes("ds-action", `ds-action--${variant}`, className)} {...props}>{children}</button>;
-}
-
-export function Panel({
-  title,
-  description,
-  action,
-  children,
-  className,
-  tone,
-}: {
-  title?: ReactNode;
-  description?: ReactNode;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-  tone?: SectionTone;
-}) {
-  return <section className={classes("ds-panel", tone && "ds-panel--toned", tone && `ds-section-panel--${tone}`, className)}>{(title || description || action) && <header className="ds-panel__header"><div>{title && <h2>{title}</h2>}{description && <p>{description}</p>}</div>{action && <div className="ds-panel__actions">{action}</div>}</header>}<div className="ds-panel__body">{children}</div></section>;
-}
-
-export function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: StatusTone }) {
-  return <span className={`ds-badge ds-badge--${tone}`}>{children}</span>;
-}
-
-export function FeedbackState({
-  title,
-  children,
-  tone = "info",
-  action,
-  autoFocus = false,
-}: {
-  title: ReactNode;
-  children?: ReactNode;
-  tone?: FeedbackTone;
-  action?: ReactNode;
-  autoFocus?: boolean;
-}) {
-  const urgent = tone === "danger" || tone === "conflict";
-  return <section className={classes("ds-feedback", `ds-feedback--${tone}`, nexaCrm.feedback)} role={urgent ? "alert" : "status"} tabIndex={autoFocus ? -1 : undefined} autoFocus={autoFocus || undefined}><div><h2>{title}</h2>{children && <div className="ds-feedback__description">{children}</div>}</div>{action && <div className="ds-feedback__actions">{action}</div>}</section>;
-}
-
-export function EmptyState({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
-  return <section className={classes("ds-empty", nexaCrm.feedback)}><h2>{title}</h2>{children && <div>{children}</div>}{action && <div className="ds-empty__actions">{action}</div>}</section>;
-}
-
-export function LoadingState({ label = "Loading…", rows = 3 }: { label?: string; rows?: number }) {
-  return <div className={classes("ds-loading", nexaCrm.feedback)} role="status" aria-label={label}><span className="sr-only">{label}</span>{Array.from({ length: rows }, (_, index) => <span className="ds-loading__row" aria-hidden="true" key={index} />)}</div>;
-}
-
-export function FieldMessage({ id, children, tone = "help" }: { id: string; children: ReactNode; tone?: "help" | "error" }) {
-  return <small id={id} className={tone === "error" ? "ds-field-message ds-field-message--error" : "ds-field-message"}>{children}</small>;
-}
-
-export function DataTable({ caption, children }: { caption: string; children: ReactNode }) {
-  return <div className={classes("ds-table-wrap", nexaCrm.tableWrap)}><table className="ds-table"><caption>{caption}</caption>{children}</table></div>;
-}
-
-export function DataToolbar({ label, htmlFor, children, helper, status }: { label: string; htmlFor?: string; children: ReactNode; helper?: ReactNode; status?: ReactNode }) {
-  const heading = htmlFor ? <label className="ds-data-toolbar__label" htmlFor={htmlFor}>{label}</label> : <div className="ds-data-toolbar__label">{label}</div>;
-  return <section className={classes("ds-data-toolbar", "ds-list-toolbar", nexaCrm.toolbar)} aria-label={`${label} controls`}>{heading}<div className="ds-data-toolbar__controls">{children}</div>{helper && <div className="ds-data-toolbar__helper">{helper}</div>}{status && <div className="ds-data-toolbar__status">{status}</div>}</section>;
-}
-
-export function RecordCards({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="ds-record-cards" role="list" aria-label={label}>{children}</div>;
-}
-
-export function RecordCard({ title, href, secondary, facts, actions }: { title: string; href: string; secondary?: ReactNode; facts: Array<{ label: string; value: ReactNode }>; actions?: ReactNode }) {
-  return <article className={classes("ds-record-card", nexaCrm.recordCard)} role="listitem"><header><div><h2><Link href={href}>{title}</Link></h2>{secondary && <div className="ds-record-card__secondary">{secondary}</div>}</div></header><dl>{facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>{actions && <div className="ds-record-card__actions">{actions}</div>}</article>;
-}
-
-export function RecordIdentity({ title, href, secondary, marker, meta }: { title: string; href?: string; secondary?: ReactNode; marker?: ReactNode; meta?: ReactNode }) {
-  const heading = href ? <Link href={href}>{title}</Link> : title;
-  return <div className="ds-record-identity">{marker && <span className="ds-record-identity__marker" aria-hidden="true">{marker}</span>}<div><h2>{heading}</h2>{secondary && <div className="ds-record-identity__secondary">{secondary}</div>}{meta && <div className="ds-record-identity__meta">{meta}</div>}</div></div>;
-}
-
-export function RecordWorkspace({ summary, children }: { summary: ReactNode; children: ReactNode }) {
-  return <div className={classes("ds-record-workspace", nexaCrm.recordWorkspace)}><aside className={classes("ds-record-workspace__summary", nexaCrm.panel)}>{summary}</aside><div className={classes("ds-record-workspace__content", nexaCrm.panel)}>{children}</div></div>;
-}
-
-export function ContentTabs({ label, items }: { label: string; items: Array<{ href: string; label: string; active?: boolean }> }) {
-  return <nav className="ds-content-tabs" aria-label={label}>{items.map(item => <a key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</a>)}</nav>;
-}
-
-export function RelationshipRow({ label, value, action }: { label: ReactNode; value: ReactNode; action?: ReactNode }) {
-  return <div className="ds-relationship-row"><div><span>{label}</span><strong>{value}</strong></div>{action && <div className="ds-relationship-row__action">{action}</div>}</div>;
-}
-
-export function ViewTabs({
-  label,
-  items,
-}: {
-  label: string;
-  items: Array<{ href: string; label: string; active: boolean }>;
-}) {
-  return <nav className={classes("ds-view-tabs", nexaCrm.viewTabs)} aria-label={label}>{items.map(item => <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</Link>)}</nav>;
-}
-
-export function StageColumn({ title, count, children, tone = "neutral", id, position }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string; position?: number }) {
-  const positionId = id && position !== undefined ? `${id}-position` : undefined;
-  return <section className={classes("ds-stage-column", `ds-stage-column--${tone}`)} aria-labelledby={[positionId,id].filter(Boolean).join(" ") || undefined}><div className="pipeline-stage ds-stage-column__content"><header><div className="ds-stage-column__heading">{position !== undefined && <span id={positionId} className="ds-stage-column__identifier">Pipeline stage {position}</span>}<h2 id={id} tabIndex={-1}>{title}</h2></div>{count !== undefined && <span className="ds-stage-column__count">{count}</span>}</header><div className="ds-stage-column__items">{children}</div></div></section>;
-}
-
-export function FactsGrid({ children }: { children: ReactNode }) {
-  return <dl className="ds-facts-grid">{children}</dl>;
-}
-
-export function WorkflowSummaryGrid({ children }: { children: ReactNode }) {
-  return <div className="ds-workflow-summary-grid">{children}</div>;
-}
-
-export function FormWorkbench({ children, label }: { children: ReactNode; label?: string }) {
-  return <div className={classes("ds-form-workbench", nexaCrm.formWorkbench)} aria-label={label}>{children}</div>;
-}
-
-export function FormSection({ id, number, title, description, tone = "overview", children }: { id: string; number: string; title: string; description: string; tone?: SectionTone; children: ReactNode }) {
-  return <section className={classes("ds-form-section", `ds-section-panel--${tone}`)} aria-labelledby={id}><header className="ds-form-section__header"><span className="ds-form-section__number" aria-hidden="true">{number}</span><div><h2 id={id}>{title}</h2><p>{description}</p></div></header>{children}</section>;
-}
-
-export function FormGrid({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={classes("form-grid", "ds-form-grid", className)}>{children}</div>;
-}
-
-export function FormActions({ children }: { children: ReactNode }) {
-  return <div className={classes("ds-page-actions", "ds-form-actions", nexaCrm.formActions)}>{children}</div>;
-}
-
-export function SectionNav({ label, items }: { label: string; items: Array<{ href: string; label: string }> }) {
-  return <nav className={classes("ds-section-nav", nexaCrm.sectionNav)} aria-label={label}>{items.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}</nav>;
-}
-
-export function ReviewWorkspace({ evidence, children }: { evidence: ReactNode; children: ReactNode }) {
-  return <div className="ds-review-layout"><aside className="ds-review-evidence" aria-label="Review evidence">{evidence}</aside><section className="ds-review-decision" aria-label="Decision workspace">{children}</section></div>;
-}
-
-export function ReviewDecisionHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
-  return <header className="ds-review-decision__header"><div><h2>{title}</h2>{description && <div>{description}</div>}</div>{action && <div className="ds-review-decision__action">{action}</div>}</header>;
-}
-
-export function ReviewDecisionGroup({ children }: { children: ReactNode }) {
-  return <div className="ds-review-decision__group">{children}</div>;
-}
-
-export function ReviewDecisionSummary({ children }: { children: ReactNode }) {
-  return <div className="ds-review-decision__summary">{children}</div>;
-}
-
-export function AdminWorkspace({ children }: { children: ReactNode }) {
-  return <div className="ds-admin-workspace">{children}</div>;
-}
-
-export function AdminPanel({ title, description, action, children, wide = false }: { title: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; wide?: boolean }) {
-  return <section className={classes("ds-admin-panel", wide && "ds-admin-panel--wide")}><header><div><h2>{title}</h2>{description && <p>{description}</p>}</div>{action && <div className="ds-admin-panel__action">{action}</div>}</header><div className="ds-admin-panel__body">{children}</div></section>;
-}
+export function ProductPageHeader({ title, description, action, context, marker }: { title: string; description?: ReactNode; action?: ReactNode; context?: string; marker?: ReactNode }) { return <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line-soft py-5"><div className="flex min-w-0 items-start gap-3">{marker && <span className="grid size-10 shrink-0 place-items-center rounded-card bg-accent-soft text-xs font-bold text-accent-ink" aria-hidden="true">{marker}</span>}<div>{context && <p className={eyebrow}>{context}</p>}<h1 className="mt-1 text-2xl font-semibold tracking-[-.02em] text-ink">{title}</h1>{description && <div className="mt-1 max-w-3xl text-[13px] text-ink-muted">{description}</div>}</div></div>{action && <div className="flex flex-wrap items-center gap-2">{action}</div>}</header>; }
+export function ActionLink({ href, children, variant = "secondary", className }: { href: string; children: ReactNode; variant?: "primary" | "secondary" | "tertiary"; className?: string }) { return <Link href={href} className={cx(button, buttonTone[variant], className)}>{children}</Link>; }
+export function Button({ variant = "secondary", className, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "tertiary" | "danger" }) { return <button className={cx(button, buttonTone[variant], className)} {...props}>{children}</button>; }
+export function Panel({ title, description, action, children, className }: { title?: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; tone?: SectionTone }) { return <section className={cx(surface, className)}>{(title || description || action) && <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line-soft px-5 py-4"><div>{title && <h2 className="text-[15.5px] font-bold text-ink">{title}</h2>}{description && <p className="mt-1 text-xs text-ink-faint">{description}</p>}</div>{action && <div className="flex flex-wrap gap-2">{action}</div>}</header>}<div className="grid gap-4 p-5">{children}</div></section>; }
+const badgeTone = { neutral: "bg-surface-muted text-ink-muted ring-line", accent: "bg-accent-soft text-accent-ink ring-accent/20", success: "bg-success-soft text-success ring-success/20", warning: "bg-warning-soft text-warning ring-warning/20", danger: "bg-danger-soft text-danger ring-danger/20" } as const;
+export function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: StatusTone }) { return <span className={cx("inline-flex min-h-6 items-center rounded-full px-2.5 py-1 text-[10.5px] font-bold ring-1 ring-inset", badgeTone[tone])}>{children}</span>; }
+const feedbackTone = { info: "border-accent/30 bg-accent-soft text-accent-ink", success: "border-success/30 bg-success-soft text-success", warning: "border-warning/30 bg-warning-soft text-warning", danger: "border-danger/30 bg-danger-soft text-danger", conflict: "border-warning/40 bg-warning-soft text-warning" } as const;
+export function FeedbackState({ title, children, tone = "info", action, autoFocus = false }: { title: ReactNode; children?: ReactNode; tone?: FeedbackTone; action?: ReactNode; autoFocus?: boolean }) { const urgent = tone === "danger" || tone === "conflict"; return <section className={cx("flex flex-wrap items-start justify-between gap-4 rounded-panel border p-4", feedbackTone[tone])} role={urgent ? "alert" : "status"} tabIndex={autoFocus ? -1 : undefined} autoFocus={autoFocus || undefined}><div><h2 className="font-bold">{title}</h2>{children && <div className="mt-1 text-xs leading-5">{children}</div>}</div>{action && <div>{action}</div>}</section>; }
+export function EmptyState({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) { return <section className={cx(surface, "grid place-items-start gap-2 border-dashed p-6 text-ink-muted")}><h2 className="text-base font-bold text-ink">{title}</h2>{children}{action && <div className="mt-2">{action}</div>}</section>; }
+export function LoadingState({ label = "Loading…", rows = 3 }: { label?: string; rows?: number }) { return <div className={cx(surface, "grid gap-3 p-5")} role="status" aria-label={label} aria-busy="true"><span className="sr-only">{label}</span>{Array.from({ length: rows }, (_, index) => <span className="h-11 animate-pulse rounded-control bg-surface-muted motion-reduce:animate-none" aria-hidden="true" key={index}/>)}</div>; }
+export function FieldMessage({ id, children, tone = "help" }: { id: string; children: ReactNode; tone?: "help" | "error" }) { return <small id={id} className={cx("mt-1 block text-xs", tone === "error" ? "font-semibold text-danger" : "text-ink-faint")}>{children}</small>; }
+export function DataTable({ caption, children }: { caption: string; children: ReactNode }) { return <div className={cx(surface, "hidden w-full overflow-x-auto md:block")}><table className="w-full min-w-[760px] border-collapse text-left text-xs [&_caption]:px-4 [&_caption]:py-3 [&_caption]:text-left [&_caption]:font-bold [&_th]:border-b [&_th]:border-line [&_th]:bg-surface-muted [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-[10.5px] [&_th]:font-bold [&_th]:uppercase [&_th]:tracking-[.05em] [&_th]:text-ink-faint [&_td]:border-b [&_td]:border-line-soft [&_td]:px-4 [&_td]:py-3 [&_tbody_tr]:hover:bg-surface-muted"><caption>{caption}</caption>{children}</table></div>; }
+export function DataToolbar({ label, htmlFor, children, helper, status }: { label: string; htmlFor?: string; children: ReactNode; helper?: ReactNode; status?: ReactNode }) { const heading = htmlFor ? <label className="w-full text-xs font-bold" htmlFor={htmlFor}>{label}</label> : <div className="w-full text-xs font-bold">{label}</div>; return <section className={cx(surface, "flex flex-wrap items-end gap-x-3 gap-y-2 p-3")} aria-label={`${label} controls`}>{heading}<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 [&>form]:min-w-[min(100%,32rem)] [&>form]:flex-1">{children}</div>{helper && <div className="min-w-[min(100%,20rem)] flex-1 text-xs text-ink-faint">{helper}</div>}{status && <div className="ml-auto max-w-md text-right text-xs text-ink-faint">{status}</div>}</section>; }
+export function RecordCards({ label, children }: { label: string; children: ReactNode }) { return <div className="grid gap-3 md:hidden" role="list" aria-label={label}>{children}</div>; }
+export function RecordCard({ title, href, secondary, facts, actions }: { title: string; href: string; secondary?: ReactNode; facts: Array<{ label: string; value: ReactNode }>; actions?: ReactNode }) { return <article className={cx(surface, "grid gap-3 p-4")} role="listitem"><header><h2 className="font-semibold"><Link className="hover:text-accent-ink" href={href}>{title}</Link></h2>{secondary && <div className="mt-1 text-xs text-ink-faint">{secondary}</div>}</header><dl className="grid gap-2">{facts.map(fact => <div className="flex justify-between gap-4" key={fact.label}><dt className={eyebrow}>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>{actions && <div className="flex flex-wrap gap-2">{actions}</div>}</article>; }
+export function RecordIdentity({ title, href, secondary, marker, meta }: { title: string; href?: string; secondary?: ReactNode; marker?: ReactNode; meta?: ReactNode }) { const heading = href ? <Link className="font-semibold normal-case tracking-normal text-ink hover:text-accent-ink" href={href}>{title}</Link> : title; return <div className="flex min-w-0 items-center gap-2.5">{marker && <span className="grid size-8 shrink-0 place-items-center rounded-control bg-surface-muted text-[10px] font-bold text-ink-muted" aria-hidden="true">{marker}</span>}<div className="min-w-0"><h2 className="truncate text-[13px] font-semibold normal-case tracking-normal">{heading}</h2>{secondary && <div className="text-[11px] font-normal normal-case tracking-normal text-ink-faint">{secondary}</div>}{meta && <div className="text-[11px] text-ink-faint">{meta}</div>}</div></div>; }
+export function RecordWorkspace({ summary, children }: { summary: ReactNode; children: ReactNode }) { return <div className="mt-5 grid items-start gap-3 lg:grid-cols-[280px_minmax(0,1fr)]"><aside className={cx(surface, "self-start p-5")}>{summary}</aside><div className={cx(surface, "self-start overflow-hidden")}>{children}</div></div>; }
+const tab = "inline-flex min-h-11 items-center border-b-2 border-transparent px-3 text-xs font-semibold text-ink-muted hover:text-ink aria-[current=page]:border-accent aria-[current=page]:text-accent-ink";
+export function ContentTabs({ label, items }: { label: string; items: Array<{ href: string; label: string; active?: boolean }> }) { return <nav className="flex flex-wrap border-b border-line px-2" aria-label={label}>{items.map(item => <a className={tab} key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</a>)}</nav>; }
+export function RelationshipRow({ label, value, action }: { label: ReactNode; value: ReactNode; action?: ReactNode }) { return <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 border-b border-line-soft py-2 last:border-0"><div><span className={eyebrow}>{label}</span><strong className="block font-semibold">{value}</strong></div>{action}</div>; }
+export function ViewTabs({ label, items }: { label: string; items: Array<{ href: string; label: string; active: boolean }> }) { return <nav className="inline-flex flex-wrap rounded-control border border-line bg-surface p-1" aria-label={label}>{items.map(item => <Link className="inline-flex min-h-10 items-center rounded-md px-3 text-xs font-semibold text-ink-muted hover:text-ink aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink" key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</Link>)}</nav>; }
+export function StageColumn({ title, count, children, id, position }: { title: ReactNode; count?: ReactNode; children: ReactNode; tone?: "neutral" | "new" | "contacted" | "qualified" | "proposal"; id?: string; position?: number }) { const positionId = id && position !== undefined ? `${id}-position` : undefined; return <section className="min-w-[280px] flex-1 rounded-card border border-line bg-surface-muted p-2.5" aria-labelledby={[positionId,id].filter(Boolean).join(" ") || undefined}><header className="flex items-start justify-between gap-3 border-b border-line-soft px-1 pb-2"><div>{position !== undefined && <span id={positionId} className={eyebrow}>Pipeline stage {position}</span>}<h2 className="mt-1 text-[12.5px] font-semibold" id={id} tabIndex={-1}>{title}</h2></div>{count !== undefined && <span className="rounded-full bg-surface px-2 py-1 text-[10px] font-bold ring-1 ring-line">{count}</span>}</header><div className="mt-2 grid gap-2">{children}</div></section>; }
+export function FactsGrid({ children }: { children: ReactNode }) { return <dl className="grid gap-px overflow-hidden rounded-card border border-line-soft bg-line-soft sm:grid-cols-2 xl:grid-cols-3 [&>div]:bg-surface [&>div]:p-3 [&_dt]:text-[10.5px] [&_dt]:font-bold [&_dt]:uppercase [&_dt]:tracking-wide [&_dt]:text-ink-faint [&_dd]:mt-1 [&_dd]:font-semibold">{children}</dl>; }
+export function WorkflowSummaryGrid({ children }: { children: ReactNode }) { return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>; }
+export function FormWorkbench({ children, label }: { children: ReactNode; label?: string }) { return <div className="grid items-start gap-3 lg:grid-cols-[184px_minmax(0,1fr)]" aria-label={label}>{children}</div>; }
+export function FormSection({ id, number, title, description, children }: { id: string; number: string; title: string; description: string; tone?: SectionTone; children: ReactNode }) { return <section className={cx(surface, "grid gap-4 border-l-4 border-l-accent p-5")} aria-labelledby={id}><header className="flex gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-soft text-[10px] font-bold text-accent-ink" aria-hidden="true">{number}</span><div><h2 className="text-[15.5px] font-bold" id={id}>{title}</h2><p className="mt-1 text-xs text-ink-faint">{description}</p></div></header>{children}</section>; }
+export function FormGrid({ children, className }: { children: ReactNode; className?: string }) { return <div className={cx("grid gap-4 md:grid-cols-12 md:[&>*]:col-span-4", className)}>{children}</div>; }
+export function FormActions({ children }: { children: ReactNode }) { return <div className="flex flex-wrap justify-end gap-2 rounded-card border border-line bg-surface-muted p-3">{children}</div>; }
+export function SectionNav({ label, items }: { label: string; items: Array<{ href: string; label: string }> }) { return <nav className={cx(surface, "sticky top-3 grid gap-1 p-2")} aria-label={label}>{items.map((item, index) => <a className="flex min-h-11 items-center gap-2 rounded-control px-2 text-xs font-semibold text-ink-muted hover:bg-accent-soft hover:text-accent-ink" href={item.href} key={item.href}><span className="grid size-6 place-items-center rounded-full border border-line text-[10px]">{index + 1}</span>{item.label}</a>)}</nav>; }
+export function ReviewWorkspace({ evidence, children }: { evidence: ReactNode; children: ReactNode }) { return <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]"><aside className={cx(surface, "p-5")} aria-label="Review evidence">{evidence}</aside><section className={cx(surface, "p-5")} aria-label="Decision workspace">{children}</section></div>; }
+export function ReviewDecisionHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) { return <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4"><div><h2 className="text-base font-bold">{title}</h2>{description && <div className="mt-1 text-xs text-ink-faint">{description}</div>}</div>{action}</header>; }
+export function ReviewDecisionGroup({ children }: { children: ReactNode }) { return <div className="grid gap-3 border-b border-line-soft py-4">{children}</div>; }
+export function ReviewDecisionSummary({ children }: { children: ReactNode }) { return <div className="mt-4 rounded-card bg-surface-muted p-4">{children}</div>; }
+export function AdminWorkspace({ children }: { children: ReactNode }) { return <div className="grid gap-4 xl:grid-cols-2">{children}</div>; }
+export function AdminPanel({ title, description, action, children, wide = false }: { title: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; wide?: boolean }) { return <section className={cx(surface, wide && "xl:col-span-2")}><header className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4"><div><h2 className="text-base font-bold">{title}</h2>{description && <p className="mt-1 text-xs text-ink-faint">{description}</p>}</div>{action}</header><div className="grid gap-4 p-5">{children}</div></section>; }

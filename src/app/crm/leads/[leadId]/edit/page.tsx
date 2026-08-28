@@ -17,7 +17,7 @@ export default async function Page({
   try {
     return (
       <CrmShell workspace={workspace.name} role={context.role}>
-        <section className="admin-content lead-form-page">
+        <section className="mx-auto grid w-full max-w-[1400px] gap-5 py-5">
           <ScreenProfileForm
             workspaceId={workspace.id}
             kind="lead"

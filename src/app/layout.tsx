@@ -8,9 +8,8 @@ import { localDatabase, sessionToken } from "@/server/http";
 import { resolveIdentityContext } from "@/server/security/session";
 import { accountPreferences } from "@/server/account/service";
 import { TitleUpdater } from "./onboarding/title-updater";
-import { interfaceStyleBootstrapScript } from "./interface-style";
+import { AccountThemeSync } from "./account-theme-sync";
 import { isThemePreference, themeBootstrapScript, type ThemePreference } from "./theme";
-import { workspaceLayoutBootstrapScript } from "./workspace-layout";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"], display: "swap", variable: "--font-geist" });
@@ -26,18 +25,12 @@ async function authenticatedTheme(requestHeaders: Headers): Promise<ThemePrefere
   try {
     const env = getServerEnv();
     const request = new Request(env.APP_ORIGIN, { headers: requestHeaders });
-    const identity = await resolveIdentityContext(pool, sessionToken(request), env.SESSION_SECRET, new Date(), {
-      idleMinutes: env.SESSION_IDLE_MINUTES,
-      touchIntervalSeconds: env.SESSION_TOUCH_INTERVAL_SECONDS,
-    });
+    const identity = await resolveIdentityContext(pool, sessionToken(request), env.SESSION_SECRET, new Date(), { idleMinutes: env.SESSION_IDLE_MINUTES, touchIntervalSeconds: env.SESSION_TOUCH_INTERVAL_SECONDS });
     if (!identity) return "system";
     const preference = (await accountPreferences(pool, identity)).appearance;
     return isThemePreference(preference) ? preference : "system";
-  } catch {
-    return "system";
-  } finally {
-    await pool.end();
-  }
+  } catch { return "system"; }
+  finally { await pool.end(); }
 }
 
 export default async function RootLayout({
@@ -49,8 +42,8 @@ export default async function RootLayout({
   const preference = await authenticatedTheme(requestHeaders);
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
   return (
-    <html lang="en" data-theme={preference === "dark" ? "dark" : "light"} data-theme-preference={preference} data-workspace-layout="structured" data-interface-style="spectrum" suppressHydrationWarning>
-      <body className={`${geist.variable} ${geistMono.variable} antialiased`}><Script id="nexaflow-theme" strategy="beforeInteractive" nonce={nonce}>{themeBootstrapScript}</Script><Script id="nexaflow-workspace-layout" strategy="beforeInteractive" nonce={nonce}>{workspaceLayoutBootstrapScript}</Script><Script id="nexaflow-interface-style" strategy="beforeInteractive" nonce={nonce}>{interfaceStyleBootstrapScript}</Script><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
+    <html lang="en" data-theme={preference === "dark" ? "dark" : "light"} data-theme-preference={preference} suppressHydrationWarning>
+      <body className={`${geist.variable} ${geistMono.variable} antialiased`}><Script id="nexaflow-theme" strategy="beforeInteractive" nonce={nonce}>{themeBootstrapScript}</Script><AccountThemeSync reconcile={false}/><TitleUpdater/><Suspense fallback={<div className="grid min-h-screen place-items-center bg-canvas text-sm text-ink-muted" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
     </html>
   );
 }
