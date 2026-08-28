@@ -238,6 +238,67 @@ html[data-workspace-layout="command-center"] {
   --nf-detail-max: 1320px;
 }
 
+/* Nexa CRM is a device-local, light-only desktop presentation over the same
+   routes, components, data, actions, and authority. Below 901px these values
+   do not apply, so the existing responsive Nexa Spectrum presentation remains. */
+@media (min-width: 901px) {
+  html[data-interface-style="nexa-crm"] {
+    color-scheme: light;
+    --nx-canvas: #f5f4f1;
+    --nx-surface-primary: #ffffff;
+    --nx-surface-secondary: #f8f7f4;
+    --nx-surface-raised: #ffffff;
+    --nx-surface-navigation: #fbfaf8;
+    --nx-surface-overlay: #ffffff;
+    --nx-text-strong: #302e2b;
+    --nx-text: #625e57;
+    --nx-text-muted: #837e75;
+    --nx-text-disabled: #a09b92;
+    --nx-border-subtle: #e7e5df;
+    --nx-border-strong: #dcd9d1;
+    --nx-border-emphasis: #c8c4bb;
+    --nx-action-primary: #6863d9;
+    --nx-action-primary-hover: #5752c8;
+    --nx-action-primary-pressed: #4944b7;
+    --nx-action-primary-text: #ffffff;
+    --nx-selected-surface: #efeefc;
+    --nx-selected-text: #4642b8;
+    --nx-link: #514cc2;
+    --nx-focus: #6863d9;
+    --nx-focus-ring: 0 0 0 3px #e4e2fa;
+    --nx-blanket: rgb(48 46 43 / 54%);
+    --nx-success: #31734e;
+    --nx-success-surface: #eaf4ee;
+    --nx-warning: #946219;
+    --nx-warning-surface: #fbf1e1;
+    --nx-danger: #a53f2c;
+    --nx-danger-surface: #fbebe7;
+    --nx-info: #514cc2;
+    --nx-info-surface: #efeefc;
+    --nx-accent: #6863d9;
+    --nx-accent-surface: #efeefc;
+    --nx-accent-border: #d8d5f6;
+    --nx-disabled-surface: #f5f4f1;
+    --nx-disabled-border: #a09b92;
+    --nx-overlay-shadow: 0 16px 38px rgb(48 46 43 / 12%);
+    --nx-record-row: #ffffff;
+    --nx-record-row-alternate: #fbfaf8;
+    --nx-record-row-hover: #f6f5f2;
+    --nf-sidebar-width: 232px;
+    --nf-content-padding: 24px;
+    --nf-content-max: 1480px;
+    --nf-form-workbench-max: 1180px;
+    --nf-detail-max: 1240px;
+    --nf-radius-compact: 7px;
+    --nf-radius-control: 8px;
+    --nf-radius-card: 10px;
+    --nf-radius-major: 12px;
+    --nf-shadow-1: 0 1px 2px rgb(48 46 43 / 4%);
+    --nf-shadow-2: 0 8px 22px rgb(48 46 43 / 7%);
+    --nf-shadow-3: 0 16px 38px rgb(48 46 43 / 11%);
+  }
+}
+
 @media (forced-colors: active) {
   :root,
   html[data-theme] {

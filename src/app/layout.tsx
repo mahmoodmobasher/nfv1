@@ -8,6 +8,7 @@ import { localDatabase, sessionToken } from "@/server/http";
 import { resolveIdentityContext } from "@/server/security/session";
 import { accountPreferences } from "@/server/account/service";
 import { TitleUpdater } from "./onboarding/title-updater";
+import { interfaceStyleBootstrapScript } from "./interface-style";
 import { isThemePreference, themeBootstrapScript, type ThemePreference } from "./theme";
 import { workspaceLayoutBootstrapScript } from "./workspace-layout";
 import "./globals.css";
@@ -48,8 +49,8 @@ export default async function RootLayout({
   const preference = await authenticatedTheme(requestHeaders);
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
   return (
-    <html lang="en" data-theme={preference === "dark" ? "dark" : "light"} data-theme-preference={preference} data-workspace-layout="structured" suppressHydrationWarning>
-      <body className={`${geist.variable} ${geistMono.variable} antialiased`}><Script id="nexaflow-theme" strategy="beforeInteractive" nonce={nonce}>{themeBootstrapScript}</Script><Script id="nexaflow-workspace-layout" strategy="beforeInteractive" nonce={nonce}>{workspaceLayoutBootstrapScript}</Script><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
+    <html lang="en" data-theme={preference === "dark" ? "dark" : "light"} data-theme-preference={preference} data-workspace-layout="structured" data-interface-style="spectrum" suppressHydrationWarning>
+      <body className={`${geist.variable} ${geistMono.variable} antialiased`}><Script id="nexaflow-theme" strategy="beforeInteractive" nonce={nonce}>{themeBootstrapScript}</Script><Script id="nexaflow-workspace-layout" strategy="beforeInteractive" nonce={nonce}>{workspaceLayoutBootstrapScript}</Script><Script id="nexaflow-interface-style" strategy="beforeInteractive" nonce={nonce}>{interfaceStyleBootstrapScript}</Script><TitleUpdater/><Suspense fallback={<div className="route-loading" role="status">Loading NexaFlow…</div>}>{children}</Suspense></body>
     </html>
   );
 }

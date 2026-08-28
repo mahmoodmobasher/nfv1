@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { announceInterfaceStylePreference, isInterfaceStylePreference, type InterfaceStylePreference } from "../interface-style";
 import { announceThemePreference } from "../theme";
 import { announceWorkspaceLayoutPreference, isWorkspaceLayoutPreference, type WorkspaceLayoutPreference } from "../workspace-layout";
 
@@ -24,6 +25,8 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
   const [preferencesStatus, setPreferencesStatus] = useState("");
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutPreference>("structured");
   const [workspaceLayoutStatus, setWorkspaceLayoutStatus] = useState("");
+  const [interfaceStyle, setInterfaceStyle] = useState<InterfaceStylePreference>("spectrum");
+  const [interfaceStyleStatus, setInterfaceStyleStatus] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -36,7 +39,17 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
   useEffect(() => {
     const current = document.documentElement.dataset.workspaceLayout;
     if (isWorkspaceLayoutPreference(current)) setWorkspaceLayout(current);
+    const currentInterfaceStyle = document.documentElement.dataset.interfaceStyle;
+    if (isInterfaceStylePreference(currentInterfaceStyle)) setInterfaceStyle(currentInterfaceStyle);
   }, []);
+
+  function chooseInterfaceStyle(next: InterfaceStylePreference) {
+    setInterfaceStyle(next);
+    announceInterfaceStylePreference(next, true);
+    setInterfaceStyleStatus(next === "nexa-crm"
+      ? "Nexa CRM is active on this device at desktop widths. Your current interface remains active at narrower widths."
+      : "Nexa Spectrum is now active on this device.");
+  }
 
   function chooseWorkspaceLayout(next: WorkspaceLayoutPreference) {
     setWorkspaceLayout(next);
@@ -121,6 +134,10 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
 
       <section className="account-section" aria-labelledby="preferences-heading">
         <div><p className="eyebrow">Preferences</p><h2 id="preferences-heading">Appearance and regional settings</h2><p>Choose how NexaFlow looks and formats information for you.</p></div>
+        <div className="account-layout-preference">
+          <label className="field"><span>Interface style</span><select value={interfaceStyle} onChange={event => chooseInterfaceStyle(event.target.value as InterfaceStylePreference)}><option value="spectrum">Nexa Spectrum</option><option value="nexa-crm">Nexa CRM (desktop, light)</option></select><small>Stored only on this browser and device. Nexa CRM applies at widths of 901px and above and does not change your Light, Dark, or System colour-mode preference.</small></label>
+          {interfaceStyleStatus && <p className="alert" role="status">{interfaceStyleStatus}</p>}
+        </div>
         <div className="account-layout-preference">
           <label className="field"><span>Workspace layout</span><select value={workspaceLayout} onChange={event => chooseWorkspaceLayout(event.target.value as WorkspaceLayoutPreference)}><option value="structured">Structured Workspace</option><option value="command-center">Command Center</option></select><small>Presentation only. This choice does not change Workspace data, permissions, or workflows.</small></label>
           {workspaceLayoutStatus && <p className="alert" role="status">{workspaceLayoutStatus}</p>}

@@ -194,6 +194,51 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   .primary,.secondary,.danger,.alert,.mobile-menu-panel,dialog,.confirm-dialog,.table-wrap { border: 1px solid ButtonText; }
 }
 
+/* Nexa CRM desktop interface style. The 901px boundary matches the point at
+   which the existing desktop rail/topbar replaces the mobile shell. */
+@media (min-width: 901px) {
+  html[data-interface-style="nexa-crm"] body { background: var(--nx-canvas); color: var(--nx-text-strong); font-size: 13px; }
+  html[data-interface-style="nexa-crm"] .product-shell--crm,
+  html[data-interface-style="nexa-crm"] .product-shell--admin { grid-template-rows: 56px minmax(0,1fr); background: var(--nx-canvas); }
+  html[data-interface-style="nexa-crm"] .product-shell>.product-rail { padding: 14px 12px; border-right-color: var(--nx-border-strong); }
+  html[data-interface-style="nexa-crm"] .product-shell>.product-rail>.brand { margin-bottom: 12px; padding: 2px 6px 12px; border-bottom: 1px solid var(--nx-border-subtle); }
+  html[data-interface-style="nexa-crm"] .product-shell .brand>span { border-radius: 8px; background: var(--nx-action-primary); }
+  html[data-interface-style="nexa-crm"] .product-shell .product-navigation-content>nav { gap: 5px; }
+  html[data-interface-style="nexa-crm"] .product-nav-group { gap: 1px; }
+  html[data-interface-style="nexa-crm"] .product-nav-group h2 button { min-height: 32px; padding: 5px 8px; font-size: 9.5px; letter-spacing: .09em; }
+  html[data-interface-style="nexa-crm"] .product-nav-group h2 button svg { width: 15px; height: 15px; }
+  html[data-interface-style="nexa-crm"] .product-nav-group>div { gap: 1px; padding-left: 0; border-left: 0; }
+  html[data-interface-style="nexa-crm"] .product-shell .product-nav-group a { min-height: 38px; padding: 6px 9px; border-radius: 7px; font-size: 12px; }
+  html[data-interface-style="nexa-crm"] .product-shell .product-nav-group a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--nx-action-primary); }
+  html[data-interface-style="nexa-crm"] .product-shell>.product-topbar { min-height: 56px; padding-inline: 20px; border-bottom-color: var(--nx-border-strong); }
+  html[data-interface-style="nexa-crm"] .product-global-search { min-width: 240px; background: #fbfaf8; }
+  html[data-interface-style="nexa-crm"] .product-create-action { border-radius: 8px; }
+  html[data-interface-style="nexa-crm"] .product-shell>.product-main { padding: 0 24px 40px; }
+  html[data-interface-style="nexa-crm"] .product-shell--crm .admin-content { max-width: 1480px; gap: 14px; }
+  html[data-interface-style="nexa-crm"] .product-shell--crm .product-page-header,
+  html[data-interface-style="nexa-crm"] .ds-page-header { margin-top: 0; padding: 20px 0 16px; }
+  html[data-interface-style="nexa-crm"] .product-shell--crm .product-page-header h1,
+  html[data-interface-style="nexa-crm"] .ds-page-header h1 { font-size: 24px; letter-spacing: -.025em; }
+  html[data-interface-style="nexa-crm"] :is(.ds-panel,.ds-record-list,.ds-table-wrap,.ds-data-toolbar,.ds-section-nav,.ds-form-section,.ds-form-actions,.ds-stage-column,.dashboard-card,.kpi-card,.dashboard-filters,.admin-toolbar,.account-section) { box-shadow: var(--nf-shadow-1); }
+  html[data-interface-style="nexa-crm"] :is(.ds-data-toolbar,.cg-directory-tools,.dashboard-filters,.admin-toolbar) { padding: 12px; }
+  html[data-interface-style="nexa-crm"] :is(.field input,.field select,.field textarea,.ds-input,.ds-select) { border-radius: 8px; background: #ffffff; }
+  html[data-interface-style="nexa-crm"] .ds-table :is(th,td),
+  html[data-interface-style="nexa-crm"] .admin-table :is(th,td) { padding-block: 10px; }
+  html[data-interface-style="nexa-crm"] .ds-table thead th,
+  html[data-interface-style="nexa-crm"] .admin-table th { background: #fbfaf8; color: var(--nx-text-muted); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+  html[data-interface-style="nexa-crm"] .ds-record-row { padding: 12px 14px; }
+  html[data-interface-style="nexa-crm"] .ds-form-workbench { grid-template-columns: 184px minmax(0,1fr); gap: 14px; }
+  html[data-interface-style="nexa-crm"] .ds-section-nav { top: 12px; padding: 8px; }
+  html[data-interface-style="nexa-crm"] .ds-form-section { gap: 14px; padding: 17px 18px; border-top-width: 1px; border-left: 4px solid var(--ds-section-accent); }
+  html[data-interface-style="nexa-crm"] .ds-form-actions { gap: 8px; padding: 10px 13px; }
+  html[data-interface-style="nexa-crm"] .pipeline-board { gap: 11px; }
+  html[data-interface-style="nexa-crm"] .ds-stage-column,
+  html[data-interface-style="nexa-crm"] .product-shell--crm .pipeline-stage { padding: 9px; border-radius: 10px; background: #f1f0ed; }
+  html[data-interface-style="nexa-crm"] .ds-stage-column__content>header { padding: 3px 3px 10px; border-bottom-width: 1px; border-top: 3px solid var(--ds-stage-accent); }
+  html[data-interface-style="nexa-crm"] .ds-lead-card,
+  html[data-interface-style="nexa-crm"] .pipeline-lead-card { border-radius: 8px; background: #ffffff; box-shadow: var(--nf-shadow-1); }
+}
+
 /* Command Center application composition. The root preference changes shared
    density and workspace geometry without changing feature behavior or data. */
 html[data-workspace-layout="command-center"] .product-shell>.product-main { padding: var(--nf-command-canvas-padding); }
