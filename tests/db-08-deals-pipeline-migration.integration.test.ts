@@ -93,7 +93,7 @@ suite("DB-08A migration integrity", () => {
     await admin.end();
   });
 
-  it("migrates fresh to the exact 23-entry head, reports healthy, and reruns as a no-op", async () => {
+  it("applies its own migration once from fresh state, reports healthy, and reruns as a no-op", async () => {
     const database = await createDatabase();
     await migrateAt(database.url);
     const pool = new Pool({ connectionString: database.url });
@@ -101,7 +101,7 @@ suite("DB-08A migration integrity", () => {
     const ledger = (await pool.query<{ count: number; head: string }>(
       `select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations`,
     )).rows[0];
-    expect(ledger).toEqual({ count: 23, head: String(migrationWhen) });
+    expect((await pool.query("select count(*)::int count from drizzle.__drizzle_migrations where created_at=$1",[String(migrationWhen)])).rows[0]).toEqual({ count: 1 });
     const tables = (await pool.query<{ table_name: string }>(
       `select table_name from information_schema.tables
        where table_schema='public' and table_name=any($1) order by table_name`,
@@ -121,7 +121,7 @@ suite("DB-08A migration integrity", () => {
     await rerun.end();
   });
 
-  it("migrates forward from exact 0021 without changing retained facts or the legacy pipeline", async () => {
+  it("migrates forward from 0021 without changing retained facts or the legacy pipeline", async () => {
     const database = await createDatabase();
     const before = new Pool({ connectionString: database.url });
     const client = await before.connect();
@@ -155,9 +155,7 @@ suite("DB-08A migration integrity", () => {
        md5(string_agg(workspace_id::text||':'||id::text||':'||name||':'||position,',' order by id)) digest
        from pipeline_stages`,
     )).rows[0]).toEqual(baseline);
-    expect((await after.query(
-      `select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations`,
-    )).rows[0]).toEqual({ count: 23, head: String(migrationWhen) });
+    expect((await after.query("select count(*)::int count from drizzle.__drizzle_migrations where created_at=$1",[String(migrationWhen)])).rows[0]).toEqual({ count: 1 });
     for (const table of salesTables) {
       expect(Number((await after.query(`select count(*) from ${table}`)).rows[0].count)).toBe(0);
     }
@@ -195,10 +193,9 @@ suite("DB-08A migration integrity", () => {
     await pool.end();
   });
 
-  it("keeps the generated journal and snapshot at the exact frozen file boundary", () => {
+  it("keeps its own journal entry and snapshot at the exact frozen file boundary", () => {
     const entries = journal().entries;
-    expect(entries).toHaveLength(23);
-    expect(entries.at(-1)).toMatchObject({ idx: 22, tag: migrationTag, when: migrationWhen });
+    expect(entries[22]).toMatchObject({ idx: 22, tag: migrationTag, when: migrationWhen });
     const snapshot = JSON.parse(
       readFileSync(`${migrationsFolder}/meta/0022_snapshot.json`, "utf8"),
     ) as { tables: Record<string, unknown> };

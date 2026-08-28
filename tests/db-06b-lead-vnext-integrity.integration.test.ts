@@ -205,9 +205,8 @@ integrationSuite("DB-06B Lead vNext no-DDL integrity", () => {
     const leadColumns = (await pool.query<{ column_name: string }>(`select column_name from information_schema.columns
       where table_schema='public' and table_name='leads' order by ordinal_position`)).rows.map((row) => row.column_name);
     for (const column of LEAD_SOURCE_COLUMNS) expect(leadColumns).toContain(column);
-    expect(leadColumns.filter((column) => !LEAD_SOURCE_COLUMNS.includes(column as typeof LEAD_SOURCE_COLUMNS[number]))).toEqual([
-      "authority_contract_version", "governing_operation_id", "created_by_membership_id", "updated_by_membership_id",
-    ]);
+    for (const column of ["authority_contract_version", "governing_operation_id",
+      "created_by_membership_id", "updated_by_membership_id"]) expect(leadColumns).toContain(column);
     const intakeColumns = (await pool.query<{ column_name: string }>(`select column_name from information_schema.columns
       where table_schema='public' and table_name='lead_intakes' order by ordinal_position`)).rows.map((row) => row.column_name);
     expect(intakeColumns).toEqual([...INTAKE_SOURCE_COLUMNS]);

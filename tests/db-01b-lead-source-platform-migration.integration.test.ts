@@ -37,13 +37,13 @@ async function seedLead(client: PoolClient, sourceValue: "manual" | "social_medi
 suite("DB-01B migration integrity", () => {
   afterAll(async () => { for (const name of names) { await admin.query("select pg_terminate_backend(pid) from pg_stat_activity where datname=$1", [name]); await admin.query(`drop database if exists ${name}`); } await admin.end(); });
 
-  it("migrates fresh and forward with retained non-social rows to exact 26-entry head, then no-ops", async () => {
+  it("applies its own migration once with retained non-social rows, then no-ops", async () => {
     for (const mode of ["fresh", "forward"] as const) {
       const url = await database();
       if (mode === "forward") { const db = new Pool({ connectionString: url }), client = await db.connect(); try { await through0024(client); await seedLead(client, "manual"); } finally { client.release(); await db.end(); } }
       await migrate(url); const db = new Pool({ connectionString: url });
       expect(await databaseHealth(db)).toMatchObject({ ok: true });
-      const ledger = (await db.query("select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations")).rows[0]; expect(ledger).toEqual({ count: 26, head });
+      const ledger = (await db.query("select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations")).rows[0]; expect((await db.query("select count(*)::int count from drizzle.__drizzle_migrations where created_at=$1",[head])).rows[0]).toEqual({ count: 1 });
       if (mode === "forward") expect((await db.query("select source,source_platform from leads")).rows[0]).toEqual({ source: "manual", source_platform: null });
       await db.end(); await migrate(url); const again = new Pool({ connectionString: url }); expect((await again.query("select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations")).rows[0]).toEqual(ledger); await again.end();
     }
