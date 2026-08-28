@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { announceThemePreference } from "../theme";
+import { announceWorkspaceLayoutPreference, isWorkspaceLayoutPreference, type WorkspaceLayoutPreference } from "../workspace-layout";
 
 type Preferences = { theme: "light" | "system" | "dark"; locale: string; timezone: string; version: number };
 const defaults: Preferences = { theme: "light", locale: "en-CA", timezone: "America/Toronto", version: 0 };
@@ -21,6 +22,8 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
   const [profileName, setProfileName] = useState(initialName);
   const [profileStatus, setProfileStatus] = useState("");
   const [preferencesStatus, setPreferencesStatus] = useState("");
+  const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutPreference>("structured");
+  const [workspaceLayoutStatus, setWorkspaceLayoutStatus] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -29,6 +32,17 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
   const [fieldError, setFieldError] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const passwordErrorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const current = document.documentElement.dataset.workspaceLayout;
+    if (isWorkspaceLayoutPreference(current)) setWorkspaceLayout(current);
+  }, []);
+
+  function chooseWorkspaceLayout(next: WorkspaceLayoutPreference) {
+    setWorkspaceLayout(next);
+    announceWorkspaceLayoutPreference(next, true);
+    setWorkspaceLayoutStatus(`${next === "command-center" ? "Command Center" : "Structured Workspace"} is now active on this device.`);
+  }
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
@@ -107,6 +121,10 @@ export function AccountSettingsClient({ initialName, initialPreferences }: { ini
 
       <section className="account-section" aria-labelledby="preferences-heading">
         <div><p className="eyebrow">Preferences</p><h2 id="preferences-heading">Appearance and regional settings</h2><p>Choose how NexaFlow looks and formats information for you.</p></div>
+        <div className="account-layout-preference">
+          <label className="field"><span>Workspace layout</span><select value={workspaceLayout} onChange={event => chooseWorkspaceLayout(event.target.value as WorkspaceLayoutPreference)}><option value="structured">Structured Workspace</option><option value="command-center">Command Center</option></select><small>Presentation only. This choice does not change Workspace data, permissions, or workflows.</small></label>
+          {workspaceLayoutStatus && <p className="alert" role="status">{workspaceLayoutStatus}</p>}
+        </div>
         <form onSubmit={savePreferences} className="account-form-grid">
           <label className="field"><span>Theme</span><select value={preferences.theme} onChange={event => { const theme = event.target.value as Preferences["theme"]; setPreferences(current => ({ ...current, theme })); announceThemePreference(theme); }}><option value="light">Light</option><option value="system">Use device setting</option><option value="dark">Dark</option></select></label>
           <label className="field"><span>Language and region</span><select value={preferences.locale} onChange={event => setPreferences(current => ({ ...current, locale: event.target.value }))}><option value="en-CA">English (Canada)</option><option value="en-US">English (United States)</option><option value="en-GB">English (United Kingdom)</option></select></label>

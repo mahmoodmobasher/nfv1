@@ -252,6 +252,58 @@
 
 :where(.ds-action,.ds-view-tabs a,.ds-section-nav a,.ds-record-row a,.ds-stage-column a):focus-visible { outline: 3px solid var(--nx-focus); outline-offset: 2px; }
 
+/* Command Center reuses every primitive and changes only shared composition. */
+html[data-workspace-layout="command-center"] .ds-page-header {
+  align-items: center;
+  gap: var(--nf-space-3);
+  margin-top: 0;
+  padding: var(--nf-space-3) var(--nf-space-4);
+  border: 1px solid var(--nx-border-strong);
+  border-radius: var(--nf-command-radius);
+  background: var(--nx-surface-primary);
+}
+html[data-workspace-layout="command-center"] .ds-page-header h1 { font-size: var(--nf-command-header-size); }
+html[data-workspace-layout="command-center"] .ds-page-header__description { margin-top: var(--nf-space-1); }
+html[data-workspace-layout="command-center"] .ds-page-header__marker { width: 40px; min-width: 40px; height: 40px; }
+html[data-workspace-layout="command-center"] .ds-list-toolbar { gap: var(--nf-command-gap); padding: var(--nf-space-2); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-table th,
+html[data-workspace-layout="command-center"] .ds-table td { padding-block: var(--nf-space-2); }
+html[data-workspace-layout="command-center"] .ds-table tbody tr { min-height: var(--nf-command-row-min); }
+html[data-workspace-layout="command-center"] .ds-record-card { gap: var(--nf-space-2); padding: var(--nf-space-3); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-record-identity { gap: var(--nf-space-2); }
+html[data-workspace-layout="command-center"] .ds-record-identity__marker { border-radius: var(--nf-command-radius-small); }
+html[data-workspace-layout="command-center"] .ds-record-workspace { grid-template-columns: var(--nf-command-detail-rail) minmax(0,1fr); gap: var(--nf-command-gap); margin-top: var(--nf-space-3); }
+html[data-workspace-layout="command-center"] .ds-record-workspace__summary,
+html[data-workspace-layout="command-center"] .ds-record-workspace__content { border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-record-workspace__summary { position: sticky; top: var(--nf-space-3); padding: var(--nf-space-4); }
+html[data-workspace-layout="command-center"] .ds-record-workspace__content>div:not(.ds-content-tabs) { gap: var(--nf-space-3); padding: var(--nf-space-4); }
+html[data-workspace-layout="command-center"] .ds-content-tabs { gap: var(--nf-space-3); padding-inline: var(--nf-space-4); }
+html[data-workspace-layout="command-center"] .ds-panel__header { padding: var(--nf-space-3) var(--nf-space-4) var(--nf-space-2); }
+html[data-workspace-layout="command-center"] .ds-panel__body { padding: var(--nf-space-3) var(--nf-space-4) var(--nf-space-4); }
+html[data-workspace-layout="command-center"] .ds-facts-grid { gap: var(--nf-space-2); }
+html[data-workspace-layout="command-center"] .ds-facts-grid>div { padding: var(--nf-space-2); border-radius: var(--nf-command-radius-small); }
+html[data-workspace-layout="command-center"] .ds-form-workbench { grid-template-columns: var(--nf-command-form-rail) minmax(0,1fr); gap: var(--nf-command-gap); }
+html[data-workspace-layout="command-center"] .ds-section-nav { top: var(--nf-space-3); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-form-section { gap: var(--nf-space-3); padding: var(--nf-space-3-5); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-form-grid { gap: var(--nf-space-2-5); }
+html[data-workspace-layout="command-center"] .ds-form-actions { gap: var(--nf-space-2); padding: var(--nf-space-3); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-pipeline { gap: var(--nf-command-gap); }
+html[data-workspace-layout="command-center"] .ds-stage-column { padding: var(--nf-space-2); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-stage-column__content>header { padding-bottom: var(--nf-space-2); }
+html[data-workspace-layout="command-center"] .ds-stage-column__items { gap: var(--nf-command-gap); padding-top: var(--nf-space-2); }
+html[data-workspace-layout="command-center"] .ds-lead-card { gap: var(--nf-space-1-5); padding: var(--nf-space-2-5); border-radius: var(--nf-command-radius-small); }
+
+@media (max-width: 900px) {
+  html[data-workspace-layout="command-center"] .ds-record-workspace,
+  html[data-workspace-layout="command-center"] .ds-form-workbench { grid-template-columns: minmax(0,1fr); gap: var(--nf-space-3); }
+  html[data-workspace-layout="command-center"] .ds-record-workspace__summary { position: static; }
+  html[data-workspace-layout="command-center"] .ds-section-nav,
+  html[data-workspace-layout="command-center"] .ds-form-section,
+  html[data-workspace-layout="command-center"] .ds-form-actions { grid-column: 1; }
+  html[data-workspace-layout="command-center"] .ds-section-nav { grid-row: auto; position: static; display: flex; overflow-x: auto; }
+  html[data-workspace-layout="command-center"] .ds-section-nav a { flex: 0 0 auto; }
+}
+
 .lead-management-dialog { position: fixed; inset: 50% auto auto 50%; box-sizing: border-box; width: min(520px,calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); margin: 0; overflow: auto; overscroll-behavior: contain; padding: var(--nf-space-5); border: 1px solid var(--nx-border-strong); border-radius: var(--nf-radius-card); background: var(--nx-surface-overlay); color: var(--nx-text-strong); box-shadow: var(--nx-overlay-shadow); transform: translate(-50%,-50%); }
 .lead-management-dialog::backdrop { background: var(--nx-blanket); }
 .lead-management-dialog h2 { margin: 0; }

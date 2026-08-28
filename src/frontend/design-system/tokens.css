@@ -222,6 +222,22 @@ html[data-theme="dark"] {
   --nf-surface-inverse: var(--nx-text-strong);
 }
 
+/* Command Center is a presentation density mode over the same semantic system. */
+html[data-workspace-layout="command-center"] {
+  --nf-command-canvas-padding: 14px;
+  --nf-command-gap: 8px;
+  --nf-command-radius: 8px;
+  --nf-command-radius-small: 6px;
+  --nf-command-metric-size: 24px;
+  --nf-command-header-size: 22px;
+  --nf-command-detail-rail: 290px;
+  --nf-command-form-rail: 160px;
+  --nf-command-row-min: 46px;
+  --nf-content-padding: 18px;
+  --nf-form-workbench-max: 1240px;
+  --nf-detail-max: 1320px;
+}
+
 @media (forced-colors: active) {
   :root,
   html[data-theme] {

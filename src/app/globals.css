@@ -194,6 +194,43 @@ dialog::backdrop,.confirm-layer { background: rgb(11 18 16 / 68%); }
   .primary,.secondary,.danger,.alert,.mobile-menu-panel,dialog,.confirm-dialog,.table-wrap { border: 1px solid ButtonText; }
 }
 
+/* Command Center application composition. The root preference changes shared
+   density and workspace geometry without changing feature behavior or data. */
+html[data-workspace-layout="command-center"] .product-shell>.product-main { padding: var(--nf-command-canvas-padding); }
+html[data-workspace-layout="command-center"] .product-shell--crm .admin-content { gap: var(--nf-space-3); max-width: var(--nf-content-max); padding-block-end: var(--nf-space-8); }
+html[data-workspace-layout="command-center"] .product-shell--crm .product-page-header { padding: var(--nf-space-3) var(--nf-space-4); border: 1px solid var(--nx-border-strong); }
+html[data-workspace-layout="command-center"] .product-shell--crm .product-page-header h1 { margin-top: 0; font-size: var(--nf-command-header-size); }
+html[data-workspace-layout="command-center"] .product-shell--crm .product-page-header .lead { margin-top: var(--nf-space-1); font-size: var(--nf-text-body); }
+html[data-workspace-layout="command-center"] .product-shell--crm .admin-toolbar,
+html[data-workspace-layout="command-center"] .product-shell--crm .dashboard-filters,
+html[data-workspace-layout="command-center"] .product-shell--crm .cg-directory-tools { gap: var(--nf-command-gap); padding: var(--nf-space-2); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .product-shell--crm .dashboard-welcome { margin-block: var(--nf-space-3); padding: var(--nf-space-3) var(--nf-space-4); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .product-shell--crm .kpi-grid,
+html[data-workspace-layout="command-center"] .product-shell--crm .dashboard-two-column,
+html[data-workspace-layout="command-center"] .product-shell--crm .dashboard-activity,
+html[data-workspace-layout="command-center"] .product-shell--crm .pipeline-board { gap: var(--nf-command-gap); }
+html[data-workspace-layout="command-center"] .product-shell--crm .kpi-card,
+html[data-workspace-layout="command-center"] .product-shell--crm .dashboard-card { padding: var(--nf-space-3); border-radius: var(--nf-command-radius); box-shadow: none; }
+html[data-workspace-layout="command-center"] .product-shell--crm .kpi-card strong { font-size: var(--nf-command-metric-size); }
+html[data-workspace-layout="command-center"] .product-shell--crm .pipeline-stage { padding: var(--nf-space-2); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .ds-review-workspace { gap: var(--nf-space-3); }
+html[data-workspace-layout="command-center"] .ds-review-list { gap: var(--nf-command-gap); }
+html[data-workspace-layout="command-center"] .ds-review-row { min-height: var(--nf-command-row-min); gap: var(--nf-space-3); padding: var(--nf-space-2); border-radius: var(--nf-command-radius); }
+html[data-workspace-layout="command-center"] .p1a-summary,
+html[data-workspace-layout="command-center"] .p1a-candidates,
+html[data-workspace-layout="command-center"] .p1a-hold { border-radius: var(--nf-command-radius); }
+.account-layout-preference { display: grid; gap: var(--nf-space-2); max-width: 520px; padding-bottom: var(--nf-space-4); border-bottom: 1px solid var(--nx-border-subtle); }
+.account-layout-preference .field { margin: 0; }
+.account-layout-preference .alert { margin: 0; }
+
+@media (max-width: 900px) {
+  html[data-workspace-layout="command-center"] .product-shell>.product-main { padding: var(--nf-content-padding); }
+}
+@media (max-width: 700px) {
+  html[data-workspace-layout="command-center"] .product-shell>.product-main { padding-inline: 16px; }
+  html[data-workspace-layout="command-center"] .product-shell--crm .product-page-header { padding: var(--nf-space-3); }
+}
+
 .p1a-lead-card { min-width: 0; overflow-wrap: anywhere; }
 .p1a-card-meta { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .p1a-card-actions { margin-top: 1rem; }
