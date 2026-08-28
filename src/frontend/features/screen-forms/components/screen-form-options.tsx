@@ -103,6 +103,7 @@ export function OptionSelect({
   reconciliation,
   onReconciled,
   onResolutionStateChange,
+  layoutSpan,
 }: {
   workspaceId: string;
   kind: ScreenKind;
@@ -120,6 +121,7 @@ export function OptionSelect({
   reconciliation?: SelectionReconciliation;
   onReconciled?: () => void;
   onResolutionStateChange?: (unresolved: boolean) => void;
+  layoutSpan?: "half" | "wide" | "full";
 }) {
   const [query, setQuery] = useState(""),
     [items, setItems] = useState<Option[]>(initial ? [initial] : []),
@@ -290,7 +292,7 @@ export function OptionSelect({
     retryItem = reconciliation?.submitted ?? initial ?? null;
   const companyRecovery = kind === "lead" && optionKind === "company" && !loading && items.length === 0;
   return (
-    <div className={`screen-option-field${leadCompanyLayout ? " lead-company-option" : ""}`}>
+    <div className={`screen-option-field${leadCompanyLayout ? " lead-company-option" : ""}${layoutSpan ? ` ds-field-span--${layoutSpan}` : ""}`}>
       <div className="screen-option-search">
         <label className="field" htmlFor={`${id}-search`}>
           <span>Search {label.toLowerCase()}</span>

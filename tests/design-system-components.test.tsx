@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionLink, ActionMenu, ContentTabs, DataTable, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, LoadingState, Panel, ProductPageHeader, RecordCard, RecordCards, RecordIdentity, RecordWorkspace, RelationshipRow, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
+import { ActionLink, ActionMenu, AdminPanel, AdminWorkspace, ContentTabs, DataTable, DataToolbar, EmptyState, FactsGrid, FeedbackState, FieldMessage, FormActions, FormGrid, FormSection, FormWorkbench, LoadingState, Panel, ProductPageHeader, RecordCard, RecordCards, RecordIdentity, RecordWorkspace, RelationshipRow, ReviewDecisionGroup, ReviewDecisionHeader, ReviewDecisionSummary, ReviewWorkspace, SectionNav, StageColumn, StatusBadge, ViewTabs, WorkflowSummaryGrid } from "../src/frontend/design-system";
 
 describe("CRM shared design-system components", () => {
   it("renders complete semantic state primitives without feature authority", () => {
@@ -52,5 +52,16 @@ describe("CRM shared design-system components", () => {
     expect(markup).toContain('aria-label="Contact sections"');
     expect(markup).toContain("ds-relationship-row");
     expect(markup).toContain('aria-label="Actions for Ada Lovelace"');
+  });
+
+  it("renders shared Command Center completion patterns without domain authority", () => {
+    const markup = renderToStaticMarkup(<><DataToolbar label="Search loaded companies" htmlFor="company-search" helper={<p id="company-search-help">Search applies only to loaded records.</p>} status={<p role="status">10 loaded companies</p>}><input id="company-search" type="search" aria-describedby="company-search-help"/><button>Search</button></DataToolbar><ReviewWorkspace evidence={<section><h2>Lead inquiry</h2></section>}><ReviewDecisionHeader title="Decision workspace" action={<button>Complete review</button>}/><ReviewDecisionGroup>Contact decision</ReviewDecisionGroup><ReviewDecisionSummary><div>Contact summary</div><div>Company summary</div></ReviewDecisionSummary></ReviewWorkspace><AdminWorkspace><AdminPanel title="People and roles" wide>Server-authorized controls</AdminPanel></AdminWorkspace></>);
+    expect(markup).toContain('for="company-search"');
+    expect(markup).toContain('aria-describedby="company-search-help"');
+    expect(markup).toContain("ds-data-toolbar__status");
+    expect(markup).toContain('aria-label="Review evidence"');
+    expect(markup).toContain('aria-label="Decision workspace"');
+    expect(markup).toContain("ds-review-decision__summary");
+    expect(markup).toContain("ds-admin-panel--wide");
   });
 });

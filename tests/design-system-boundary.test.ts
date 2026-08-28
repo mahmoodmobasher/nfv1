@@ -221,6 +221,25 @@ describe("design-system document boundary", () => {
     expect(deals).toContain("deal-board__stage ds-stage-column");
   });
 
+  it("keeps Command Center completion geometry in shared Nexa Spectrum patterns", () => {
+    const components = readFileSync(new URL("../src/frontend/design-system/components.css", import.meta.url), "utf8");
+    const directory = readFileSync(new URL("../src/frontend/features/customer-graph/components/customer-graph-list.tsx", import.meta.url), "utf8");
+    const form = readFileSync(new URL("../src/frontend/features/screen-forms/components/screen-profile-form.tsx", import.meta.url), "utf8");
+    const review = readFileSync(new URL("../src/frontend/features/identity-review/components/identity-review-detail.tsx", import.meta.url), "utf8");
+    const admin = readFileSync(new URL("../src/app/workspace/settings/admin-shell.tsx", import.meta.url), "utf8");
+    expect(components).toContain('html[data-workspace-layout="command-center"] .ds-command-form-workspace');
+    expect(components).toContain(".ds-data-toolbar");
+    expect(components).toContain(".ds-review-layout");
+    expect(components).toContain(".ds-admin-workspace");
+    expect(directory).toContain("<DataToolbar");
+    expect(form).toContain("ds-command-band");
+    expect(review).toContain("<ReviewWorkspace");
+    expect(admin).toContain("<AdminWorkspace>");
+    for (const [name, source] of [["directory", directory], ["form", form], ["review", review], ["admin", admin]] as const) {
+      expect(source, name).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    }
+  });
+
   it("keeps Phase 3 CRM presentation on the centralized semantic contract", () => {
     const css = readFileSync(
       new URL("../src/app/globals.css", import.meta.url),

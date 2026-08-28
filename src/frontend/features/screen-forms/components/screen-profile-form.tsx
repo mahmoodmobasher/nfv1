@@ -115,7 +115,8 @@ export function ScreenProfileForm({
     request = useRef({ body: "", key: crypto.randomUUID() }),
     noteRequest = useRef({ body: "", key: crypto.randomUUID() });
   const quickCompanyCommittedRef = useRef(false);
-  const basePath = `/crm/${plural(kind)}`,
+  const commandEditor = kind === "contact" || kind === "lead",
+    basePath = `/crm/${plural(kind)}`,
     profileRoute = recordId ? `${plural(kind)}/${recordId}/profile` : "";
   function clearProtectedState() {
     setReady(false);
@@ -596,18 +597,32 @@ export function ScreenProfileForm({
       <FormWorkbench label={`${editing ? "Edit" : "Add"} ${noun(kind)}`}>
       <SectionNav label={`${noun(kind)} form sections`} items={kind === "company" ? [{href:"#company-profile-heading",label:"Profile"},{href:"#company-hierarchy-heading",label:"Hierarchy"},{href:"#company-contact-heading",label:"Contact & address"},{href:"#assignment-heading",label:"Responsibility"}] : kind === "contact" ? [{href:"#basic-heading",label:"Overview"},{href:"#affiliation-heading",label:"Company affiliation"},{href:"#channels-heading",label:"Channels"},{href:"#lifecycle-heading",label:"Lifecycle"},{href:"#address-heading",label:"Address"},{href:"#notes-heading",label:"Notes"},{href:"#assignment-heading",label:"Responsibility"}] : [{href:"#lead-essentials-heading",label:"Overview"},{href:"#lead-channels-heading",label:"Channels"},{href:"#profiling-heading",label:"Profiling"},{href:"#assignment-heading",label:"Responsibility"}]}/>
         <form
-          className={`ds-form screen-profile-form${kind === "lead" ? " lead-profile-shell" : ""}`}
+          className={`ds-form screen-profile-form${commandEditor ? " ds-command-form-workspace" : ""}${kind === "lead" ? " lead-profile-shell" : ""}`}
           noValidate
           onSubmit={submit}
           aria-busy={busy}
         >
+          {commandEditor && <div className="ds-command-band" role="region" aria-label={`${noun(kind)} save controls`}>
+            <p className="ds-command-band__status" role="status">{notice || (editing ? "Ready to save changes." : `Ready to create ${noun(kind).toLowerCase()}.`)}</p>
+            <div className="ds-command-band__actions"><ScreenFormActions>
+              <Link
+                className="secondary link-button"
+                href={editing ? `${basePath}/${recordId}` : basePath}
+              >
+                Cancel
+              </Link>
+              <Button variant="primary" disabled={busy || stale || selectionConflict !== null || unresolvedOptions.size > 0}>
+                {busy ? "Saving…" : kind === "lead" && editing ? "Save changes" : `Save ${noun(kind)}`}
+              </Button>
+            </ScreenFormActions></div>
+          </div>}
           <ErrorSummary
             errors={errors}
             summary={summary}
             linkedFields={linkedFields(kind)}
             reference={safeReference || undefined}
           />
-          {notice && (
+          {!commandEditor && notice && (
             <p className="alert info" role="status">
               {notice}
             </p>
@@ -771,6 +786,7 @@ export function ScreenProfileForm({
                     optionKind="company"
                     id="companyId"
                     label="Company"
+                    layoutSpan="half"
                     onResolutionStateChange={(unresolved) => setOptionResolution("companyId", unresolved)}
                     initial={companyOption}
                     error={errors.companyId}
@@ -798,6 +814,7 @@ export function ScreenProfileForm({
                   <Input
                     id="primaryEmail"
                     label="Primary email"
+                    layoutSpan="half"
                     required
                     type="email"
                     autoComplete="email"
@@ -807,6 +824,7 @@ export function ScreenProfileForm({
                   <Input
                     id="secondaryEmail"
                     label="Secondary email"
+                    layoutSpan="half"
                     type="email"
                     autoComplete="email"
                     defaultValue={channel?.secondaryEmail ?? ""}
@@ -915,6 +933,7 @@ export function ScreenProfileForm({
                     id="companyId"
                     label="Company"
                     required
+                    layoutSpan="wide"
                     onResolutionStateChange={(unresolved) => setOptionResolution("companyId", unresolved)}
                     initial={companyOption}
                     reconciliation={selectionConflict?.field === "profile.company" ? selectionConflict : undefined}
@@ -959,6 +978,7 @@ export function ScreenProfileForm({
                     id="primaryEmail"
                     label="Primary email"
                     required
+                    layoutSpan="half"
                     type="email"
                     autoComplete="email"
                     defaultValue={channel?.primaryEmail ?? ""}
@@ -1205,7 +1225,7 @@ export function ScreenProfileForm({
               </Button>
             </div>
           )}
-          <ScreenFormActions>
+          {!commandEditor && <ScreenFormActions>
             <Link
               className="secondary link-button"
               href={editing ? `${basePath}/${recordId}` : basePath}
@@ -1213,9 +1233,9 @@ export function ScreenProfileForm({
               Cancel
             </Link>
             <Button variant="primary" disabled={busy || stale || selectionConflict !== null || unresolvedOptions.size > 0}>
-              {busy ? "Saving…" : kind === "lead" && editing ? "Save changes" : `Save ${noun(kind)}`}
+              {busy ? "Saving…" : `Save ${noun(kind)}`}
             </Button>
-          </ScreenFormActions>
+          </ScreenFormActions>}
         </form>
       </FormWorkbench>
     </>

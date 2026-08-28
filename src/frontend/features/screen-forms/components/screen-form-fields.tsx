@@ -199,12 +199,14 @@ export function Input({
   label,
   required,
   help,
+  layoutSpan,
   ...props
 }: {
   id: string;
   label: string;
   required?: boolean;
   help?: string;
+  layoutSpan?: "half" | "wide" | "full";
   "data-error"?: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   const error = props["data-error"] as string | undefined;
@@ -213,7 +215,7 @@ export function Input({
       .filter(Boolean)
       .join(" ") || undefined;
   return (
-    <label className="field" htmlFor={id}>
+    <label className={`field${layoutSpan ? ` ds-field-span--${layoutSpan}` : ""}`} htmlFor={id}>
       <span>
         {label}
         {required ? (
@@ -249,6 +251,7 @@ export function Select({
   required,
   error,
   defaultValue,
+  layoutSpan,
 }: {
   id: string;
   label: string;
@@ -256,9 +259,10 @@ export function Select({
   required?: boolean;
   error?: string;
   defaultValue?: string;
+  layoutSpan?: "half" | "wide" | "full";
 }) {
   return (
-    <label className="field" htmlFor={id}>
+    <label className={`field${layoutSpan ? ` ds-field-span--${layoutSpan}` : ""}`} htmlFor={id}>
       <span>
         {label}
         {required ? (

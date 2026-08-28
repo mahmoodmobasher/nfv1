@@ -105,6 +105,11 @@ export function DataTable({ caption, children }: { caption: string; children: Re
   return <div className="ds-table-wrap"><table className="ds-table"><caption>{caption}</caption>{children}</table></div>;
 }
 
+export function DataToolbar({ label, htmlFor, children, helper, status }: { label: string; htmlFor?: string; children: ReactNode; helper?: ReactNode; status?: ReactNode }) {
+  const heading = htmlFor ? <label className="ds-data-toolbar__label" htmlFor={htmlFor}>{label}</label> : <div className="ds-data-toolbar__label">{label}</div>;
+  return <section className="ds-data-toolbar ds-list-toolbar" aria-label={`${label} controls`}>{heading}<div className="ds-data-toolbar__controls">{children}</div>{helper && <div className="ds-data-toolbar__helper">{helper}</div>}{status && <div className="ds-data-toolbar__status">{status}</div>}</section>;
+}
+
 export function RecordCards({ label, children }: { label: string; children: ReactNode }) {
   return <div className="ds-record-cards" role="list" aria-label={label}>{children}</div>;
 }
@@ -171,4 +176,28 @@ export function FormActions({ children }: { children: ReactNode }) {
 
 export function SectionNav({ label, items }: { label: string; items: Array<{ href: string; label: string }> }) {
   return <nav className="ds-section-nav" aria-label={label}>{items.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}</nav>;
+}
+
+export function ReviewWorkspace({ evidence, children }: { evidence: ReactNode; children: ReactNode }) {
+  return <div className="ds-review-layout"><aside className="ds-review-evidence" aria-label="Review evidence">{evidence}</aside><section className="ds-review-decision" aria-label="Decision workspace">{children}</section></div>;
+}
+
+export function ReviewDecisionHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
+  return <header className="ds-review-decision__header"><div><h2>{title}</h2>{description && <div>{description}</div>}</div>{action && <div className="ds-review-decision__action">{action}</div>}</header>;
+}
+
+export function ReviewDecisionGroup({ children }: { children: ReactNode }) {
+  return <div className="ds-review-decision__group">{children}</div>;
+}
+
+export function ReviewDecisionSummary({ children }: { children: ReactNode }) {
+  return <div className="ds-review-decision__summary">{children}</div>;
+}
+
+export function AdminWorkspace({ children }: { children: ReactNode }) {
+  return <div className="ds-admin-workspace">{children}</div>;
+}
+
+export function AdminPanel({ title, description, action, children, wide = false }: { title: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; wide?: boolean }) {
+  return <section className={classes("ds-admin-panel", wide && "ds-admin-panel--wide")}><header><div><h2>{title}</h2>{description && <p>{description}</p>}</div>{action && <div className="ds-admin-panel__action">{action}</div>}</header><div className="ds-admin-panel__body">{children}</div></section>;
 }
