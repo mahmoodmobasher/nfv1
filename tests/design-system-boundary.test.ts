@@ -228,11 +228,14 @@ describe("design-system document boundary", () => {
     const review = readFileSync(new URL("../src/frontend/features/identity-review/components/identity-review-detail.tsx", import.meta.url), "utf8");
     const admin = readFileSync(new URL("../src/app/workspace/settings/admin-shell.tsx", import.meta.url), "utf8");
     expect(components).toContain('html[data-workspace-layout="command-center"] .ds-command-form-workspace');
+    expect(components).toContain('html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--half { grid-column: span 1; }');
+    expect(components).toContain('html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--wide,html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--full { grid-column: 1/-1; }');
     expect(components).toContain(".ds-data-toolbar");
     expect(components).toContain(".ds-review-layout");
     expect(components).toContain(".ds-admin-workspace");
     expect(directory).toContain("<DataToolbar");
     expect(form).toContain("ds-command-band");
+    expect(readFileSync(new URL("../src/frontend/features/screen-forms/components/screen-form-options.tsx", import.meta.url), "utf8")).toContain('` ds-field-span--${layoutSpan}`');
     expect(review).toContain("<ReviewWorkspace");
     expect(admin).toContain("<AdminWorkspace>");
     for (const [name, source] of [["directory", directory], ["form", form], ["review", review], ["admin", admin]] as const) {

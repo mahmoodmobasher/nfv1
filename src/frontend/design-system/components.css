@@ -502,12 +502,14 @@ html[data-workspace-layout="command-center"] .ds-lead-card { gap: var(--nf-space
   .ds-form-section,.ds-form-actions { grid-column: 1; }
   html[data-workspace-layout="command-center"] .ds-form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   html[data-workspace-layout="command-center"] .ds-form-grid>.field { grid-column: span 1; }
-  html[data-workspace-layout="command-center"] .ds-form-grid>.field:has(textarea),html[data-workspace-layout="command-center"] .ds-form-grid>fieldset,html[data-workspace-layout="command-center"] .ds-form-grid>.full-width { grid-column: 1/-1; }
+  html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--half { grid-column: span 1; }
+  html[data-workspace-layout="command-center"] .ds-form-grid>.field:has(textarea),html[data-workspace-layout="command-center"] .ds-form-grid>fieldset,html[data-workspace-layout="command-center"] .ds-form-grid>.full-width,html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--wide,html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--full { grid-column: 1/-1; }
   html[data-workspace-layout="command-center"] .ds-review-evidence { position: static; }
 }
 @media (max-width: 520px) {
   html[data-workspace-layout="command-center"] .ds-form-grid { grid-template-columns: minmax(0,1fr); }
   html[data-workspace-layout="command-center"] .ds-form-grid>.field { grid-column: 1; }
+  html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--half,html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--wide,html[data-workspace-layout="command-center"] .ds-form-grid>.ds-field-span--full { grid-column: 1/-1; }
 }
 @media (max-width: 360px) {
   .ds-data-toolbar .cg-directory-search { grid-template-columns: minmax(0,1fr); }
