@@ -138,11 +138,13 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
     },
     async canDiscloseLead(actor: TrustedActor, lead: { id: string; owner_membership_id: string | null; visibility: string }) {
       if (actor.role !== "member") return true;
-      // Must mirror visibleLeadIds and WORKSPACE_LEAD_DISCLOSURE_SQL_PREDICATE_V1 exactly:
-      // workspace visibility OR ownership OR active-team share. Testing ownership first
-      // made workspace-visible leads owned by another member undisclosable.
+      // Deliberately NARROWER than visibleLeadIds and WORKSPACE_LEAD_DISCLOSURE_SQL_PREDICATE_V1.
+      // Only identity-review, intake-replay and screen-form paths call this, and those surfaces
+      // expose candidate PII of other people, so workspace-wide visibility is NOT sufficient:
+      // a Member must own the Lead or hold active team visibility. Do not "align" this with the
+      // Lead list predicate - p1a-manual-intake asserts withholding when responsibility is lost.
+      if (lead.owner_membership_id !== actor.membershipId) return false;
       if (lead.visibility === "workspace") return true;
-      if (lead.owner_membership_id === actor.membershipId) return true;
       return Boolean((await tx.query(
         `select 1 from lead_visible_teams lvt join team_memberships tm on tm.workspace_id=lvt.workspace_id and tm.team_id=lvt.team_id
           where lvt.workspace_id=$1 and lvt.lead_id=$2 and tm.workspace_membership_id=$3`,
