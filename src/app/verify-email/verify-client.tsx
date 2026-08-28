@@ -5,6 +5,7 @@ import { Check, Mail } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { securePost } from "../onboarding/api";
 import { Alert, PlanSummary, Shell } from "../onboarding/components";
+import { Button } from "@/frontend/design-system";
 
 type VerificationState =
   "waiting" | "checking" | "verified" | "invalid" | "resent" | "delivery-error";
@@ -93,13 +94,14 @@ export function VerifyClient({
           This link is invalid, expired, replaced, or already used.
         </Alert>
         {email ? (
-          <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+          <Button
+            variant="primary"
+            className="disabled:opacity-45"
             onClick={resend}
             disabled={busy}
           >
             {busy ? "Requesting…" : "Request another link"}
-          </button>
+          </Button>
         ) : (
           <Link className="inline-flex min-h-11 items-center justify-center rounded-control border border-accent bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-ink" href={registrationHref}>
             Return to registration
@@ -153,13 +155,14 @@ export function VerifyClient({
           registration.
         </Alert>
       )}
-      <button
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+      <Button
+        variant="secondary"
+        className="disabled:opacity-45"
         onClick={resend}
         disabled={busy || !email}
       >
         {busy ? "Requesting…" : "Resend verification email"}
-      </button>
+      </Button>
       <p className="text-center text-xs text-ink-muted [&_a]:font-semibold [&_a]:text-accent-ink">
         <Link href={registrationHref}>Wrong email or need to start again?</Link>
       </p>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { FormEvent, useRef, useState } from "react";
 import { Field, Shell } from "../../onboarding/components";
+import { Button } from "@/frontend/design-system";
 import { securePost } from "../../onboarding/api";
 import { query, type Cadence, type PlanKey } from "../../onboarding/logic";
 
@@ -151,12 +152,13 @@ export function WorkspaceForm({ plan }: { plan: PlanContext }) {
             limits.
           </p>
         </div>
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+        <Button
+          variant="primary"
+          className="disabled:opacity-45"
           disabled={busy}
         >
           {busy ? "Creating Workspace…" : "Create company Workspace"}
-        </button>
+        </Button>
       </form>
     </Shell>
   );

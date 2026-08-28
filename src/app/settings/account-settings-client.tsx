@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useRef, useState } from "react";
 import { announceThemePreference } from "../theme";
+import { Button } from "@/frontend/design-system";
 
 type Preferences = {
   theme: "light" | "system" | "dark";
@@ -255,9 +256,9 @@ export function AccountSettingsClient({
               autoComplete="name"
             />
           </label>
-          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45">
+          <Button variant="primary" className="disabled:opacity-45">
             Save profile
-          </button>
+          </Button>
         </form>
         {profileStatus && (
           <p
@@ -337,9 +338,9 @@ export function AccountSettingsClient({
               <option value="UTC">UTC</option>
             </select>
           </label>
-          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45">
+          <Button variant="primary" className="disabled:opacity-45">
             Save preferences
-          </button>
+          </Button>
         </form>
         {preferencesStatus && (
           <>
@@ -349,13 +350,14 @@ export function AccountSettingsClient({
             >
               {preferencesStatus}
             </p>
-            <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+            <Button
+              variant="secondary"
+              className="disabled:opacity-45"
               type="button"
               onClick={reloadPreferences}
             >
               Reload latest
-            </button>
+            </Button>
           </>
         )}
       </section>
@@ -386,16 +388,17 @@ export function AccountSettingsClient({
                 required
               />
             </label>
-            <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+            <Button
+              variant="secondary"
+              className="disabled:opacity-45"
               type="button"
               onClick={() => setShowPasswords((value) => !value)}
             >
               {showPasswords ? "Hide password" : "Show password"}
-            </button>
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45">
+            </Button>
+            <Button variant="primary" className="disabled:opacity-45">
               Confirm identity
-            </button>
+            </Button>
           </form>
         ) : (
           <form onSubmit={changePassword}>
@@ -436,13 +439,14 @@ export function AccountSettingsClient({
                 aria-describedby={fieldError ? "password-error" : undefined}
               />
             </label>
-            <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+            <Button
+              variant="secondary"
+              className="disabled:opacity-45"
               type="button"
               onClick={() => setShowPasswords((value) => !value)}
             >
               {showPasswords ? "Hide passwords" : "Show passwords"}
-            </button>
+            </Button>
             {fieldError && (
               <p
                 ref={passwordErrorRef}
@@ -458,9 +462,9 @@ export function AccountSettingsClient({
               Changing your password signs you out of all devices. Sign in again
               to continue.
             </p>
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45">
+            <Button variant="primary" className="disabled:opacity-45">
               Change password
-            </button>
+            </Button>
             <Link
               className="inline-flex min-h-11 items-center border-0 bg-transparent px-2 font-semibold text-accent-ink"
               href="/forgot-password"

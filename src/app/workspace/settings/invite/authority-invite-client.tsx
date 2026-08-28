@@ -1,5 +1,6 @@
 "use client";
 import { FormEvent, useState } from "react";
+import { Button } from "@/frontend/design-system";
 type Role = "member" | "admin";
 type Team = { id: string; name: string; status: string };
 type Draft = {
@@ -151,13 +152,14 @@ export function AuthorityInviteClient({
             }}
           />
         </label>
-        <button
+        <Button
           type="button"
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+          variant="secondary"
+          className="disabled:opacity-45"
           onClick={() => add()}
         >
           Add
-        </button>
+        </Button>
       </div>
       <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-ink-muted [&_input]:min-h-11 [&_input]:w-full [&_input]:rounded-control [&_input]:border [&_input]:border-control [&_input]:bg-surface [&_input]:px-3 [&_input]:text-ink [&_select]:min-h-11 [&_select]:w-full [&_select]:rounded-control [&_select]:border [&_select]:border-control [&_select]:bg-surface [&_select]:px-3 [&_select]:text-ink [&_textarea]:min-h-28 [&_textarea]:w-full [&_textarea]:rounded-control [&_textarea]:border [&_textarea]:border-control [&_textarea]:bg-surface [&_textarea]:p-3 [&_textarea]:text-ink">
         <span>Default role</span>
@@ -246,12 +248,13 @@ export function AuthorityInviteClient({
           {alert}
         </p>
       )}
-      <button
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+      <Button
+        variant="primary"
+        className="disabled:opacity-45"
         disabled={busy}
       >
         {busy ? "Sending invitations…" : "Send invitations"}
-      </button>
+      </Button>
     </form>
   );
 }

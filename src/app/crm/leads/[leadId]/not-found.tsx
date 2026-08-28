@@ -1,2 +1,2 @@
-import Link from "next/link";
-export default function LeadNotFound(){return <main className="public-shell"><section className="public-card"><h1>Lead unavailable</h1><p>The lead does not exist or is no longer available to you. No lead details are shown.</p><Link className="inline-flex min-h-11 items-center justify-center rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink" href="/crm">Return to leads</Link></section></main>}
+import { ActionLink } from "@/frontend/design-system";
+export default function LeadNotFound(){return <main className="public-shell"><section className="public-card"><h1>Lead unavailable</h1><p>The lead does not exist or is no longer available to you. No lead details are shown.</p><ActionLink variant="primary" href="/crm">Return to leads</ActionLink></section></main>}

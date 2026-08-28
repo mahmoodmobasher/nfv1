@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { securePost } from "../onboarding/api";
 import { query, type Cadence, type PlanKey } from "../onboarding/logic";
+import { Button } from "@/frontend/design-system";
 
 export function PlanAction({
   plan,
@@ -57,15 +58,16 @@ export function PlanAction({
 
   return (
     <>
-      <button
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+      <Button
+        variant="primary"
+        className="disabled:opacity-45"
         type="button"
         disabled={busy}
         aria-busy={busy}
         onClick={() => void save()}
       >
         {busy ? "Saving selection…" : `Continue with ${name}`}
-      </button>
+      </Button>
       {error && (
         <p className="rounded-control border border-danger bg-danger-soft p-3 text-sm text-danger" role="alert">
           {error}
