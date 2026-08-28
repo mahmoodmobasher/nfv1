@@ -14,8 +14,19 @@ describe("Company directory Nexa Spectrum migration", () => {
     expect(directory).toContain('marker="CO"');
     expect(directory).toContain('context="Customer records"');
     expect(directory).toContain('title="Companies"');
-    expect(directory).toContain('className="cg-directory-tools ds-list-toolbar"');
-    expect(directory).toContain('className="cg-directory-results ds-responsive-record-list"');
+    expect(directory).toContain("<DataToolbar");
+    expect(directory).toContain("<SearchInput");
+    expect(directory).toContain("<SearchButton");
+    expect(directory).toContain('flex-wrap items-center gap-2');
+    expect(directory).toContain('className="min-w-60 flex-1"');
+    expect(directory).toContain("<RecordCards");
+  });
+
+  it("keeps local-search truth, archive controls, and shared input affordance together", () => {
+    expect(directory).toContain("Search applies only to the records currently loaded below.");
+    expect(directory).toContain("Include archived");
+    expect(directory).toContain("placeholder={`Search loaded ${title(kind).toLowerCase()}`}");
+    expect(directory).not.toContain("[&_input]:min-w-[240px]");
   });
 
   it("retains capability-derived Company creation and lifecycle controls", () => {

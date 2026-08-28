@@ -5,6 +5,7 @@ const component = readFileSync("src/frontend/features/customer-graph/components/
 const listComponent = readFileSync("src/frontend/features/customer-graph/components/customer-graph-list.tsx", "utf8");
 const contracts = readFileSync("src/frontend/features/customer-graph/contracts/customer-graph.contracts.ts", "utf8");
 const navigation = readFileSync("src/app/product-navigation.ts", "utf8");
+const actionMenu = readFileSync("src/frontend/design-system/action-menu.tsx", "utf8");
 
 describe("CUSTOMER-GRAPH-01 frontend boundaries", () => {
   it("keeps browser code outside backend, database, environment, and server graphs", () => {
@@ -37,6 +38,15 @@ describe("CUSTOMER-GRAPH-01 frontend boundaries", () => {
     expect(listComponent).toContain("View<span className=\"sr-only\"");
     expect(listComponent).toContain("Edit<span className=\"sr-only\"");
     expect(listComponent).not.toMatch(/method:\s*["']DELETE["']|hard delete|permanently delete/i);
+  });
+  it("dismisses the originating action menu before opening lifecycle confirmation", () => {
+    expect(actionMenu).toContain("function closeOnAction");
+    expect(actionMenu).toContain('closest<HTMLElement>("a,button")');
+    expect(actionMenu).toContain("setDismissed(true)");
+    expect(actionMenu).toContain('contents [&>a]:hidden [&>button]:hidden [&>div]:contents [&>div>*:not(dialog)]:hidden');
+    expect(actionMenu).toContain('querySelector("dialog")');
+    expect(listComponent).toContain('closest("details")?.querySelector<HTMLElement>("summary")');
+    expect(listComponent).toContain("restoreRef.current()");
   });
   it("keeps sensitive disclosure minimized and strict", () => {
     expect(component).toContain("maskedEmail"); expect(component).toContain("maskedPhone");

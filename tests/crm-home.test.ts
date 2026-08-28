@@ -2,10 +2,19 @@ import { describe, expect, it } from "vitest";
 import { activityLabel, activityPreview, CrmHomeError, parseCrmHomeFilters } from "../src/server/crm/home";
 import { crmHomeQuery, crmLeadHref, hasCrmHomeFilters } from "../src/server/crm/home-links";
 import { CRM_HOME_DEMO_PREVIEW } from "../src/app/crm/home/demo";
+import { readFileSync } from "node:fs";
 
 const defaults={status:"all",stage:"all",owner:"all",team:"all",period:"all"} as const;
 
 describe("CRM home provider-independent behavior",()=>{
+  it("keeps dashboard copy separate from discoverable Tailwind utilities",()=>{
+    const source=readFileSync("src/app/crm/home/page.tsx","utf8");
+    expect(source).not.toMatch(/Review bg-accent-soft|first bg-accent-soft|live-badge|welcome-stat|kpi-card|kpi-grid|coming-label|recent-card/);
+    expect(source).toContain('className="grid gap-1 rounded-card border border-line bg-surface p-4 hover:border-accent"');
+    expect(source).toContain('className="flex items-center justify-between gap-3"');
+    expect(source).toContain("Review follow-up across your visible work.");
+    expect(source).toContain("Current leads in the first Pipeline stage.");
+  });
   it("allowlists, defaults, and canonicalizes dashboard filters",()=>{
     expect(parseCrmHomeFilters({})).toEqual(defaults);
     expect(parseCrmHomeFilters({status:"won",owner:"mine",period:"30d"})).toEqual({...defaults,status:"won",owner:"mine",period:"30d"});
