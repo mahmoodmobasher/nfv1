@@ -76,7 +76,7 @@ function SafeConversionState({ authentication }: { authentication: boolean }) {
   return <FocusedFeedbackState tone="danger" title="Lead unavailable" action={<ActionLink href={authentication ? `/login?next=${encodeURIComponent("/crm")}` : "/crm"}>{authentication ? "Sign in again" : "Back to leads"}</ActionLink>}><p>Your authority changed or this Lead is no longer available. Protected Lead, customer, Deal preview, assignment, choice, draft, and action data has been cleared.</p></FocusedFeedbackState>;
 }
 
-function LeadConversionPanel({ workspaceId, leadId, onAuthorityLoss }: { workspaceId: string; leadId: string; onAuthorityLoss: (error: LeadConversionError) => void }) {
+function LeadConversionPanel({ workspaceId, leadId, leadVersion, onAuthorityLoss }: { workspaceId: string; leadId: string; leadVersion: number; onAuthorityLoss: (error: LeadConversionError) => void }) {
   const [preview, setPreview] = useState<LeadConversionPreviewV1 | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,7 +112,7 @@ function LeadConversionPanel({ workspaceId, leadId, onAuthorityLoss }: { workspa
     } finally { setLoading(false); }
   }
   useEffect(() => { void loadPreview(false); // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, leadId]);
+  }, [workspaceId, leadId, leadVersion]);
 
   function review(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -204,5 +204,5 @@ function LeadConversionPanel({ workspaceId, leadId, onAuthorityLoss }: { workspa
 export function LeadDetailWithConversion({ lead, workspaceId, stages = [] }: { lead: LeadSummaryItem; workspaceId: string; stages?: LeadPipelineStage[] }) {
   const [authorityError, setAuthorityError] = useState<LeadConversionError | null>(null);
   if (authorityError) return <SafeConversionState authentication={authorityError.code === "authentication_required"}/>;
-  return <><LeadReadOnlyDetail lead={lead} workspaceId={workspaceId} stages={stages}/><section id="lead-conversion" aria-label="Lead conversion"><LeadConversionPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={setAuthorityError}/></section><section id="lead-activity" aria-label="Lead activity"><LeadActivityPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={error => setAuthorityError({ code: error.code, message: "The Lead is unavailable.", retryable: false, reconciliation: { required: true, action: "clear_conversion_state" }, guarantees: { zeroPartialEffects: true } })}/></section></>;
+  return <><LeadReadOnlyDetail lead={lead} workspaceId={workspaceId} stages={stages}/><section id="lead-conversion" aria-label="Lead conversion"><LeadConversionPanel workspaceId={workspaceId} leadId={lead.leadId} leadVersion={lead.version} onAuthorityLoss={setAuthorityError}/></section><section id="lead-activity" aria-label="Lead activity"><LeadActivityPanel workspaceId={workspaceId} leadId={lead.leadId} onAuthorityLoss={error => setAuthorityError({ code: error.code, message: "The Lead is unavailable.", retryable: false, reconciliation: { required: true, action: "clear_conversion_state" }, guarantees: { zeroPartialEffects: true } })}/></section></>;
 }
