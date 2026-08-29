@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { ALLOWED_LEAD_LIFECYCLE_TRANSITIONS, LEAD_LIFECYCLE_CODES, submitLeadInquiryV1,
+import { ALLOWED_LEAD_LIFECYCLE_TRANSITIONS, LEAD_LIFECYCLE_CODES, getLeadDetailV1, submitLeadInquiryV1,
   transitionLeadLifecycleV1, type LeadLifecycleCode } from "../src/backend/modules/leads";
 import { getServerEnv } from "../src/server/env";
 import { createSession } from "../src/server/security/session";
@@ -267,6 +267,67 @@ suite("lead lifecycle transitions", () => {
       command: { contractVersion: "lead-lifecycle-transition.v1", expectedVersion: lead.version,
         targetLifecycle: "working", disqualificationReason: null, disqualificationNote: null },
       idempotencyKey: `lc-${randomUUID()}` })).rejects.toMatchObject({ code: "lifecycle_unavailable", status: 409 });
+  });
+
+  // ---- Phase 2: the transition set the detail view offers ------------------
+
+  it("offers Owner and Admin every legal move from the current state", async () => {
+    const f = await fixture();
+    for (const who of [f.a.owner, f.a.admin]) {
+      const lead = await leadAt(f.a, "working", f.a.member.membershipId);
+      const view = await getLeadDetailV1(pool, who, lead.leadId);
+      expect(view.lifecycleTransitions.map(option => option.to).sort())
+        .toEqual([...ALLOWED_LEAD_LIFECYCLE_TRANSITIONS.working].sort());
+      expect(view.lifecycleTransitions.find(option => option.to === "disqualified")?.requiresReason).toBe(true);
+    }
+  });
+
+  it("offers a Member moves only on a Lead they own", async () => {
+    const f = await fixture();
+    const owned = await leadAt(f.a, "working", f.a.member.membershipId);
+    expect((await getLeadDetailV1(pool, f.a.member, owned.leadId)).lifecycleTransitions.length).toBeGreaterThan(0);
+    const foreign = await leadAt(f.a, "working", f.a.otherMember.membershipId);
+    expect((await getLeadDetailV1(pool, f.a.member, foreign.leadId)).lifecycleTransitions).toEqual([]);
+  });
+
+  it("never offers a Member the reopen of a disqualified Lead", async () => {
+    const f = await fixture();
+    const lead = await leadAt(f.a, "disqualified", f.a.member.membershipId);
+    expect((await getLeadDetailV1(pool, f.a.member, lead.leadId)).lifecycleTransitions).toEqual([]);
+    expect((await getLeadDetailV1(pool, f.a.admin, lead.leadId)).lifecycleTransitions.map(o => o.to)).toEqual(["working"]);
+  });
+
+  it("withholds work and qualify while the Lead is unassigned", async () => {
+    const f = await fixture();
+    const lead = await leadAt(f.a, "new", null);
+    expect((await getLeadDetailV1(pool, f.a.owner, lead.leadId)).lifecycleTransitions.map(o => o.to))
+      .toEqual(["disqualified"]);
+  });
+
+  it("never offers converted, which belongs to the conversion orchestrator", async () => {
+    const f = await fixture();
+    for (const from of ["new", "working", "qualified"] as const) {
+      const lead = await leadAt(f.a, from, f.a.member.membershipId);
+      const view = await getLeadDetailV1(pool, f.a.owner, lead.leadId);
+      expect(view.lifecycleTransitions.map(option => option.to)).not.toContain("converted");
+    }
+  });
+
+  it("offers nothing for a Lead with no lifecycle", async () => {
+    const f = await fixture();
+    await pool.query("alter table leads disable trigger leads_p1a_compatibility_defaults");
+    let legacyId: string;
+    try {
+      legacyId = (await pool.query<{ id: string }>(
+        `insert into leads(workspace_id,display_name,person_name_normalized,email_normalized,email_display,source,
+           original_source_category,original_source_medium,intake_channel,status,stage_id,visibility,owner_membership_id)
+         values($1,'Legacy Lead','legacy lead',$2,$2,'manual','manual','unknown','manual','open',$3,'workspace',$4)
+         returning id`,
+        [f.a.workspace.id, `legacy-${randomUUID()}@example.test`, f.a.stage.id, f.a.member.membershipId])).rows[0].id;
+    } finally { await pool.query("alter table leads enable trigger leads_p1a_compatibility_defaults"); }
+    const view = await getLeadDetailV1(pool, f.a.owner, legacyId);
+    expect(view.lifecycleTransitions).toEqual([]);
+    expect(view.lead.lifecycle.code).toBeNull();
   });
 
   it("treats a same-state request as a durable no-op", async () => {
