@@ -16,6 +16,8 @@ const presentation: Record<LeadManagementErrorCode, readonly [string, boolean, s
   stale_version: ["The Lead has changed.", false, "refetch_lead", 409],
   stage_unavailable: ["The selected stage is no longer available.", false, "refetch_lead_and_stages", 409],
   assignment_unavailable: ["The selected responsibility is no longer available.", false, "refetch_lead_operational_edit", 409],
+  lifecycle_transition_not_allowed: ["That lifecycle change is not allowed from the current state.", false, "refetch_lead", 409],
+  lifecycle_unavailable: ["This Lead is not managed by the lifecycle.", false, "refetch_lead", 409],
   rate_limited: ["Too many requests. Try again later.", true, "retry_same_request", 429],
   lead_mutation_unavailable: ["Lead changes are temporarily unavailable.", true, "retry_same_request", 503],
   unexpected_error: ["The request could not be completed.", true, "retry_same_request", 500],
@@ -25,7 +27,8 @@ function safeValidationDetails(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => key !== "fields")) return undefined;
   const fields = (value as { fields?: unknown }).fields;
   const allowed = new Set(["contractVersion", "expectedVersion", "responsibleMembershipId", "responsibleTeamId",
-    "visibility", "visibleTeamIds", "targetStageId", "idempotencyKey"]);
+    "visibility", "visibleTeamIds", "targetStageId", "targetLifecycle", "disqualificationReason",
+    "disqualificationNote", "idempotencyKey"]);
   if (!Array.isArray(fields) || fields.length > 16 || fields.some(field => typeof field !== "string" || !allowed.has(field))) return undefined;
   return { fields: [...new Set(fields)] };
 }

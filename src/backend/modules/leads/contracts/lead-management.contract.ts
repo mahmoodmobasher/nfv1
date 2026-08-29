@@ -80,14 +80,16 @@ export const leadStageTransitionResultV1Schema = z.object({
 
 const leadManagementErrorCodeSchema = z.enum(["authentication_required", "permission_required", "resource_not_found",
   "validation_failed", "unsupported_contract_version", "idempotency_conflict", "stale_version", "stage_unavailable",
-  "assignment_unavailable", "rate_limited", "lead_mutation_unavailable", "unexpected_error"]);
+  "assignment_unavailable", "lifecycle_transition_not_allowed", "lifecycle_unavailable", "rate_limited",
+  "lead_mutation_unavailable", "unexpected_error"]);
 const leadManagementReconciliationActionSchema = z.enum(["none", "refetch_lead", "refetch_lead_and_stages",
   "refetch_lead_operational_edit", "retry_same_request"]);
 export const leadManagementErrorEnvelopeV1Schema = z.object({ error: z.object({ code: leadManagementErrorCodeSchema,
   message: z.string().min(1).max(200), retryable: z.boolean(), reconciliation: z.object({ required: z.boolean(),
     action: leadManagementReconciliationActionSchema }).strict(), details: z.object({ fields: z.array(z.enum([
       "contractVersion", "expectedVersion", "responsibleMembershipId", "responsibleTeamId", "visibility", "visibleTeamIds",
-      "targetStageId", "idempotencyKey"])).max(16) }).strict().optional() }).strict(), requestId: uuid }).strict();
+      "targetStageId", "targetLifecycle", "disqualificationReason", "disqualificationNote",
+      "idempotencyKey"])).max(16) }).strict().optional() }).strict(), requestId: uuid }).strict();
 
 export type LeadOperationalEditCommandV1 = z.infer<typeof leadOperationalEditCommandV1Schema>;
 export type LeadStageTransitionCommandV1 = z.infer<typeof leadStageTransitionCommandV1Schema>;
@@ -98,7 +100,8 @@ export type LeadManagementErrorEnvelopeV1 = z.infer<typeof leadManagementErrorEn
 
 export type LeadManagementErrorCode = "authentication_required" | "permission_required" | "resource_not_found" |
   "validation_failed" | "unsupported_contract_version" | "idempotency_conflict" | "stale_version" |
-  "stage_unavailable" | "assignment_unavailable" | "rate_limited" | "lead_mutation_unavailable" | "unexpected_error";
+  "stage_unavailable" | "assignment_unavailable" | "lifecycle_transition_not_allowed" | "lifecycle_unavailable" |
+  "rate_limited" | "lead_mutation_unavailable" | "unexpected_error";
 
 export class LeadManagementError extends Error {
   constructor(public code: LeadManagementErrorCode, public status: number, public safe?: unknown) { super(code); }
