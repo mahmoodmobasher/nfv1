@@ -9,109 +9,75 @@ specification for the lead lifecycle and carries the reasoning, the rejected opt
 the traps, which this file only summarises. Verify Git status and local/origin SHAs
 before trusting any of it.
 
-## Authority snapshot (2026-08-29, second run)
+## Authority snapshot (2026-08-29, third run)
 
-- Working branch: `design-system-consistency-local`, pushed to `design-system-consistency`,
-  head `a3aacc0`. **Not merged to `main`.** `main` is `1843381`.
-- **Unmerged fix branch: `fix/identity-review-canonical-contacts`, head `00c2395`,
-  branched from `a3aacc0`.** Not pushed. See "The blocker found by walking UAT" below.
-- UAT still runs `d1610aa-uat54` — it does **not** contain the fix.
-- Migration ledger: 28 entries; head `0027_default_sales_pipeline_backfill`. The fix adds
-  no migration.
-- UAT database is `nexaflow_uat`, not `nexaflow`.
-- Suite at `00c2395`: **966 passed, 12 failed, 9 skipped.** The 12 are the documented
+- `design-system-consistency-local`, pushed to `design-system-consistency`, head
+  `1237a93`. **Merged to `main`** (`main` was `1843381`; merge brought 26 commits / 75
+  files, not a lifecycle-only subset — see `PROJECT-STATUS.md` for what's in it).
+- UAT runs `1237a93-uat56`, healthy, migration ledger 28.
+- Suite at `1237a93`: **967 passed, 12 failed, 9 skipped.** The 12 are the documented
   pre-existing set, unchanged.
+- The lead lifecycle arc has now been walked **end to end in the real UI**, not just by
+  tests: `Mobasher UAT Lead 01` went intake → identity review resolved → `new → working →
+  qualified` → convert → Deal → Deal closed won → Lead settled to `won`.
 
-## The blocker found by walking UAT
+## Two blockers found and fixed since the last handover
 
-The previous run's top recommendation was "walk the arc on UAT before building more, and
-expect a fourth blocker". That was done, and there was a fourth blocker.
+Both were found only by driving real data through the browser on UAT — neither was caught
+by the test suite or by code review. Full detail in `PROJECT-STATUS.md`; summary:
 
-**Symptom.** Resolving an identity review with "Create new contact" produced a Contact the
-Lead detail screen showed as a permanently read-only *legacy record* — no edit, no
-lifecycle, no affiliation management, "no adoption or backfill action is offered". The
-Lead's Conversion tab then read *"The linked Contact is not currently eligible as the
-primary Contact"*, forever.
-
-**Cause.** `resolve-lead-identity-review.orchestrator.ts` created new Contacts and
-Companies through the legacy P1A repositories (`contactTransactionParticipant.create`,
-`companyTransactionParticipant.create`). Those repositories never set
-`authority_contract_version` (so rows default to `legacy-p1a-root-v1`), never write
-`contact_identity_points`, and never write a `contact_company_affiliations` row.
-Conversion's primary-contact check in
-`customer-graph/application/deal-party-reference.participant.ts` requires
-`authority_contract_version='customer-graph-v1'` **and** an active `is_primary`
-affiliation row to the selected Company. The two halves of the product disagreed about
-what a Contact is.
-
-Because identity review is the *only* way a Lead with no pre-existing match gets a
-Contact, every such Lead was unconvertible. This is the same shape as the previous run's
-lesson: a feature that looks dead has more than one cause stacked behind it.
-
-**Why 965 green tests missed it.** `tests/lead-conversion-01-backend.integration.test.ts`
-pre-seeded a canonical Company by raw SQL and dismissed the Contact entirely. The
-create path that real data uses was never exercised. A green suite proved the fixture,
-not the product.
-
-**Fix (`00c2395`).** Added `customerGraphIdentityResolutionParticipant` in
-`src/backend/modules/customer-graph/application/identity-resolution.participant.ts` —
-`createCanonicalContact` / `createCanonicalCompany`, composable inside an already-open
-transaction. customer-graph is the module that owns `contacts`, `companies`,
-`contact_identity_points`, `contact_company_affiliations` and `company_domain_points`, so
-this satisfies the SQL-ownership boundary scanner. The identity-review orchestrator now
-calls these instead of the legacy repositories. New identity-review Contacts get
-`customer-graph-v1`, their identity points, and a primary affiliation to the Company
-resolved in the same decision. Added an integration test that drives
-`contact:"create"` + `company:"create"` and asserts the Lead converts.
+1. **Identity-review Contacts were legacy records** (`00c2395`, merged `74936d5`,
+   deployed `uat55`). "Create new contact"/"Create new company" during identity review
+   wrote through legacy P1A repositories instead of the customer-graph module, so the
+   resulting Contact could never pass conversion's primary-contact eligibility check.
+   **Forward-only** — `Mobasher UAT Lead 08` is a confirmed stranded pre-fix record.
+   Backfill is still an open product decision.
+2. **The Deal pipeline screens crashed once real data existed** (`e87040c`, merged
+   `1237a93`, deployed `uat56`). The published Deal-stage contract — mirrored `.strict()`
+   on both frontend and backend — never declared the `pipelineId` field the server
+   actually puts on every stage row, so every response with a stage failed client-side
+   schema validation and surfaced as "Deals are temporarily unavailable," with zero server
+   logs because the server never threw.
 
 ## Do this next
 
-1. **Merge and deploy the fix.** It is verified by tests but has never run on UAT.
-
-   ```
-   git checkout design-system-consistency-local
-   git merge --no-ff fix/identity-review-canonical-contacts
-   git push origin design-system-consistency-local:design-system-consistency
-   ```
-
-   Then build `<shortsha>-uat55` per `docs/release/CURRENT-UAT.md`.
-
-2. **Walk the arc on UAT, on a fresh Lead.** Resolve an identity review with "Create new
-   contact", convert, close the Deal as won, confirm the Lead settles to `won`. Seven
-   Leads remain `identity_review_status='pending'`.
-
-   Do **not** use `Mobasher UAT Lead 08` (`f1f7ecc7-7ec1-4ec8-9004-969716215e2c`). Its
-   review was resolved under the old code, so its Contact
-   (`f83d9220-b8d8-4432-8527-1be99dcdbbb7`) is a stranded legacy record. The fix is
-   forward-only and does not repair it.
+1. **Walk the remaining Leads through the arc**, or move on to Phase 4/5 work below —
+   product's call. Seven Leads still carry `identity_review_status='pending'`:
+   `Mobasher UAT Lead 02`, `03`, `04`, `05`, `06`, `07`, `09`. Do **not** use `Lead 08`
+   (`f1f7ecc7-7ec1-4ec8-9004-969716215e2c`) — its Contact
+   (`f83d9220-b8d8-4432-8527-1be99dcdbbb7`) is stranded pre-fix and the fix does not
+   repair it.
 
    Read UAT data with:
    ```
-   sudo docker exec -it nexaflow-uat-postgres-1 psql -U nexaflow -d nexaflow_uat -c "<sql>"
+   sudo docker exec nexaflow-uat-postgres-1 psql -U nexaflow -d nexaflow_uat -c "<sql>"
    ```
+   (Don't use `-it`/interactive attach over a non-interactive SSH command — it fails with
+   `cannot attach stdin to a TTY-enabled container because stdin is not a terminal`.)
 
-3. **Decide on backfill.** Any workspace that used "Create new contact" before the fix has
-   Leads that can never convert, and no UI can adopt those records. Blast radius today is
-   UAT only, because none of this reached `main`. Options: a migration adopting
-   identity-review-created `legacy-p1a-root-v1` rows into `customer-graph-v1` with
-   affiliations; a UI adoption action; or accept forward-only and document it. **Open
-   product decision.**
+2. **Decide on backfill** for `Lead 08` and any other pre-fix identity-review record.
+   Options: a migration adopting identity-review-created `legacy-p1a-root-v1` rows into
+   `customer-graph-v1` with affiliations; a UI adoption action; or accept forward-only and
+   document it. **Open product decision.**
 
-4. **Phase 4** — dashboard lifecycle funnel, Leads-list lifecycle filter, timeline
+3. **Phase 4** — dashboard lifecycle funnel, Leads-list lifecycle filter, timeline
    backfill (#7), and the `FactsGrid` phantom-cell fix. The lifecycle filter is not small:
    the list uses keyset pagination whose cursor encodes active filters, with eight tests
    asserting cursor stability.
 
-5. **Phase 5** — retire `leads.stage_id` from Lead views and plan its removal.
+4. **Phase 5** — retire `leads.stage_id` from Lead views and plan its removal.
 
-6. **Decide the fate of the 12 red tests**, especially `design-system-components.test.tsx`,
+5. **Decide the fate of the 12 red tests**, especially `design-system-components.test.tsx`,
    which asserts `ds-*` class names that no longer exist anywhere in the design system.
+
+6. **Consider a production deploy.** `main` now contains this work, but nothing beyond
+   UAT has been deployed. That is a distinct, not-yet-taken step.
 
 ## How to run the tests — read this first
 
 `npm run test:integration` runs **only** `tests/*.integration.test.ts`, which is 50 of the
 122 test files. Treating that as the whole suite hid three real defects that shipped to
-UAT twice.
+UAT twice, in an earlier run.
 
 ```
 RUN_DB_INTEGRATION=1 npx vitest run --no-file-parallelism --maxWorkers=1
@@ -122,25 +88,42 @@ truncate in their hooks, so parallel workers deadlock and emit misleading
 `Hook timed out` failures. Without `RUN_DB_INTEGRATION=1` they silently *skip* and the run
 looks clean — always check the skipped count.
 
-**Baseline at `00c2395`: 966 passed, 12 failed, 9 skipped.** The 12 are pre-existing and
+**Baseline at `1237a93`: 967 passed, 12 failed, 9 skipped.** The 12 are pre-existing and
 listed in `PROJECT-STATUS.md`. Do not treat them as new breakage, and do not let them
-train you to ignore red.
+train you to ignore red. A green suite has now twice failed to catch a real defect that
+only showed up driving the product for real — see "The most important lesson, twice over"
+in `PROJECT-STATUS.md`.
+
+## Deploying to UAT — the part that will trip you up
+
+SSH via `connectssh.sh`, but **add agent forwarding**: the script itself is just
+`ssh -i ~/.ssh/lightsail-ca-central-new.pem ubuntu@99.79.158.110`, no `-A`. The UAT host
+has no GitHub key of its own — `~/.ssh/` on the host has no private key file, only
+`authorized_keys`. Every release, including the ones in this run, was cloned via whoever's
+key was forwarded from the machine running the deploy. Connect with:
+```
+ssh -A -i ~/.ssh/lightsail-ca-central-new.pem ubuntu@99.79.158.110
+```
+and verify before staging anything:
+```
+ssh-add -l
+ssh -T git@github.com
+```
+If either fails, `git clone` on the host will fail with `Permission denied (publickey)`,
+and — this is the trap — every subsequent step (`docker build`, migrate, symlink switch)
+will appear to run without an obvious hard failure, because they execute against an empty
+or stale release directory. Check `git rev-parse HEAD` right after the clone and confirm
+it matches the SHA you intend to deploy before doing anything else.
+
+Full procedure in `docs/release/CURRENT-UAT.md`.
 
 ## Standing decisions left open for the product owner
 
 - Should Members be able to resolve identity reviews? That gate currently sits between a
   Member qualifying a Lead and anyone converting it.
 - Rewrite or delete the permanently-red design-system test file.
-- Backfill or forward-only for pre-fix identity-review records (item 3 above).
-- Whether to merge `design-system-consistency` to `main` at all.
-
-## Housekeeping in the working tree
-
-- `Documentation/handover/nexaflow-phase1-4-uat-fall-forward-handover.md` is deleted but
-  unstaged. It **is** tracked (committed at `4383e1e`), contrary to what an earlier
-  PROJECT-STATUS claimed. Commit the deletion or restore it deliberately.
-- `.gitignore` has an uncommitted `+.aider*` line.
-- Untracked: `connectssh.sh`, `vitest.txt`, `work/`. None belong in a commit as-is.
+- Backfill or forward-only for pre-fix identity-review records (item 2 above).
+- Whether/when to deploy `main` to production, now that it contains this work.
 
 ## Working model that suited this owner
 
