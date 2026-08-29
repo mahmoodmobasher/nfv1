@@ -8,6 +8,7 @@ import { writeDomainEventSet, type DomainEventV1 } from "@/backend/platform/outb
 import { contactTransactionParticipant } from "@/backend/modules/contacts";
 import { companyContactCandidateReadModel, companyTransactionParticipant } from "@/backend/modules/companies";
 import { identityReviewTransactionParticipant, type IdentityReviewDecisionCommandV1 } from "@/backend/modules/identity-review";
+import { customerGraphIdentityResolutionParticipant } from "@/backend/modules/customer-graph";
 import { sameCandidateSet, sameVersionSet, selectCandidateSetV1, type CandidateQueryV1 } from "../../domain/identity-candidate-set.domain";
 import { leadTransactionParticipant } from "../../persistence/repositories/lead.repository";
 import { LeadIntakeError } from "../../contracts/lead-inquiry-intake.contract";
@@ -91,6 +92,7 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
       if (!candidateQuery || candidateQuery.contractVersion !== "p1a-candidate-query.v1")
         throw new LeadIntakeError("stale_version", 409);
       const companies = companyTransactionParticipant(tx), contacts = contactTransactionParticipant(tx);
+      const identityResolution = customerGraphIdentityResolutionParticipant(tx);
       const companyContacts = companyContactCandidateReadModel(tx);
       let companyCandidate: { id: string; target_id: string; target_version: number } | undefined;
       let contactCandidate: { id: string; target_id: string; target_version: number } | undefined;
@@ -217,24 +219,26 @@ export async function decideLeadIdentityReviewV1(pool: Pool, input: {
           nextView: { kind: "identity_review_detail", leadId: lead.id, reviewId: reviewsLocked.id } };
       }
 
+      const canonicalOperationId = randomUUID();
       let companyId: string | null = null, companyVersion: number | null = null, companyCreated = false;
       if (input.command.company.action === "link" && companyCandidate) {
         companyId = companyCandidate.target_id; companyVersion = companyCandidate.target_version;
       } else if (input.command.company.action === "create") {
         if (!candidateQuery.companyNameNormalized) throw new LeadIntakeError("invalid_match_decision", 409);
-        const created = await companies.create({ workspaceId: actor.workspaceId, displayName: String(lead.company),
-          nameNormalized: candidateQuery.companyNameNormalized, domainNormalized: candidateQuery.companyDomainNormalized });
+        const created = await identityResolution.createCanonicalCompany({ workspaceId: actor.workspaceId, displayName: String(lead.company),
+          nameNormalized: candidateQuery.companyNameNormalized, domainNormalized: candidateQuery.companyDomainNormalized,
+          governingOperationId: canonicalOperationId, createdByMembershipId: actor.membershipId });
         companyId = created.id; companyVersion = created.version; companyCreated = true;
       }
       let contactId: string | null = null, contactVersion: number | null = null, contactCreated = false;
       if (input.command.contact.action === "link" && contactCandidate) {
         contactId = contactCandidate.target_id; contactVersion = contactCandidate.target_version;
       } else if (input.command.contact.action === "create") {
-        const created = await contacts.create({ workspaceId: actor.workspaceId, displayName: lead.display_name,
+        const created = await identityResolution.createCanonicalContact({ workspaceId: actor.workspaceId, displayName: lead.display_name,
           personNameNormalized: lead.person_name_normalized, firstName: lead.first_name, lastName: lead.last_name,
           emailDisplay: lead.email_display, emailNormalized: lead.email_normalized, phoneDisplay: lead.phone,
-          phoneNormalized: lead.phone_normalized, phoneCountryCodeUsed: lead.phone_country_code_used,
-          normalizationVersion: String(lead.normalization_version), companyId });
+          phoneNormalized: lead.phone_normalized, phoneCountryCodeUsed: lead.phone_country_code_used, companyId,
+          governingOperationId: canonicalOperationId, createdByMembershipId: actor.membershipId });
         contactId = created.id; contactVersion = created.version; contactCreated = true;
       }
       const resultLeadVersion = lead.version + 1, resultReviewVersion = reviewsLocked.version + 1;
