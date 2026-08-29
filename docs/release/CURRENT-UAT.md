@@ -4,15 +4,17 @@ Status date: 2026-08-29
 
 | Item | Value |
 | --- | --- |
-| Source revision | `1237a93` on branch `design-system-consistency` (also merged to `main`) |
-| Release | `/opt/nexaflow/uat/releases/1237a93-uat56` |
-| Image | `nexaflow:1237a93-uat56` |
+| Source revision | `4a5add3` on `main` |
+| Release | `/opt/nexaflow/uat/releases/4a5add3-uat57` |
+| Image | `nexaflow:4a5add3-uat57` |
 | Runtime user | `10001:10001` |
 | Migration ledger | 28 |
 | Migration head | `0027_default_sales_pipeline_backfill` |
 | UAT database | `nexaflow_uat` (not `nexaflow`) |
 
-App container reported `(healthy)` after deployment. The database was migrated, not reset.
+App container reported `(healthy)` after deployment. `4a5add3-uat57` is frontend, tests,
+and docs only — the migrate step ran and applied nothing; ledger stayed at 28, head
+unchanged at `0027_default_sales_pipeline_backfill`.
 
 ## Releases in this run
 
@@ -26,6 +28,7 @@ App container reported `(healthy)` after deployment. The database was migrated, 
 | `d1610aa-uat54` | `d1610aa` | Migration `0027`; default Deal pipeline seeded and backfilled |
 | `74936d5-uat55` | `74936d5` | Identity-review "Create new contact/company" now writes conversion-eligible customer-graph-v1 Contacts/Companies |
 | `1237a93-uat56` | `1237a93` | Deal-stage published contract now declares `pipelineId`; Deals list/board render again |
+| `4a5add3-uat57` | `4a5add3` | Merges `main`. Conversion panel re-fetches after a sibling lifecycle change (finding #2); no schema change |
 
 ## Verified on UAT
 
@@ -38,6 +41,23 @@ App container reported `(healthy)` after deployment. The database was migrated, 
   resolved with Create new contact + Create new company → `new → working → qualified` →
   Convert to Deal → Deal opened in `/crm/deals` list → Deal closed **Won** → Lead
   `lifecycle_state='converted'`, `status='won'`, `status_source='system'`.
+- **A follow-up browser walk on `uat56` found six more items, documented in
+  `UAT-WALK-FINDINGS-2026-08-29.md`.** Finding #1 (Deal settlement/dashboard mismatch) was
+  investigated in depth and is **VOID — there was never a bug.** Both the settlement write
+  and the dashboard tile query are correct; a controlled A/B (`Lead 01` no-disqualify/Won,
+  `Lead 02` disqualify→reopen/Lost, `Lead 03` no-disqualify/Lost) and a direct SQL check on
+  `uat56` confirmed all three Leads carry the right Deal-derived status and the dashboard
+  tiles match the table exactly. See `UAT-WALK-FINDINGS-2026-08-29.md` section 1
+  (voided at commit `8fb1d05`). Nothing in `applyDerivedOutcome`, `transitionDeal`,
+  `LEAD_LIFECYCLE_UPDATE_SQL_V1`, or the dashboard aggregation query was changed.
+- **Finding #2 (conversion panel shows stale "not eligible" after a lifecycle change) is
+  fixed in this release, but the fix itself has not yet been verified live on UAT.**
+  `LeadConversionPanel`'s preview effect now re-fetches on `lead.version`, which changes
+  whenever `LeadLifecycleControl` calls `router.refresh()` after a successful transition.
+  Confirmed by a new behavioral test (mounted with `react-dom/client`, stubbed `fetch`);
+  not yet confirmed by driving the actual UI. Next UAT walk should reproduce: open a
+  `working` Lead, click a transition to `qualified`, and confirm the conversion panel
+  updates to offer Convert **without a page reload**.
 
 ## Known stranded record
 
