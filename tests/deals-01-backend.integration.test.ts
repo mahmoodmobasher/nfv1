@@ -3,7 +3,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import {
   createDeal as createDealService,
+  getSalesPipeline,
   listDeals,
+  salesPipelineViewV1Schema,
   transitionDeal,
 } from "../src/backend/modules/sales";
 import { createSession } from "../src/server/security/session";
@@ -368,5 +370,14 @@ suite("DEALS-01 backend", () => {
         },
       ),
     ).rejects.toMatchObject({ code: "resource_not_found", status: 404 });
+  });
+
+  it("returns a pipeline view whose stages actually satisfy the published contract", async () => {
+    const f = await fixture();
+    const view = await getSalesPipeline(pool, f.actor, randomUUID());
+    expect(() => salesPipelineViewV1Schema.parse(view)).not.toThrow();
+    expect(view.pipeline?.stages[0]).toMatchObject({
+      pipelineId: f.pipeline.id,
+    });
   });
 });
