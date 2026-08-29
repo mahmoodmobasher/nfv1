@@ -2,82 +2,67 @@
 
 These came from driving real data through the UI on UAT after `uat56`, in a session with
 browser access. Five blockers had already been found this way; these are what a **sixth**
-walk turned up. Nothing here is fixed. Ordered by severity.
+walk turned up. Ordered by severity. **Finding #1 is void — see below. #2 is fixed on
+`fix/conversion-panel-stale-lifecycle`. #3 and #4 are real and open.**
 
 Environment: UAT `1237a93-uat56`, `main` at `f5cdbe1`, actor = the `def` workspace owner.
 
 ---
 
-## 1. A Deal closed **Lost** appears not to settle its Lead — UNCONFIRMED, confirm first
+## 1. VOID — there was never a bug here. Settlement and dashboard are both correct.
 
-**What was done.** `Mobasher UAT Lead 02` (`f22502a4-e4a5-482f-b747-cd4b359c7ee0`) was
-walked: identity review resolved with *Create new contact* + *Create new company* →
-`working` → **disqualified** (reason "No response") → **reopened** → `qualified` →
-converted (Company **and** primary Contact both linked) → Deal
-`a11d6c71-ff12-446e-9e9a-a396ecf9e96f` → stage changed to **Lost** (reason "Competitor").
+**This finding was wrong twice and is fully withdrawn. Skip to #2.** It is kept only
+because the way it was reached is worth not repeating.
 
-The stage change succeeded and the UI reported *"The server confirmed lost outcome at
-version 2. No duplicate transition was created."*
+Two queries settled it on 2026-08-29 at ~21:25 UTC.
 
-**Symptom.** The CRM home tiles did not move. Before this walk: Open 8 / Won 0 / Lost 2.
-After it (freshly generated 8:45 p.m. UTC, not cached): **Open 7 / Won 1 / Lost 2**. The
-Won 0→1 is `Lead 01` from the previous session. `Lead 02` is still counted **Open**, so
-`leads.status` was seemingly never set to `lost`.
+All three Leads settled correctly from their Deals:
 
-**What has already been ruled out, from source:**
+| Lead | status | status_source | lifecycle | reopen_count | deal outcome_class |
+|---|---|---|---|---|---|
+| Mobasher UAT Lead 01 | `won` | `system` | converted | 0 | won |
+| Mobasher UAT Lead 02 | `lost` | `system` | converted | **1** | lost |
+| Mobasher UAT Lead 03 | `lost` | `system` | converted | 0 | lost |
 
-- *The manual-override guardrail.* `applyDerivedOutcome`
-  (`leads/persistence/repositories/lead-outcome.repository.ts`) only writes while
-  `status_source='system'`. But **no code anywhere writes `status_source`** — grep across
-  `src/` and `src/server/db/migrations/` finds only the schema default `'system'`, the
-  check constraint, and reads. So the column cannot have been `'manual'`.
-- *Two different transition paths.* There is only one `transitionDeal`
-  (`sales/application/deal.service.ts:883`); Won and Lost share it. The settlement block
-  at `deal.service.ts:974` fires for any `target.outcomeClass !== "open"`.
-- *A Won sibling suppressing it.* `hasWon` can only be true if a sibling Deal is `won`;
-  Lead 02 has exactly one Deal.
-- *Staleness.* The dashboard reports its own generation timestamp, which was after the
-  transition.
+And the dashboard tiles agree exactly with the table: tiles read Open 6 / Won 1 / Lost 3;
+`select status, count(*) from leads group by status` returns `open 6 / won 1 / lost 3`.
 
-**Leading remaining hypothesis.** The settlement reads
-`lead_deal_conversion_lineage` filtered on `deal_id` **and**
-`lead_record_type='crm.lead'`. If no row matches, `derived` is `undefined` and the whole
-settlement is skipped **silently** — no error, no evidence, and the caller still returns
-success. Worth checking whether the lineage row written by conversion actually carries
-`lead_record_type='crm.lead'`, and whether the disqualify→reopen round trip changed
-anything the lineage or the settlement depends on. Note `Lead 01`, which *did* settle, was
-converted **without** a disqualify/reopen cycle — that is the main difference between the
-two walks.
+So the Deal-derived outcome path, the `status_source='system'` guard, the reopen ->
+`open` reset, the conversion lineage **and** the dashboard aggregation are all correct,
+including through a disqualify -> reopen cycle. **Change none of them on the strength of
+this document.**
 
-**Confirm before fixing** (the point of this section — do not start from the hypothesis):
+### How the false finding was produced
 
-```
-sudo docker exec -it nexaflow-uat-postgres-1 psql -U nexaflow -d nexaflow_uat -c "
-select l.display_name, l.status, l.status_source, def.code as lifecycle,
-       lin.deal_id, lin.lead_record_type, d.outcome_class, d.closed_at, d.version as deal_version
-from leads l
-join lead_lifecycle_definitions def on def.id = l.lifecycle_definition_id
-left join lead_deal_conversion_lineage lin
-       on lin.workspace_id = l.workspace_id and lin.lead_record_id = l.id
-      and lin.lead_record_type = 'crm.lead'
-left join deals d on d.workspace_id = lin.workspace_id and d.id = lin.deal_id
-where l.display_name in ('Mobasher UAT Lead 01','Mobasher UAT Lead 02')
-order by l.display_name;"
-```
+The claim came from reading the CRM home tiles and doing arithmetic against an assumed
+baseline, without ever querying `leads`. The assumption was that `Mobasher UAT Lead 01`
+was `open` before the walk, so its move to `won` would decrement Open. Lead 01 was in fact
+`lost` at baseline and went `lost -> won`, which decrements Lost, not Open. That single
+wrong premise shifted every later count by one and made Lead 02 look unsettled:
 
-Read it as: `Lead 02` with `status='open'` and `outcome_class='lost'` confirms the
-blocker. A null `lin.deal_id` for Lead 02 points at the lineage row instead. If
-`status='lost'` after all, then the **dashboard tile query** is what is wrong, not the
-settlement — a different and equally real bug, since the dashboard is what Phase 4's
-funnel builds on.
+| | Open | Won | Lost |
+|---|---|---|---|
+| baseline | 8 | 0 | 2 |
+| Lead 01 `lost -> won` | 8 | 1 | 1 |
+| Lead 02 `open -> lost` | 7 | 1 | 2 | <- misread as "Lead 02 did not settle" |
+| Lead 03 `open -> lost` | 6 | 1 | 3 |
 
-**Test gap either way.** `lead-conversion-01-backend.integration.test.ts` covers "settles
-the Lead as lost when its only Deal is lost", and it passes. So whatever is happening
-live is outside what that test constructs — the same shape as the fourth and fifth
-blockers, where a green test proved the fixture rather than the product. Any fix should
-add coverage that reproduces the *live* sequence, disqualify→reopen included.
+Every tile reading taken during the walk was correct and internally consistent.
 
----
+A follow-up A/B (Lead 03, converted with no disqualify/reopen) appeared to "isolate" the
+disqualify -> reopen cycle as the trigger. It did nothing of the kind: it compared two
+correct outcomes against a miscounted baseline. **A controlled experiment on top of an
+unverified premise reproduces the premise, not the truth.**
+
+### The lesson, which is the opposite of the one this file previously drew
+
+The other five blockers in this project were found by walking the product because the
+tests were checking fixtures instead of behaviour. That is a real lesson, and it made a
+derived view — the dashboard — feel like evidence. It is not. A rendered aggregate is a
+claim about the data, not the data. When a walk suggests a backend defect, the next step
+is a query against the owning table, before any hypothesis is written down, any experiment
+is designed, or any other session is told to act. Reading the row here would have cost one
+command and saved several hours of two sessions' work.
 
 ## 2. The conversion panel shows stale authority after a lifecycle change — CONFIRMED
 
