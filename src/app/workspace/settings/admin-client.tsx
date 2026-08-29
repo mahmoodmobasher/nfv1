@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { securePost } from "../../onboarding/api";
 import {
@@ -325,12 +324,9 @@ export function PeopleClient({
   return (
     <>
       <div className="flex flex-wrap items-end gap-3 rounded-panel border border-line bg-surface p-4">
-        <Link
-          className="inline-flex min-h-11 items-center justify-center rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink"
-          href="/workspace/settings/invite"
-        >
+        <ActionLink variant="primary" href="/workspace/settings/invite">
           Invite your team
-        </Link>
+        </ActionLink>
         <label>
           Search people
           <input
@@ -452,9 +448,10 @@ export function PeopleClient({
                     <div className="flex flex-wrap gap-2">
                       {row.status === "active" && (
                         <>
-                          <button
+                          <Button
                             type="button"
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+                            variant="secondary"
+                            className="disabled:opacity-45"
                             disabled={!manageable || busy}
                             onClick={(event) =>
                               setConfirm({
@@ -465,7 +462,7 @@ export function PeopleClient({
                             }
                           >
                             Suspend
-                          </button>
+                          </Button>
                           <button
                             type="button"
                             className="inline-flex min-h-11 items-center justify-center rounded-control border border-danger bg-danger px-3.5 py-2 text-[12.5px] font-semibold text-surface disabled:opacity-45"
@@ -484,9 +481,10 @@ export function PeopleClient({
                       )}
                       {row.status === "suspended" && (
                         <>
-                          <button
+                          <Button
                             type="button"
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+                            variant="primary"
+                            className="disabled:opacity-45"
                             disabled={!manageable || busy}
                             onClick={(event) =>
                               setConfirm({
@@ -497,7 +495,7 @@ export function PeopleClient({
                             }
                           >
                             Restore access
-                          </button>
+                          </Button>
                           <button
                             type="button"
                             className="inline-flex min-h-11 items-center justify-center rounded-control border border-danger bg-danger px-3.5 py-2 text-[12.5px] font-semibold text-surface disabled:opacity-45"
@@ -520,13 +518,14 @@ export function PeopleClient({
                         </small>
                       )}
                       {conflictId === row.id && (
-                        <button
+                        <Button
                           type="button"
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+                          variant="secondary"
+                          className="disabled:opacity-45"
                           onClick={() => void reload(row)}
                         >
                           Reload latest
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>
@@ -687,13 +686,14 @@ export function InviteClient({
             aria-describedby="invite-help"
           />
         </label>
-        <button
+        <Button
           type="button"
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+          variant="secondary"
+          className="disabled:opacity-45"
           onClick={() => add()}
         >
           Add
-        </button>
+        </Button>
       </div>
       <p id="invite-help" className="text-xs leading-5 text-ink-faint">
         Separate addresses with Enter, comma, semicolon, or space.
@@ -772,17 +772,19 @@ export function InviteClient({
               )}
               <div className="flex flex-wrap gap-2">
                 {row.state === "error" && (
-                  <button
+                  <Button
                     type="button"
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+                    variant="secondary"
+                    className="disabled:opacity-45"
                     onClick={() => void sendRow(row)}
                   >
                     Retry {row.email}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
                   type="button"
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+                  variant="secondary"
+                  className="disabled:opacity-45"
                   aria-label={`Remove ${row.email}`}
                   onClick={() =>
                     setRows((current) =>
@@ -791,7 +793,7 @@ export function InviteClient({
                   }
                 >
                   Remove
-                </button>
+                </Button>
               </div>
             </article>
           ))}
@@ -805,12 +807,13 @@ export function InviteClient({
           {message}
         </p>
       )}
-      <button
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+      <Button
+        variant="primary"
+        className="disabled:opacity-45"
         disabled={busy}
       >
         {busy ? "Sending invitations…" : "Send invitations"}
-      </button>
+      </Button>
       <p className="text-xs leading-5 text-ink-faint">
         In this local environment, delivery can be inspected in Mailpit.
       </p>
@@ -1393,16 +1396,16 @@ export function TransferClient({
                 autoComplete="current-password"
               />
             </label>
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45">
+            <Button variant="primary" className="disabled:opacity-45">
               Verify and continue
-            </button>
+            </Button>
           </form>
-          <a
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted"
+          <ActionLink
+            variant="secondary"
             href={`/api/auth/recent/oidc/start?returnTo=${encodeURIComponent("/workspace/settings/transfer-ownership")}`}
           >
             Confirm with local Google fixture
-          </a>
+          </ActionLink>
         </>
       )}
       {verified && (

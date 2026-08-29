@@ -138,6 +138,11 @@ export function workspaceAuthorityParticipant(tx: ModuleTransaction) {
     },
     async canDiscloseLead(actor: TrustedActor, lead: { id: string; owner_membership_id: string | null; visibility: string }) {
       if (actor.role !== "member") return true;
+      // Deliberately NARROWER than visibleLeadIds and WORKSPACE_LEAD_DISCLOSURE_SQL_PREDICATE_V1.
+      // Only identity-review, intake-replay and screen-form paths call this, and those surfaces
+      // expose candidate PII of other people, so workspace-wide visibility is NOT sufficient:
+      // a Member must own the Lead or hold active team visibility. Do not "align" this with the
+      // Lead list predicate - p1a-manual-intake asserts withholding when responsibility is lost.
       if (lead.owner_membership_id !== actor.membershipId) return false;
       if (lead.visibility === "workspace") return true;
       return Boolean((await tx.query(

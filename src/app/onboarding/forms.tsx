@@ -13,6 +13,7 @@ import {
   type PlanPresentation,
 } from "./components";
 import { validEmail, validPassword } from "./logic";
+import { Button } from "@/frontend/design-system";
 import { securePost } from "./api";
 
 type Errors = Record<string, string>;
@@ -174,12 +175,13 @@ export function RegisterForm({
           autoComplete="new-password"
         />
         <Requirements value={password} />
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+        <Button
+          variant="primary"
+          className="disabled:opacity-45"
           disabled={busy || (!presentation && !invitationRegistration)}
         >
           {busy ? "Creating account…" : "Create account"}
-        </button>
+        </Button>
       </form>
       <p className="text-xs leading-5 text-ink-faint">
         No payment is collected in this environment. Production billing and plan
@@ -300,12 +302,13 @@ export function LoginForm({
           autoComplete="current-password"
           error={errors.password}
         />
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+        <Button
+          variant="primary"
+          className="disabled:opacity-45"
           disabled={busy}
         >
           {busy ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
       <p className="text-center text-xs text-ink-muted [&_a]:font-semibold [&_a]:text-accent-ink">
         New to NexaFlow? <Link href="/select-plan">Choose a plan</Link>
@@ -369,12 +372,13 @@ export function ForgotForm() {
               error={errors.email}
               autoComplete="email"
             />
-            <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+            <Button
+              variant="primary"
+              className="disabled:opacity-45"
               disabled={busy}
             >
               {busy ? "Submitting…" : "Send reset link"}
-            </button>
+            </Button>
           </form>
         </>
       )}
@@ -472,12 +476,13 @@ export function ResetForm({ hasIntent }: { hasIntent: boolean }) {
               error={errors.confirm}
               autoComplete="new-password"
             />
-            <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+            <Button
+              variant="primary"
+              className="disabled:opacity-45"
               disabled={busy}
             >
               {busy ? "Saving…" : "Save new password"}
-            </button>
+            </Button>
           </form>
         </>
       )}

@@ -50,11 +50,35 @@ export const leadSummariesViewV1Schema = z.object({
   nextCursor: z.string().max(1024).nullable(),
 }).strict();
 
+/**
+ * The transitions available to the requesting actor for a Lead in its current state.
+ * The server computes them with the shared lifecycle map plus role and ownership; the
+ * client renders exactly what it is given and never derives the state machine itself.
+ *
+ * Note for editors: tests/p1a-modular-boundaries.test.ts scans this file - comments
+ * included - for SQL table ownership, so never put a bare word directly after the
+ * words from/join/into/update/delete anywhere in it.
+ */
+export const leadLifecycleTransitionOptionV1Schema = z.object({
+  to: z.enum(["new", "working", "qualified", "disqualified", "converted"]),
+  label: z.string().min(1).max(60),
+  requiresReason: z.boolean(),
+  /** Only a genuinely forward move is ever "primary". A demotion or a disqualification
+   *  must not be the most prominent control on the page. */
+  emphasis: z.enum(["primary", "secondary"]),
+}).strict();
+
 export const leadDetailViewV1Schema = z.object({
   contractVersion: z.literal(LEAD_DETAIL_QUERY_V1),
   requestId: uuid,
   lead: leadSummaryItemV1Schema,
-}).strict();
+  lifecycleTransitions: z.array(leadLifecycleTransitionOptionV1Schema).max(5),
+}).strict().superRefine((view, issue) => {
+  if (view.lifecycleTransitions.some(option => option.requiresReason !== (option.to === "disqualified")))
+    issue.addIssue({ code: "custom", message: "reason_requirement_mismatch", path: ["lifecycleTransitions"] });
+  if (new Set(view.lifecycleTransitions.map(option => option.to)).size !== view.lifecycleTransitions.length)
+    issue.addIssue({ code: "custom", message: "duplicate_transition_target", path: ["lifecycleTransitions"] });
+});
 
 export const leadPipelineStageV1Schema = z.object({ stageId: uuid, name: z.string().min(1).max(160),
   position: z.number().int().min(0), status: z.literal("active") }).strict();
@@ -81,6 +105,7 @@ export const leadSummaryFiltersV1Schema = z.object({
 export type LeadSummaryItemV1 = z.infer<typeof leadSummaryItemV1Schema>;
 export type LeadSummariesViewV1 = z.infer<typeof leadSummariesViewV1Schema>;
 export type LeadDetailViewV1 = z.infer<typeof leadDetailViewV1Schema>;
+export type LeadLifecycleTransitionOptionV1 = z.infer<typeof leadLifecycleTransitionOptionV1Schema>;
 export type LeadPipelineStagesViewV1 = z.infer<typeof leadPipelineStagesViewV1Schema>;
 export type LeadPipelineStageV1 = z.infer<typeof leadPipelineStageV1Schema>;
 export type LeadSummaryFiltersV1 = z.infer<typeof leadSummaryFiltersV1Schema>;

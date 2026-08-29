@@ -50,8 +50,8 @@ test("Change stage focuses persistent Cancel after async detail and restores its
   const dealId = "30000000-0000-4000-8000-000000000004";
   const requestId = "30000000-0000-4000-8000-000000000005";
   const now = "2026-08-26T12:00:00.000Z";
-  const stage = { stageId, code: "sales.qualification", label: "Qualification", outcomeClass: "open", sortKey: 0, defaultProbabilityBps: 1000, version: 1 } as const;
-  const targetStage = { stageId: targetStageId, code: "sales.proposal", label: "Proposal", outcomeClass: "open", sortKey: 1, defaultProbabilityBps: 3000, version: 1 } as const;
+  const stage = { stageId, pipelineId, code: "sales.qualification", label: "Qualification", outcomeClass: "open", sortKey: 0, defaultProbabilityBps: 1000, version: 1 } as const;
+  const targetStage = { stageId: targetStageId, pipelineId, code: "sales.proposal", label: "Proposal", outcomeClass: "open", sortKey: 1, defaultProbabilityBps: 3000, version: 1 } as const;
   const summary = { dealId, name: "Focus-safe Deal", lifecycle: "active", outcomeClass: "open", stageId, pipelineId, value: null, expectedCloseOn: null, probabilityBps: 1000, company: { available: false }, primaryContact: null, responsibleMembershipId: fixture.membershipId, version: 1, updatedAt: now, capabilities: { canEdit: true, canTransition: true, canArchive: true, canRestore: false } };
   const pipeline = { data: { contractVersion: "sales-pipeline-view.v1", pipeline: { pipelineId, label: "Sales", configurationVersion: 1, version: 1, stages: [stage, targetStage] }, options: { responsibleMemberships: [], teams: [] }, capabilities: { canCreate: true, canManageAssignment: true }, requestId } };
   const list = { data: { contractVersion: "sales-deal-list.v1", filters: { lifecycle: "active" }, items: [summary], nextCursor: null, requestId } };

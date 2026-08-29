@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { securePost } from "../../onboarding/api";
+import { Button } from "@/frontend/design-system";
 type Workspace = {
   id: string;
   name: string;
@@ -72,12 +73,13 @@ export function SwitchClient({ initial }: { initial: Workspace[] }) {
       {error && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-control border border-danger bg-danger-soft p-3 text-sm text-danger">
           <span>{error}</span>{" "}
-          <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+          <Button
+            variant="secondary"
+            className="disabled:opacity-45"
             onClick={() => void reload()}
           >
             Reload latest
-          </button>
+          </Button>
         </div>
       )}
       <ul
@@ -99,15 +101,16 @@ export function SwitchClient({ initial }: { initial: Workspace[] }) {
               {item.current ? (
                 <span aria-label="Selected Workspace">Selected</span>
               ) : (
-                <button
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+                <Button
+                  variant="primary"
+                  className="disabled:opacity-45"
                   disabled={!!busy}
                   aria-busy={busy === item.id}
                   aria-describedby={roleId}
                   onClick={() => void choose(item)}
                 >
                   {busy === item.id ? "Switching…" : `Switch to ${item.name}`}
-                </button>
+                </Button>
               )}
             </li>
           );

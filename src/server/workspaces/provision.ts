@@ -27,6 +27,19 @@ export async function provisionWorkspace(pool:Pool,input:{userId:string;sessionI
     for(const code of ["owner","admin","member"] as const){const role=(await client.query(`insert into roles(workspace_id,code,permissions,is_system,policy_version)values($1,$2,$3,true,'tenant-admin-v1')returning id`,[workspace.id,code,JSON.stringify({version:"tenant-admin-v1",permissions:policies[code]})])).rows[0];if(code==="owner")ownerRoleId=role.id}
     const membership=(await client.query(`insert into workspace_memberships(workspace_id,user_id,role_id,status)values($1,$2,$3,'active')returning id`,[workspace.id,input.userId,ownerRoleId])).rows[0];
     await client.query(`insert into pipeline_stages(workspace_id,name,position)values($1,'New',0),($1,'Contacted',1),($1,'Qualified',2),($1,'Proposal',3)` ,[workspace.id]);
+    // A workspace needs a Deal pipeline before any Lead can be converted. Without one the
+    // conversion preview reports `pipeline_unavailable` and the feature is unusable, and
+    // there is no other surface that creates a pipeline. Seeded here alongside the Lead
+    // stages so every workspace is convertible from the moment it exists.
+    const salesPipeline=(await client.query(`insert into sales_pipelines(workspace_id,code,label,is_default,governing_operation_id,created_by_membership_id,updated_by_membership_id)
+      values($1,'sales.default','Sales pipeline',true,$2,$3,$3)returning id`,[workspace.id,crypto.randomUUID(),membership.id])).rows[0];
+    await client.query(`insert into deal_stage_definitions(workspace_id,pipeline_id,code,label,outcome_class,sort_key,default_probability_bps,governing_operation_id,created_by_membership_id,updated_by_membership_id)
+      values($1,$2,'sales.discovery','Discovery','open',1000,1000,$3,$4,$4),
+            ($1,$2,'sales.proposal','Proposal','open',2000,4000,$3,$4,$4),
+            ($1,$2,'sales.negotiation','Negotiation','open',3000,7000,$3,$4,$4),
+            ($1,$2,'sales.won','Won','won',9000,10000,$3,$4,$4),
+            ($1,$2,'sales.lost','Lost','lost',9500,0,$3,$4,$4)`,
+      [workspace.id,salesPipeline.id,crypto.randomUUID(),membership.id]);
     await client.query(`insert into workspace_entitlement_snapshots(workspace_id,plan_code,catalog_version,effective_feature_flags,effective_limits)values($1,$2,$3,$4,$5)`,[workspace.id,onboarding.selected_plan_code,plan.catalogVersion,plan.featureFlags,JSON.stringify({activeSeats:plan.seats})]);
     await client.query("update workspaces set status='active',updated_at=now() where id=$1",[workspace.id]);
     await client.query("update onboarding_progress set workspace_id=$2,current_step='complete',completed_at=now(),version=version+1,updated_at=now() where user_id=$1",[input.userId,workspace.id]);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { securePost } from "../../../onboarding/api";
+import { Button } from "@/frontend/design-system";
 
 type Acceptance = { workspaceName: string; role: "admin" | "member" };
 type Preview = {
@@ -119,14 +120,15 @@ export function AcceptInvitationClient({
             </div>
           )}
           {authenticated ? (
-            <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45"
+            <Button
+              variant="primary"
+              className="disabled:opacity-45"
               onClick={() => void accept()}
               disabled={busy}
               aria-busy={busy}
             >
               {busy ? "Joining Workspace…" : "Accept invitation"}
-            </button>
+            </Button>
           ) : (
             <>
               <p className="text-xs leading-5 text-ink-faint">
@@ -149,14 +151,15 @@ export function AcceptInvitationClient({
               </Link>
             </>
           )}
-          <button
+          <Button
             type="button"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-control bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-ink hover:bg-surface-muted disabled:opacity-45"
+            variant="secondary"
+            className="disabled:opacity-45"
             onClick={() => void leave()}
             disabled={busy}
           >
             Not now
-          </button>
+          </Button>
           <p className="text-xs leading-5 text-ink-faint">
             Not now does not revoke or decline the invitation on the server.
           </p>

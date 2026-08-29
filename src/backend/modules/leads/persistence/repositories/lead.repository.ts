@@ -33,6 +33,49 @@ export const LEAD_STAGE_UPDATE_SQL_V1 = `update leads set stage_id=$4,version=ve
 export const LEAD_ACTIVITY_APPEND_SQL_V1 = `insert into lead_activities(workspace_id,lead_id,kind,body,created_by_membership_id)
   values($1,$2,$3,$4,$5)`;
 
+/**
+ * Lifecycle rows carry everything authorizeMutation needs plus the current lifecycle
+ * facts. lifecycle_code is NULL for legacy pre-P1A Leads (lifecycle_definition_id is
+ * nullable by design -- see leads_phone_pair_check); those Leads are not on the
+ * lifecycle and the transition orchestrator refuses them.
+ */
+export type LeadLifecycleRow = LeadMutationRow & {
+  lifecycle_definition_id: string | null;
+  lifecycle_code: string | null;
+  disqualification_reason: string | null;
+  lifecycle_reopen_count: number;
+  status: "open" | "won" | "lost";
+  status_source: "system" | "manual";
+};
+
+export const LEAD_LIFECYCLE_LOCK_SQL_V1 = `select l.id,l.version,l.stage_id,l.owner_membership_id,
+    l.responsible_team_id,l.visibility,l.lifecycle_definition_id,l.disqualification_reason,
+    l.lifecycle_reopen_count,l.status,l.status_source,d.code lifecycle_code
+  from leads l left join lead_lifecycle_definitions d on d.id=l.lifecycle_definition_id
+  where l.workspace_id=$1 and l.id=$2 for update of l`;
+
+/**
+ * One statement so a lifecycle move is atomic with its derived facts.
+ * $4 target code, $5 reason, $6 note, $7 reopen increment (0 or 1).
+ * leads.status is only ever auto-derived while status_source='system'; a manual
+ * owner/admin override permanently opts that Lead out of derivation.
+ */
+export const LEAD_LIFECYCLE_UPDATE_SQL_V1 = `update leads set
+    lifecycle_definition_id=(select id from lead_lifecycle_definitions where code=$4 and status='active'),
+    lifecycle_changed_at=now(),
+    working_started_at=case when $4='working' and working_started_at is null then now() else working_started_at end,
+    qualified_at=case when $4='qualified' then now() else qualified_at end,
+    disqualification_reason=$5,
+    disqualification_note=$6,
+    lifecycle_reopen_count=lifecycle_reopen_count+$7,
+    status=case when status_source<>'system' then status
+                when $4='disqualified' then 'lost'
+                when $4 in ('new','working','qualified') then 'open'
+                else status end,
+    version=version+1,updated_at=now()
+  where workspace_id=$1 and id=$2 and version=$3
+  returning version,lifecycle_reopen_count`;
+
 function context(row: Record<string, unknown>): LeadIntakeContext {
   const outcome = row.outcome as Record<string, unknown> | null;
   return { ...row, candidate_query: outcome?._candidateQuery as CandidateQueryV1 | undefined } as LeadIntakeContext;
@@ -225,8 +268,24 @@ export function leadTransactionParticipant(tx: ModuleTransaction) {
       if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
       return row.version;
     },
+    async lockForLifecycle(workspaceId: string, leadId: string): Promise<LeadLifecycleRow> {
+      const row = (await tx.query<LeadLifecycleRow>(LEAD_LIFECYCLE_LOCK_SQL_V1, [workspaceId, leadId])).rows[0];
+      if (!row) throw Object.assign(new Error("resource_not_found"), { code: "resource_not_found", status: 404 });
+      return row;
+    },
+    async transitionLifecycle(input: { workspaceId: string; leadId: string; expectedVersion: number;
+      targetLifecycle: string; disqualificationReason: string | null; disqualificationNote: string | null;
+      reopenIncrement: 0 | 1 }): Promise<{ version: number; reopenCount: number }> {
+      const row = (await tx.query<{ version: number; lifecycle_reopen_count: number }>(
+        LEAD_LIFECYCLE_UPDATE_SQL_V1,
+        [input.workspaceId, input.leadId, input.expectedVersion, input.targetLifecycle,
+          input.disqualificationReason, input.disqualificationNote, input.reopenIncrement],
+      )).rows[0];
+      if (!row) throw Object.assign(new Error("stale_version"), { code: "stale_version", status: 409 });
+      return { version: row.version, reopenCount: row.lifecycle_reopen_count };
+    },
     async addMutationActivity(input: { workspaceId: string; leadId: string; actorMembershipId: string;
-      kind: "updated" | "stage_changed"; body: string }): Promise<void> {
+      kind: "updated" | "stage_changed" | "status_changed"; body: string }): Promise<void> {
       await tx.query(
         LEAD_ACTIVITY_APPEND_SQL_V1,
         [input.workspaceId, input.leadId, input.kind, input.body, input.actorMembershipId],

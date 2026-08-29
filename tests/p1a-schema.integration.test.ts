@@ -45,8 +45,8 @@ async function createLeadAndIntake(fixture: Awaited<ReturnType<typeof workspaceF
     `insert into leads(
        workspace_id,display_name,first_name,last_name,email_normalized,email_display,company,source,
        original_source_category,original_source_platform,original_source_medium,intake_channel,
-       status,stage_id,owner_membership_id,visibility)
-     values($1,'Casey Morgan','Casey','Morgan','casey@example.test','casey@example.test',null,$2,$2,$3,'unknown','manual','open',$4,null,'workspace')
+       source_platform,status,stage_id,owner_membership_id,visibility)
+     values($1,'Casey Morgan','Casey','Morgan','casey@example.test','casey@example.test',null,$2,$2,$3,'unknown','manual',$3,'open',$4,null,'workspace')
      returning id,lifecycle_definition_id`,
     [fixture.workspaceId, sourceCategory, sourcePlatform, fixture.stageId],
   )).rows[0];

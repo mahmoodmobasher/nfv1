@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { Alert } from "../onboarding/components";
 import { plans, type PlanKey, validEmail } from "../onboarding/logic";
+import { Button } from "@/frontend/design-system";
 
 type Role = "Member" | "Admin";
 type PreviewInvite = {
@@ -122,9 +123,9 @@ export function InvitationPreview({
             >
               Add preview entry
             </button>
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-accent bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent hover:bg-accent-ink disabled:opacity-45">
+            <Button variant="primary" className="disabled:opacity-45">
               Preview invitation result
-            </button>
+            </Button>
           </form>
         </section>
       </main>

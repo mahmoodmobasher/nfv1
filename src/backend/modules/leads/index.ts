@@ -1,6 +1,18 @@
 export { submitLeadInquiryV1, submitLegacyManualLeadV1 } from "./application/commands/submit-lead-inquiry.command";
 export { editLeadOperationalV1 } from "./application/commands/edit-lead-operational.command";
 export { transitionLeadStageV1 } from "./application/commands/transition-lead-stage.command";
+export { transitionLeadLifecycleV1 } from "./application/commands/transition-lead-lifecycle.command";
+export { leadOutcomeParticipant } from "./persistence/repositories/lead-outcome.repository";
+export { getLeadOutcomeReconciliationV1 } from "./application/queries/lead-outcome-reconciliation.query";
+export { LEAD_OUTCOME_RECONCILIATION_QUERY_V1, LEAD_OUTCOME_DISAGREEMENTS, outcomeDisagreement,
+  leadOutcomeReconciliationViewV1Schema } from "./contracts/lead-reconciliation.contract";
+export type { LeadOutcomeDisagreement, LeadOutcomeReconciliationItemV1,
+  LeadOutcomeReconciliationViewV1 } from "./contracts/lead-reconciliation.contract";
+export { ALLOWED_LEAD_LIFECYCLE_TRANSITIONS, LEAD_DISQUALIFICATION_REASONS, LEAD_LIFECYCLE_CODES,
+  LEAD_LIFECYCLE_TRANSITION_OPERATION, isAllowedLifecycleTransition,
+  leadLifecycleTransitionCommandV1Schema, leadLifecycleTransitionResultV1Schema } from "./contracts/lead-lifecycle.contract";
+export type { LeadLifecycleCode, LeadDisqualificationReason, LeadLifecycleTransitionCommandV1,
+  LeadLifecycleTransitionResultV1 } from "./contracts/lead-lifecycle.contract";
 export { decideLeadIdentityReviewV1, resolveLeadIdentityReviewV1, type LeadIdentityReviewDecisionResultV1,
   type ResolveLeadIdentityReviewResultV1 } from "./application/orchestrators/resolve-lead-identity-review.orchestrator";
 export { getIdentityReviewCandidatesV1, getIdentityReviewDetailV1 } from "./application/queries/get-identity-review-candidates.query";

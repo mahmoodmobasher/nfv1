@@ -2,7 +2,8 @@ import type { ModuleTransaction } from "../database";
 
 export type P1AEventTopic = "crm.inquiry.created.v1" | "crm.inquiry.review_required.v1" |
   "crm.inquiry.review_resolved.v1" | "crm.inquiry.linked.v1" | "crm.contact.created.v1" | "crm.company.created.v1" |
-  "crm.lead.operational_updated.v1" | "crm.lead.stage_transitioned.v1";
+  "crm.lead.operational_updated.v1" | "crm.lead.stage_transitioned.v1" |
+  "crm.lead.lifecycle_transitioned.v1";
 export type DomainEventV1 = {
   topic: P1AEventTopic;
   aggregateType: "lead" | "contact" | "company";
@@ -27,6 +28,8 @@ const topicContract: Record<P1AEventTopic, { aggregate: DomainEventV1["aggregate
     "changeFields", "requestId"], allowed: [] },
   "crm.lead.stage_transitioned.v1": { aggregate: "lead", required: ["schemaVersion", "workspaceId", "leadId", "leadVersion",
     "previousStageId", "stageId", "requestId"], allowed: [] },
+  "crm.lead.lifecycle_transitioned.v1": { aggregate: "lead", required: ["schemaVersion", "workspaceId", "leadId", "leadVersion",
+    "previousLifecycle", "lifecycle", "requestId"], allowed: ["disqualificationReason"] },
 };
 
 function assertEventContract(event: DomainEventV1, workspaceId: string) {
@@ -108,6 +111,7 @@ export async function writeDomainEventSet(tx: ModuleTransaction, input: {
     "crm.company.created.v1,crm.contact.created.v1,crm.inquiry.linked.v1,crm.inquiry.review_resolved.v1",
     "crm.lead.operational_updated.v1",
     "crm.lead.stage_transitioned.v1",
+    "crm.lead.lifecycle_transitioned.v1",
   ]);
   if (!allowedSets.has(topicSet)) throw new Error("invalid_p1a_event_set");
   for (const event of input.events) {

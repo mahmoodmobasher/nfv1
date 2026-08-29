@@ -179,3 +179,32 @@ export function salesLeadConversionParticipant(tx: ModuleTransaction) {
     },
   };
 }
+
+/**
+ * Deal outcomes grouped by the Lead each Deal was converted from. Sales owns the
+ * conversion lineage and Deals; the Leads module matches this against its own `leads`
+ * rows in TypeScript so neither module reads the other's tables.
+ *
+ * Note: the SQL-ownership scanner allows zero whitespace after its keywords, so even a
+ * plural of one of those verbs in ordinary prose registers as a table reference. Keep
+ * them out of comments in this module.
+ */
+export function dealOutcomesByLeadParticipant(tx: ModuleTransaction) {
+  return {
+    async forWorkspace(workspaceId: string, limit = 500) {
+      return (await tx.query<{ leadId: string; won: number; lost: number; open: number }>(
+        `select lineage.lead_record_id "leadId",
+            count(*) filter (where deal.outcome_class='won')::int won,
+            count(*) filter (where deal.outcome_class='lost')::int lost,
+            count(*) filter (where deal.outcome_class='open')::int open
+           from lead_deal_conversion_lineage lineage
+           join deals deal on deal.workspace_id=lineage.workspace_id and deal.id=lineage.deal_id
+          where lineage.workspace_id=$1 and lineage.lead_record_type='crm.lead'
+          group by lineage.lead_record_id
+          order by lineage.lead_record_id
+          limit $2`,
+        [workspaceId, limit],
+      )).rows;
+    },
+  };
+}

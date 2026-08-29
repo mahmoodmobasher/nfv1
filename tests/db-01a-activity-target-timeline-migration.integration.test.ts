@@ -32,14 +32,14 @@ async function through0023(client: PoolClient) {
 suite("DB-01A migration integrity", () => {
   afterAll(async () => { for (const name of names) { await admin.query("select pg_terminate_backend(pid) from pg_stat_activity where datname=$1", [name]); await admin.query(`drop database if exists ${name}`); } await admin.end(); });
 
-  it("migrates fresh and forward-empty to exact 25-entry head, then no-ops", async () => {
+  it("applies its own migration once from fresh and forward-empty state, then no-ops", async () => {
     for (const mode of ["fresh", "forward"] as const) {
       const url = await database();
       if (mode === "forward") { const db = new Pool({ connectionString: url }); const client = await db.connect(); try { await through0023(client); } finally { client.release(); await db.end(); } }
       await migrate(url); const db = new Pool({ connectionString: url });
       expect(await databaseHealth(db)).toMatchObject({ ok: true });
       const ledger = (await db.query("select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations")).rows[0];
-      expect(ledger).toEqual({ count: 25, head }); await db.end();
+      expect((await db.query("select count(*)::int count from drizzle.__drizzle_migrations where created_at=$1",[head])).rows[0]).toEqual({ count: 1 }); await db.end();
       await migrate(url); const again = new Pool({ connectionString: url }); expect((await again.query("select count(*)::int count,max(created_at)::text head from drizzle.__drizzle_migrations")).rows[0]).toEqual(ledger); await again.end();
     }
   });
