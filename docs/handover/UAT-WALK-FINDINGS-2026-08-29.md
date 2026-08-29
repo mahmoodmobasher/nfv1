@@ -8,7 +8,60 @@ Environment: UAT `1237a93-uat56`, `main` at `f5cdbe1`, actor = the `def` workspa
 
 ---
 
-## 1. A Deal closed **Lost** appears not to settle its Lead — UNCONFIRMED, confirm first
+## 1. RETRACTED — the settlement works. The DASHBOARD undercounts.
+
+**Read this before anything below it.** The original finding in this section claimed a
+Deal closed Lost did not settle its Lead. **That was wrong.** It was inferred from the CRM
+home tiles without checking the table. The confirming query, run 2026-08-29 21:24 UTC,
+shows all three Leads settled correctly:
+
+| Lead | status | status_source | lifecycle | reopen_count | deal outcome_class |
+|---|---|---|---|---|---|
+| Mobasher UAT Lead 01 | `won` | `system` | converted | 0 | won |
+| Mobasher UAT Lead 02 | **`lost`** | `system` | converted | **1** | lost |
+| Mobasher UAT Lead 03 | `lost` | `system` | converted | 0 | lost |
+
+`Lead 02` — the disqualify -> reopen case — settled to `lost` exactly as intended. The
+Deal-derived outcome path, the `status_source='system'` guard, the reopen -> `open` reset
+and the lineage are all working. **No fix is needed here. Do not change
+`applyDerivedOutcome`, `transitionDeal`, or the lifecycle SQL on the strength of this
+section.**
+
+### What is actually wrong: the dashboard disagrees with the table
+
+The CRM home tiles did not move when `Lead 02` settled, and still under-report. Observed
+at 21:13 UTC, after both Lead 02 and Lead 03 were `lost` in the table:
+
+- Tiles: **Visible 10 / Open 6 / Won 1 / Lost 3**
+- Table: Lead 01 `won`, Lead 02 `lost`, Lead 03 `lost`, plus the pre-existing `lost`
+  rows — which should make Lost **4** and Open **5**.
+
+The tiles increment for some Leads and not others: Lost went 2 -> 3 when Lead 03 closed at
+21:13, but did not move when Lead 02 closed at 20:43. So the dashboard's outcome
+aggregation is dropping or misclassifying at least one Lead whose row is correct. The one
+visible difference between Lead 02 and Lead 03 is `lifecycle_reopen_count` (1 vs 0).
+
+**Confirm the discrepancy before chasing it** — the counts, straight from the table:
+
+```
+sudo docker exec -it nexaflow-uat-postgres-1 psql -U nexaflow -d nexaflow_uat -c "
+select l.status, count(*)
+from leads l
+where l.workspace_id = (select workspace_id from leads where display_name='Mobasher UAT Lead 01')
+group by l.status order by 1;"
+```
+
+If that returns `open 5 / won 1 / lost 4` against tiles reading 6/1/3, the dashboard query
+is the bug. If it returns `open 6 / won 1 / lost 3`, the tiles are right and the earlier
+arithmetic in this document was simply wrong — in which case there is no finding #1 at all.
+
+**This matters for Phase 4 regardless of which:** the lifecycle funnel is built on this
+same aggregation. A funnel inheriting a miscount is worse than no funnel. Settle it before
+building.
+
+### Original (incorrect) analysis, kept only as a record of how it was reached
+
+
 
 **What was done.** `Mobasher UAT Lead 02` (`f22502a4-e4a5-482f-b747-cd4b359c7ee0`) was
 walked: identity review resolved with *Create new contact* + *Create new company* →
