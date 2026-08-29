@@ -162,6 +162,7 @@ const option = z.object({ id: uuid, label: clean(200) }).strict(),
   stage = z
     .object({
       stageId: uuid,
+      pipelineId: uuid,
       code: clean(64),
       label: clean(100),
       outcomeClass: z.enum(["open", "won", "lost"]),
