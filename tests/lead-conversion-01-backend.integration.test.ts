@@ -173,6 +173,139 @@ async function fixture() {
     lostStageId: closingStages.find(stage => stage.outcome_class === "lost")!.id };
 }
 
+async function fixtureWithNewIdentity() {
+  const user = (
+    await pool.query<{ id: string }>(
+      `insert into users(primary_email_normalized,primary_email_display,display_name,status,email_verified_at)
+       values($1,$1,'Conversion Owner','active',now()) returning id`,
+      [`conversion-${randomUUID()}@test.local`],
+    )
+  ).rows[0];
+  const workspace = (
+    await pool.query<{ id: string }>(
+      `insert into workspaces(name,slug,status,plan_code,billing_cadence,created_by_user_id)
+       values('Conversion',$1,'active','growth','monthly',$2) returning id`,
+      [`conversion-${randomUUID()}`, user.id],
+    )
+  ).rows[0];
+  const role = (
+    await pool.query<{ id: string }>(
+      `insert into roles(workspace_id,code,permissions,is_system)
+       values($1,'owner','{}',true) returning id`,
+      [workspace.id],
+    )
+  ).rows[0];
+  const membership = (
+    await pool.query<{ id: string }>(
+      `insert into workspace_memberships(workspace_id,user_id,role_id,status)
+       values($1,$2,$3,'active') returning id`,
+      [workspace.id, user.id, role.id],
+    )
+  ).rows[0];
+  const session = (
+    await pool.query<{ id: string }>(
+      `insert into sessions(user_id,session_hash,idle_expires_at,absolute_expires_at,auth_method)
+       values($1,$2,now()+interval '1 hour',now()+interval '1 day','password') returning id`,
+      [user.id, randomUUID()],
+    )
+  ).rows[0];
+  const actor: TrustedActor = {
+    userId: user.id,
+    sessionId: session.id,
+    workspaceId: workspace.id,
+    membershipId: membership.id,
+    role: "owner",
+  };
+  await pool.query(
+    `insert into pipeline_stages(workspace_id,name,position,status)
+     values($1,'New',0,'active')`,
+    [workspace.id],
+  );
+  const pipeline = (
+    await pool.query<{ id: string }>(
+      `insert into sales_pipelines(workspace_id,code,label,is_default,governing_operation_id,created_by_membership_id,updated_by_membership_id)
+       values($1,$2,'Sales',true,$3,$4,$4) returning id`,
+      [
+        workspace.id,
+        `sales.pipeline_${randomUUID().slice(0, 8)}`,
+        randomUUID(),
+        membership.id,
+      ],
+    )
+  ).rows[0];
+  await pool.query(
+    `insert into deal_stage_definitions(workspace_id,pipeline_id,code,label,outcome_class,sort_key,default_probability_bps,
+       governing_operation_id,created_by_membership_id,updated_by_membership_id)
+     values($1,$2,$3,'Discovery','open',1000,1500,$4,$5,$5)`,
+    [
+      workspace.id,
+      pipeline.id,
+      `sales.stage_${randomUUID().slice(0, 8)}`,
+      randomUUID(),
+      membership.id,
+    ],
+  );
+  // No canonical Company or Contact is pre-made here: identity review must CREATE both,
+  // the path that previously produced legacy-p1a-root-v1 records no conversion could ever use.
+  // One legacy Contact is seeded only so a review actually opens (submit-lead-inquiry opens a
+  // review only when at least one candidate exists); the decision below rejects it and creates new.
+  const email = `jordan-${randomUUID()}@example.test`;
+  await pool.query(
+    `insert into contacts(workspace_id,display_name,person_name_normalized,email_display,email_normalized)
+     values($1,'Prior Jordan','prior jordan',$2,$2)`,
+    [workspace.id, email],
+  );
+  const intake = await submitLeadInquiryV1(pool, {
+    actor,
+    idempotencyKey: `intake-${randomUUID()}`,
+    command: {
+      contractVersion: "lead-inquiry-intake.v1",
+      intakeChannel: "manual",
+      person: {
+        displayName: "Jordan Vale",
+        email,
+      },
+      organization: { name: "Vale Robotics" },
+      inquiry: { receivedAt: "2026-08-26T12:00:00.000Z" },
+      source: {
+        sourceCategory: "manual",
+        sourceMedium: "unknown",
+        sourceDetail: {},
+        campaignContext: {},
+        attributionContractVersion: "p1a-attribution-v1",
+      },
+      requestedAssignment: { responsibleMembershipId: membership.id },
+    },
+  });
+  const review = await getIdentityReviewCandidatesV1(
+    pool,
+    actor,
+    intake.leadId,
+  );
+  await resolveLeadIdentityReviewV1(pool, {
+    actor,
+    leadId: intake.leadId,
+    idempotencyKey: `resolve-${randomUUID()}`,
+    command: {
+      contractVersion: "lead-identity-review-decision.v1",
+      expectedLeadVersion: review.leadVersion,
+      expectedReviewVersion: review.reviewVersion,
+      expectedIntakeVersion: review.intakeVersion,
+      outcome: "resolve",
+      contact: { action: "create" },
+      company: { action: "create" },
+    },
+  });
+  for (const target of ["working", "qualified"] as const) {
+    const version = (await pool.query<{ version: number }>(
+      "select version from leads where workspace_id=$1 and id=$2", [workspace.id, intake.leadId])).rows[0].version;
+    await transitionLeadLifecycleV1(pool, { actor, leadId: intake.leadId, idempotencyKey: `lc-${randomUUID()}`,
+      command: { contractVersion: "lead-lifecycle-transition.v1", expectedVersion: version,
+        targetLifecycle: target, disqualificationReason: null, disqualificationNote: null } });
+  }
+  return { actor, leadId: intake.leadId, workspaceId: workspace.id };
+}
+
 async function command(f: Awaited<ReturnType<typeof fixture>>) {
   const preview = await getLeadConversionPreviewV1(pool, f.actor, f.leadId);
   expect(preview).toMatchObject({
@@ -489,5 +622,46 @@ suite("LEAD-CONVERSION-01 backend", () => {
     await pool.query("update workspace_memberships set role_id=$2 where id=$1", [f.actor.membershipId, memberRole.id]);
     await expect(getLeadOutcomeReconciliationV1(pool, f.actor))
       .rejects.toMatchObject({ code: "permission_required", status: 403 });
+  });
+
+  it("makes a brand-new identity-review Contact and Company primary-eligible for conversion", async () => {
+    const f = await fixtureWithNewIdentity();
+    const preview = await getLeadConversionPreviewV1(pool, f.actor, f.leadId);
+    expect(preview.eligible).toBe(true);
+    expect(preview.ineligibilityReasons).toEqual([]);
+    expect(preview.choices.companies).toHaveLength(1);
+    expect(preview.choices.primaryContacts).toHaveLength(1);
+    expect(preview.choices.primaryContacts[0]).toMatchObject({ primaryEligible: true });
+    const input = {
+      contractVersion: "lead-convert-to-deal.v1" as const,
+      expectedLeadVersion: preview.lead.version,
+      intakeId: preview.lead.intakeId,
+      expectedIntakeVersion: preview.lead.intakeVersion,
+      review: preview.lead.review!,
+      company: {
+        companyId: preview.choices.companies[0].companyId,
+        expectedVersion: preview.choices.companies[0].version,
+      },
+      primaryContact: {
+        contactId: preview.choices.primaryContacts[0].contactId,
+        expectedVersion: preview.choices.primaryContacts[0].version,
+      },
+      pipeline: {
+        pipelineId: preview.pipeline!.pipelineId,
+        expectedVersion: preview.pipeline!.version,
+        expectedConfigurationVersion: preview.pipeline!.configurationVersion,
+        stageId: preview.pipeline!.initialStage.stageId,
+        expectedStageVersion: preview.pipeline!.initialStage.version,
+      },
+      deal: { name: "Vale Robotics opportunity", value: null, expectedCloseOn: null },
+      assignment: preview.assignment,
+    };
+    const result = await convertLeadToDealV1(pool, {
+      actor: f.actor,
+      leadId: f.leadId,
+      command: input,
+      idempotencyKey: `convert-${randomUUID()}`,
+    });
+    expect(result).toMatchObject({ committed: true, replayed: false });
   });
 });

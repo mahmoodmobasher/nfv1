@@ -4,3 +4,4 @@ export * from "./application/customer-graph.service";
 export * from "./application/deal-party-reference.participant";
 export { contactNoteTargetParticipant } from "./application/contact-note-target.participant";
 export { getCustomerGraphScreenProfileV1 } from "./application/screen-profile.participant";
+export { customerGraphIdentityResolutionParticipant } from "./application/identity-resolution.participant";
