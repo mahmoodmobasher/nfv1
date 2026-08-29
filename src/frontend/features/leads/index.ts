@@ -1,6 +1,8 @@
 export{ManualLeadIntakePage}from"./components/manual-lead-intake-page";
 export{LeadList,LeadPipeline,LeadPresentationUnavailable,LeadReadOnlyDetail,LeadSummaryCard,leadAssignmentLabel,leadContactLabel}from"./components/lead-presentation";
 export{LeadOperationalEditForm,LeadStageMove}from"./components/lead-management";
+export{LeadLifecycleControl}from"./components/lead-lifecycle";
+export type{LeadLifecycleTransitionOption}from"./components/lead-lifecycle";
 export{LeadActivityPanel,activityMatchesFilter,compareActivityDescending,mergeActivityItems}from"./components/lead-activity";
 export{ACTIVITY_CREATE_V1,ACTIVITY_CREATE_RESULT_V1,ACTIVITY_LIST_QUERY_V1,LEAD_ACTIVITY_LIST_V1,activityCreateCommandV1Schema,activityCreateEnvelopeV1Schema,activityErrorDisposition,activityErrorEnvelopeV1Schema,activityItemV1Schema,leadActivityListEnvelopeV1Schema,leadActivityListV1Schema}from"./contracts/lead-activity.contracts";
 export type{ActivityCreateCommandV1,ActivityCreateResultV1,ActivityErrorV1,ActivityItemV1,ActivityKindV1,LeadActivityListV1}from"./contracts/lead-activity.contracts";
