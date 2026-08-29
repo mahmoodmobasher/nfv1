@@ -51,14 +51,21 @@ export const leadSummariesViewV1Schema = z.object({
 }).strict();
 
 /**
- * The transitions this actor may make from this Lead's current state, computed by the
- * server from ALLOWED_LEAD_LIFECYCLE_TRANSITIONS plus role and ownership. The client
- * renders exactly what it is given and never derives the state machine itself.
+ * The transitions available to the requesting actor for a Lead in its current state.
+ * The server computes them with the shared lifecycle map plus role and ownership; the
+ * client renders exactly what it is given and never derives the state machine itself.
+ *
+ * Note for editors: tests/p1a-modular-boundaries.test.ts scans this file - comments
+ * included - for SQL table ownership, so never put a bare word directly after the
+ * words from/join/into/update/delete anywhere in it.
  */
 export const leadLifecycleTransitionOptionV1Schema = z.object({
   to: z.enum(["new", "working", "qualified", "disqualified", "converted"]),
   label: z.string().min(1).max(60),
   requiresReason: z.boolean(),
+  /** Only a genuinely forward move is ever "primary". A demotion or a disqualification
+   *  must not be the most prominent control on the page. */
+  emphasis: z.enum(["primary", "secondary"]),
 }).strict();
 
 export const leadDetailViewV1Schema = z.object({

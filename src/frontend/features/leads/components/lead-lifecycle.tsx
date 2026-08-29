@@ -13,7 +13,8 @@ import {
 
 type LifecycleError = LeadManagementErrorEnvelope["error"];
 
-export type LeadLifecycleTransitionOption = { to: LeadLifecycleCode; label: string; requiresReason: boolean };
+export type LeadLifecycleTransitionOption = { to: LeadLifecycleCode; label: string; requiresReason: boolean;
+  emphasis: "primary" | "secondary" };
 
 const REASONS: Array<{ value: LeadDisqualificationReason; label: string }> = [
   { value: "not_a_fit", label: "Not a fit" },
@@ -126,7 +127,7 @@ export function LeadLifecycleControl({ workspaceId, leadId, version, currentCode
           {transitions.map(option => (
             <Button
               key={option.to}
-              variant={option.to === "disqualified" ? "secondary" : "primary"}
+              variant={option.emphasis}
               className="h-9 min-h-0 py-0 text-xs"
               disabled={busy}
               onClick={() => (option.requiresReason ? setPending(option) : void submit(option))}

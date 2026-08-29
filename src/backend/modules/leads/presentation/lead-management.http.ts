@@ -16,7 +16,7 @@ const presentation: Record<LeadManagementErrorCode, readonly [string, boolean, s
   stale_version: ["The Lead has changed.", false, "refetch_lead", 409],
   stage_unavailable: ["The selected stage is no longer available.", false, "refetch_lead_and_stages", 409],
   assignment_unavailable: ["The selected responsibility is no longer available.", false, "refetch_lead_operational_edit", 409],
-  lifecycle_transition_not_allowed: ["That lifecycle change is not allowed from the current state.", false, "refetch_lead", 409],
+  lifecycle_transition_not_allowed: ["That lifecycle change is not available in this state.", false, "refetch_lead", 409],
   lifecycle_unavailable: ["This Lead is not managed by the lifecycle.", false, "refetch_lead", 409],
   rate_limited: ["Too many requests. Try again later.", true, "retry_same_request", 429],
   lead_mutation_unavailable: ["Lead changes are temporarily unavailable.", true, "retry_same_request", 503],

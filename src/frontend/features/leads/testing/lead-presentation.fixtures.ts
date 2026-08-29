@@ -20,8 +20,8 @@ export const pendingReviewLeadFixture:LeadSummariesView["items"][number]={...saf
 export const leadSummariesFixture:LeadSummariesView={contractVersion:"listLeadSummaries.v1",requestId,
   items:[safeLeadSummaryFixture],nextCursor:null};
 export const leadDetailFixture:LeadDetailView={contractVersion:"getLeadDetail.v1",requestId,lead:safeLeadSummaryFixture,
-  lifecycleTransitions:[{to:"working",label:"Start working",requiresReason:false},
-    {to:"disqualified",label:"Disqualify",requiresReason:true}]};
+  lifecycleTransitions:[{to:"working",label:"Start working",requiresReason:false,emphasis:"primary"},
+    {to:"disqualified",label:"Disqualify",requiresReason:true,emphasis:"secondary"}]};
 export const pipelineStagesFixture:LeadPipelineStagesView={contractVersion:"listLeadPipelineStages.v1",requestId,items:[
   {stageId:"40000000-0000-4000-8000-000000000003",name:"New",position:0,status:"active"},
   {stageId:"40000000-0000-4000-8000-000000000004",name:"Working",position:1,status:"active"},

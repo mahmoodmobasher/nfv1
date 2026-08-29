@@ -148,26 +148,45 @@ export async function listLeadSummariesV1(pool:Pool,actor:TrustedActor,rawFilter
       nextCursor:hasMore&&boundary?encodeCursor(boundary,filters):null});
     return result})}
 
-const LIFECYCLE_LABELS:Record<string,string>={new:"Mark as new",working:"Start working",qualified:"Mark qualified",
-  disqualified:"Disqualify",converted:"Convert"};
+/**
+ * Keyed by `${from}>${to}` because the same target means different things depending on
+ * the Lead's previous state: working starts a `new` Lead, demotes a `qualified` one,
+ * and a reopen from `disqualified`. Emphasis follows the same logic -- only a forward
+ * move is primary, so a demotion is never the loudest control on the page.
+ */
+const LIFECYCLE_TRANSITIONS:Record<string,{label:string;emphasis:"primary"|"secondary"}>={
+  "new>working":{label:"Start working",emphasis:"primary"},
+  "new>disqualified":{label:"Disqualify",emphasis:"secondary"},
+  "working>qualified":{label:"Mark qualified",emphasis:"primary"},
+  "working>disqualified":{label:"Disqualify",emphasis:"secondary"},
+  "qualified>working":{label:"Move back to working",emphasis:"secondary"},
+  "qualified>disqualified":{label:"Disqualify",emphasis:"secondary"},
+  "disqualified>working":{label:"Reopen lead",emphasis:"primary"},
+};
 
 /**
- * The legal moves for THIS actor from THIS state. Mirrors the orchestrator's rules:
- * the map decides what may follow what; owner/admin may make any legal move; a Member
- * may act only on a Lead they own; reopening a disqualified Lead is owner/admin only;
- * `converted` belongs to the conversion orchestrator and is never offered here.
+ * The legal moves available to the given actor for a Lead in its current state.
+ * Mirrors the orchestrator's rules: the map decides what may follow what; owner/admin
+ * may make any legal move; a Member may act only on a Lead they own; reopening a
+ * disqualified Lead is owner/admin only; `converted` belongs to the conversion
+ * orchestrator and is never offered here.
+ *
+ * Note: no local may be named `from`, and no comment may put a bare word after the
+ * words from/join/into/update/delete. tests/p1a-modular-boundaries.test.ts scans this
+ * whole file - comments included - for SQL table ownership and would read one as a table.
  */
 function lifecycleTransitionOptions(lead:LeadSummaryItemV1,actor:TrustedActor){
-  const from=lead.lifecycle.code;
-  if(!from||!(from in ALLOWED_LEAD_LIFECYCLE_TRANSITIONS))return [];
+  const currentCode=lead.lifecycle.code;
+  if(!currentCode||!Object.hasOwn(ALLOWED_LEAD_LIFECYCLE_TRANSITIONS,currentCode))return [];
   const privileged=actor.role==="owner"||actor.role==="admin";
-  if(from==="disqualified"&&!privileged)return [];
+  if(currentCode==="disqualified"&&!privileged)return [];
   if(!privileged&&lead.assignment.responsibleMembershipId!==actor.membershipId)return [];
   const unassigned=!lead.assignment.responsibleMembershipId;
-  return ALLOWED_LEAD_LIFECYCLE_TRANSITIONS[from as LeadLifecycleCode]
+  return ALLOWED_LEAD_LIFECYCLE_TRANSITIONS[currentCode as LeadLifecycleCode]
     .filter(to=>to!=="converted")
     .filter(to=>!(unassigned&&(to==="working"||to==="qualified")))
-    .map(to=>({to,label:LIFECYCLE_LABELS[to]??to,requiresReason:to==="disqualified"}));
+    .map(to=>{const entry=LIFECYCLE_TRANSITIONS[`${currentCode}>${to}`];
+      return{to,label:entry?.label??to,emphasis:entry?.emphasis??"secondary",requiresReason:to==="disqualified"}});
 }
 
 export async function getLeadDetailV1(pool:Pool,actor:TrustedActor,leadId:string,requestId:string=randomUUID()):Promise<LeadDetailViewV1>{

@@ -132,7 +132,8 @@ export const leadLifecycleCodeSchema = z.enum(["new", "working", "qualified", "d
 export const leadDisqualificationReasonSchema = z.enum(["not_a_fit", "no_response", "duplicate", "bad_data",
   "no_budget", "lost_to_competitor", "other"]);
 export const leadLifecycleTransitionOptionSchema = z.object({ to: leadLifecycleCodeSchema,
-  label: z.string().min(1).max(60), requiresReason: z.boolean() }).strict();
+  label: z.string().min(1).max(60), requiresReason: z.boolean(),
+  emphasis: z.enum(["primary", "secondary"]) }).strict();
 export const leadDetailViewSchema = z.object({ contractVersion: z.literal("getLeadDetail.v1"), requestId: uuid,
   lead: leadSummaryItemSchema, lifecycleTransitions: z.array(leadLifecycleTransitionOptionSchema).max(5) }).strict();
 export const leadPipelineStageSchema = z.object({ stageId: uuid, name: z.string().min(1).max(160),

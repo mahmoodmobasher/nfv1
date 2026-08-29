@@ -78,7 +78,9 @@ export async function executeLeadLifecycleTransitionV1(pool: Pool, input: { acto
       }
       if (lead.version !== input.command.expectedVersion) throw new LeadManagementError("stale_version", 409);
 
-      // Legacy pre-P1A Leads carry no lifecycle and cannot join one retroactively.
+      // Legacy pre-P1A Leads carry no lifecycle and cannot be given one retroactively.
+      // (Avoid the word pair "join <word>" here: the SQL-ownership boundary scanner in
+      //  tests/p1a-modular-boundaries.test.ts reads comments too and would see a table.)
       if (!lead.lifecycle_code) throw new LeadManagementError("lifecycle_unavailable", 409);
       const from = lead.lifecycle_code as LeadLifecycleCode, to = input.command.targetLifecycle;
       assertTransitionPermitted(actor.role, lead, actor.membershipId, from);
