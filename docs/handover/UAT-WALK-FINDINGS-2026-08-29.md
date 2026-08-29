@@ -64,7 +64,86 @@ is a query against the owning table, before any hypothesis is written down, any 
 is designed, or any other session is told to act. Reading the row here would have cost one
 command and saved several hours of two sessions' work.
 
-## 2. The conversion panel shows stale authority after a lifecycle change — CONFIRMED
+## 5. BLOCKER — "No primary Contact" is offered but the server always rejects it
+
+Found on `uat57` by walking the one conversion branch nothing had exercised. **This is a
+live blocker, not cosmetic: a Lead cannot be converted without a primary Contact, even
+though the UI presents that as a supported choice.**
+
+### Reproduce
+
+`Mobasher UAT Lead 05` (`e5439837-6333-4fbf-ab6e-f23369edcb69`) has been **left in the
+failing state on UAT as a live reproduction** — it is resolved, qualified, and refuses to
+convert. Leads 06, 07 and 09 remain untouched for further testing.
+
+1. Resolve a Lead's identity review with *Create new contact* + *Create new company*.
+2. Drive it to `qualified`. Reload the page fully (so no client staleness is involved).
+3. Leave **Primary Contact** on its default, `No primary Contact`. Convert.
+4. The panel returns: *"The conversion preview has changed. Conversion was not completed
+   and no partial Deal, Lead, customer, lineage, or related effects were saved."*
+   "Reload conversion preview" and retrying does not help. A full page reload does not
+   help. It never succeeds.
+
+### Isolation
+
+Same Lead, same session, one variable changed:
+
+| Lead | Primary Contact | Page state | Result |
+|---|---|---|---|
+| Lead 04 | **No primary Contact** | after in-page qualify | FAIL |
+| Lead 04 | **No primary Contact** | after "Reload conversion preview" | FAIL |
+| Lead 04 | **No primary Contact** | after full page reload | FAIL |
+| Lead 04 | **Contact selected** | same page, immediately after | **SUCCESS** |
+| Lead 05 | **No primary Contact** | clean, full page reload | FAIL |
+
+So it is not staleness and not the fix in #2 — it is the null primary Contact.
+
+### Cause
+
+`convert-lead-to-deal.orchestrator.ts`, the pre-commit guard that ends in
+`fail("stale_preview")`. Two of its conditions fire whenever the identity review bound a
+Contact and the command omits one:
+
+```ts
+(state.customer.contact?.id ?? null) !== (command.primaryContact?.contactId ?? null) ||
+...
+review.contactId !== (command.primaryContact?.contactId ?? null)
+```
+
+When the review resolved with *Create new contact*, `review.contactId` is that Contact's
+id and `state.customer.contact` is the primary-eligible Contact. Submitting
+`primaryContact: null` makes both comparisons unequal, so the guard rejects the command.
+The guard effectively requires the primary Contact to **equal** the reviewed Contact,
+while the UI offers omitting it.
+
+Two things are wrong and they should be fixed together:
+
+1. **The behaviour.** Either the server should permit `primaryContact: null` when the
+   review has a Contact (treating the Contact as available, not mandatory), or the UI must
+   stop offering "No primary Contact" once a review-bound Contact exists — and stop
+   printing the atomic effect *"Link the selected existing Company with no primary
+   Contact."*, which currently describes an outcome the server will refuse. This is a
+   product decision: is a primary Contact required on a converted Deal, or optional?
+2. **The error.** A rejected *input* is reported as `stale_preview` — "the conversion
+   preview has changed" — which tells the user a race occurred and invites them to retry
+   forever. It cost three retries and a full reload here before the pattern was visible.
+   A refused selection needs its own reason code and a message naming the field.
+
+### Test gap
+
+`lead-conversion-01-backend.integration.test.ts` converts with `primaryContact: null` in
+its main fixture and passes — but in that fixture the identity review is resolved with
+`contact: { action: "dismiss" }`, so `review.contactId` is null and both comparisons hold.
+The failing combination is *review created a Contact* **and** *command omits it*, which no
+test constructs. Add that case.
+
+## 2. Conversion panel stale authority after a lifecycle change — FIXED AND VERIFIED LIVE ON uat57
+
+Verified on `uat57` with `Mobasher UAT Lead 04`: resolving the review, then Start working,
+then Mark qualified, with **no reload at any point**, now leaves the full "Convert Lead to
+Deal" form on screen. Before uat57 this read "not available - the canonical Lead lifecycle
+must be Qualified before conversion" until a manual refresh.
+
 
 **Reproduce.** Open a `qualified`-eligible Lead in `working`, click **Mark qualified**.
 The lifecycle header updates to `Qualified`. The Lead conversion panel below it continues
