@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { dealPartyReferenceParticipant } from "@/backend/modules/customer-graph";
+import { leadOutcomeParticipant } from "@/backend/modules/leads";
 import {
   lookupActiveActor,
   revalidateActiveActor,
@@ -965,6 +966,30 @@ export async function transitionDeal(
             operationId,
           ],
         );
+        // A closing Deal settles the outcome of the Lead it came from. Sales owns the
+        // conversion lineage and Deals so it resolves the Lead and the derived outcome
+        // here; the Leads module owns the `leads` write and applies it.
+        // A Lead is `won` when ANY of its Deals was won, so a later lost Deal never
+        // downgrades a Lead that already produced business.
+        if (target.outcomeClass !== "open") {
+          const derived = (await tx.query<{ leadId: string; hasWon: boolean }>(
+            `select lineage.lead_record_id "leadId", exists(
+               select 1 from lead_deal_conversion_lineage sibling
+                 join deals sibling_deal on sibling_deal.workspace_id=sibling.workspace_id
+                   and sibling_deal.id=sibling.deal_id
+                where sibling.workspace_id=$1 and sibling.lead_record_id=lineage.lead_record_id
+                  and sibling.lead_record_type='crm.lead' and sibling_deal.outcome_class='won') "hasWon"
+               from lead_deal_conversion_lineage lineage
+              where lineage.workspace_id=$1 and lineage.deal_id=$2 and lineage.lead_record_type='crm.lead'`,
+            [finalActor.workspaceId, old.dealId],
+          )).rows[0];
+          if (derived)
+            await leadOutcomeParticipant(tx).applyDerivedOutcome({
+              workspaceId: finalActor.workspaceId,
+              leadId: derived.leadId,
+              status: derived.hasWon ? "won" : "lost",
+            });
+        }
         await writeSalesEvidence(tx, {
           actor: finalActor,
           operation: "sales-deal-stage-transition.v1",

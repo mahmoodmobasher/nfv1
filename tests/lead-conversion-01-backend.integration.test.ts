@@ -5,9 +5,12 @@ import {
   convertLeadToDealV1,
   getIdentityReviewCandidatesV1,
   getLeadConversionPreviewV1,
+  getLeadOutcomeReconciliationV1,
   resolveLeadIdentityReviewV1,
   submitLeadInquiryV1,
+  transitionLeadLifecycleV1,
 } from "../src/backend/modules/leads";
+import { transitionDeal } from "../src/backend/modules/sales";
 import type { TrustedActor } from "../src/backend/platform/authorization";
 
 const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
@@ -146,12 +149,28 @@ async function fixture() {
       },
     },
   });
-  await pool.query(
-    `update leads set lifecycle_definition_id=(select id from lead_lifecycle_definitions where code='qualified')
-     where workspace_id=$1 and id=$2`,
-    [workspace.id, intake.leadId],
-  );
-  return { actor, leadId: intake.leadId, company };
+  // Reach `qualified` through the real lifecycle rather than raw SQL. Before Phase 1
+  // nothing could set it, which is why conversion was unreachable in production.
+  const closingStages = (
+    await pool.query<{ id: string; outcome_class: string }>(
+      `insert into deal_stage_definitions(workspace_id,pipeline_id,code,label,outcome_class,sort_key,default_probability_bps,
+         governing_operation_id,created_by_membership_id,updated_by_membership_id)
+       values($1,$2,$3,'Won','won',9000,10000,$5,$6,$6),($1,$2,$4,'Lost','lost',9500,0,$5,$6,$6)
+       returning id,outcome_class`,
+      [workspace.id, pipeline.id, `sales.stage_${randomUUID().slice(0, 8)}`,
+        `sales.stage_${randomUUID().slice(0, 8)}`, randomUUID(), membership.id],
+    )
+  ).rows;
+  for (const target of ["working", "qualified"] as const) {
+    const version = (await pool.query<{ version: number }>(
+      "select version from leads where workspace_id=$1 and id=$2", [workspace.id, intake.leadId])).rows[0].version;
+    await transitionLeadLifecycleV1(pool, { actor, leadId: intake.leadId, idempotencyKey: `lc-${randomUUID()}`,
+      command: { contractVersion: "lead-lifecycle-transition.v1", expectedVersion: version,
+        targetLifecycle: target, disqualificationReason: null, disqualificationNote: null } });
+  }
+  return { actor, leadId: intake.leadId, company, workspaceId: workspace.id,
+    wonStageId: closingStages.find(stage => stage.outcome_class === "won")!.id,
+    lostStageId: closingStages.find(stage => stage.outcome_class === "lost")!.id };
 }
 
 async function command(f: Awaited<ReturnType<typeof fixture>>) {
@@ -373,5 +392,102 @@ suite("LEAD-CONVERSION-01 backend", () => {
       )
     ).rows[0];
     expect(evidence).toEqual({ audits: 1, events: 2, receipts: 1 });
+  });
+
+  // ---- Phase 3: the Deal outcome settles the Lead outcome -------------------
+
+  // Conversion refuses a Lead whose status is already terminal (`legacy_status_terminal`),
+  // so a manual outcome override can only happen AFTER the Deal exists. These are kept
+  // separate so tests can put the override in the right place.
+  async function convertLead(f: Awaited<ReturnType<typeof fixture>>) {
+    const result = await convertLeadToDealV1(pool, { actor: f.actor, leadId: f.leadId,
+      command: await command(f), idempotencyKey: `convert-${randomUUID()}` });
+    const deal = (await pool.query<{ id: string; version: number }>(
+      `select deal.id,deal.version from deals deal
+         join lead_deal_conversion_lineage lineage on lineage.workspace_id=deal.workspace_id and lineage.deal_id=deal.id
+        where lineage.workspace_id=$1 and lineage.lead_record_id=$2`,
+      [f.workspaceId, f.leadId])).rows[0];
+    return { result, deal };
+  }
+
+  async function closeDeal(f: Awaited<ReturnType<typeof fixture>>,
+    deal: { id: string; version: number }, stageId: string) {
+    await transitionDeal(pool, { actor: f.actor, dealId: deal.id, key: `deal-${randomUUID()}`, requestId: randomUUID(),
+      command: { contractVersion: "sales-deal-stage-transition.v1", expectedVersion: deal.version,
+        targetStageId: stageId, lostReasonCode: stageId === f.lostStageId ? ("budget" as const) : null } });
+  }
+
+  async function convertThenClose(f: Awaited<ReturnType<typeof fixture>>, stageId: string) {
+    const { result, deal } = await convertLead(f);
+    await closeDeal(f, deal, stageId);
+    return { result, dealId: deal.id };
+  }
+
+  const leadOutcome = async (leadId: string) => (await pool.query<{ status: string; status_source: string }>(
+    "select status,status_source from leads where id=$1", [leadId])).rows[0];
+
+  it("reaches conversion through the real lifecycle and marks the Lead converted", async () => {
+    const f = await fixture();
+    const result = await convertLeadToDealV1(pool, { actor: f.actor, leadId: f.leadId,
+      command: await command(f), idempotencyKey: `convert-${randomUUID()}` });
+    expect(result).toMatchObject({ committed: true });
+    expect((await pool.query<{ lifecycle: string }>(
+      `select definition.code lifecycle from leads lead
+         join lead_lifecycle_definitions definition on definition.id=lead.lifecycle_definition_id
+        where lead.id=$1`, [f.leadId])).rows[0].lifecycle).toBe("converted");
+  });
+
+  it("settles the Lead as won when its Deal is won", async () => {
+    const f = await fixture();
+    await convertThenClose(f, f.wonStageId);
+    expect(await leadOutcome(f.leadId)).toMatchObject({ status: "won", status_source: "system" });
+  });
+
+  it("settles the Lead as lost when its only Deal is lost", async () => {
+    const f = await fixture();
+    await convertThenClose(f, f.lostStageId);
+    expect(await leadOutcome(f.leadId)).toMatchObject({ status: "lost", status_source: "system" });
+  });
+
+  it("never downgrades a Lead that already produced a won Deal", async () => {
+    const f = await fixture();
+    const { dealId } = await convertThenClose(f, f.wonStageId);
+    // A second Deal on the same Lead, closed lost, must not undo the win.
+    // Re-closing is refused (terminal Deal), and the won outcome stands.
+    const closed = (await pool.query<{ version: number }>(
+      "select version from deals where id=$1", [dealId])).rows[0];
+    await expect(transitionDeal(pool, { actor: f.actor, dealId, key: `deal-${randomUUID()}`, requestId: randomUUID(),
+      command: { contractVersion: "sales-deal-stage-transition.v1", expectedVersion: closed.version,
+        targetStageId: f.lostStageId, lostReasonCode: "budget" } }))
+      .rejects.toMatchObject({ code: "terminal_deal" });
+    expect(await leadOutcome(f.leadId)).toMatchObject({ status: "won", status_source: "system" });
+  });
+
+  it("never overwrites a manual outcome", async () => {
+    const f = await fixture();
+    const { deal } = await convertLead(f);
+    // An Owner records the real-world result by hand, then the Deal closes the other way.
+    await pool.query("update leads set status='won',status_source='manual' where id=$1", [f.leadId]);
+    await closeDeal(f, deal, f.lostStageId);
+    expect(await leadOutcome(f.leadId)).toMatchObject({ status: "won", status_source: "manual" });
+  });
+
+  it("reports a manual outcome that disagrees with its Deals, to Owner and Admin only", async () => {
+    const f = await fixture();
+    await convertThenClose(f, f.lostStageId);
+    const clean = await getLeadOutcomeReconciliationV1(pool, f.actor);
+    expect(clean.items).toEqual([]);
+    await pool.query("update leads set status='won',status_source='manual' where id=$1", [f.leadId]);
+    const drifted = await getLeadOutcomeReconciliationV1(pool, f.actor);
+    expect(drifted.items).toHaveLength(1);
+    expect(drifted.items[0]).toMatchObject({ leadId: f.leadId, leadStatus: "won", statusSource: "manual",
+      disagreement: "won_without_a_won_deal", deals: { won: 0, lost: 1, open: 0 } });
+    const memberRole = (await pool.query<{ id: string }>(
+      `insert into roles(workspace_id,code,permissions,is_system) values($1,'member','{}',true)
+       on conflict do nothing returning id`, [f.workspaceId])).rows[0]
+      ?? (await pool.query<{ id: string }>("select id from roles where workspace_id=$1 and code='member'", [f.workspaceId])).rows[0];
+    await pool.query("update workspace_memberships set role_id=$2 where id=$1", [f.actor.membershipId, memberRole.id]);
+    await expect(getLeadOutcomeReconciliationV1(pool, f.actor))
+      .rejects.toMatchObject({ code: "permission_required", status: 403 });
   });
 });
