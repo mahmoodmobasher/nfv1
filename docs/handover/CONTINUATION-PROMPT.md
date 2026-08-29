@@ -39,6 +39,15 @@ by the test suite or by code review. Full detail in `PROJECT-STATUS.md`; summary
    schema validation and surfaced as "Deals are temporarily unavailable," with zero server
    logs because the server never threw.
 
+## Open findings from the 2026-08-29 browser walk
+
+`docs/handover/UAT-WALK-FINDINGS-2026-08-29.md` records six findings from walking UAT
+after `uat56`, none of them fixed. Read it before starting Phase 4. The headline: a Deal
+closed **Lost** appears not to settle its Lead, while Won does — unconfirmed, and that doc
+carries the exact SQL to confirm it and the hypotheses already ruled out from source.
+Second: the Lead conversion panel shows stale authority after a lifecycle change, so
+qualifying a Lead still reads "must be Qualified" until a manual reload.
+
 ## Do this next
 
 1. **Walk the remaining Leads through the arc**, or move on to Phase 4/5 work below —
