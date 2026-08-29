@@ -5,10 +5,35 @@ Status date: 2026-08-29. Supersedes the 2026-08-27 status.
 ## Current authority
 
 - Working branch `design-system-consistency-local`, pushed to `design-system-consistency`,
-  head `d1610aa`. **Not merged to `main`.** Merging it is an open decision.
-- UAT runs `d1610aa-uat54` and is healthy.
+  head `a3aacc0`. **Not merged to `main`.** Merging it is an open decision.
+- **Unmerged fix branch `fix/identity-review-canonical-contacts`, head `00c2395`, off
+  `a3aacc0`. Not pushed, not on UAT.** See "Fourth conversion blocker" below.
+- UAT runs `d1610aa-uat54` and is healthy, but does **not** contain that fix.
 - Migration ledger 28; head `0027_default_sales_pipeline_backfill`.
-- Test baseline: 965 passed, 12 failed, 9 skipped across 122 files.
+- Test baseline: 966 passed, 12 failed, 9 skipped across 122 files (at `00c2395`).
+
+## Fourth conversion blocker — found by walking UAT, fixed, not yet deployed
+
+Identity review's "Create new contact" decision wrote Contacts through the legacy P1A
+repositories, which leave `authority_contract_version` at `legacy-p1a-root-v1` and write
+neither `contact_identity_points` nor a `contact_company_affiliations` row. Conversion's
+primary-contact check requires `customer-graph-v1` plus an active primary affiliation, so
+every Lead whose Contact came from identity review was permanently unconvertible and
+surfaced as a read-only "legacy record" with no adoption path. Same for "Create new
+company".
+
+The suite missed it because `lead-conversion-01-backend.integration.test.ts` pre-seeded a
+canonical Company by raw SQL and dismissed the Contact — the create path real data uses
+was never exercised. **A green suite proved the fixture, not the product.**
+
+Fixed in `00c2395` by adding `customerGraphIdentityResolutionParticipant` to the
+customer-graph module (which owns those tables, satisfying the SQL-ownership scanner) and
+calling it from the identity-review orchestrator, plus an integration test that converts a
+Lead whose Contact and Company were both created during review.
+
+**The fix is forward-only.** Records created before it stay stranded; whether to backfill
+them is an open decision. `Mobasher UAT Lead 08`
+(`f1f7ecc7-7ec1-4ec8-9004-969716215e2c`) is one such stranded Lead on UAT.
 
 ## What changed in this run
 
@@ -82,7 +107,9 @@ database. It is an index/latency benchmark — run before a release, not per cha
 
 ## Recommended next sequence
 
-1. Walk the full arc on UAT (identity review → convert → close won → confirm outcome).
+1. Merge and deploy `fix/identity-review-canonical-contacts`, then walk the full arc on
+   UAT on a *fresh* pending Lead (identity review → convert → close won → confirm
+   outcome). Seven Leads remain pending; do not use the stranded one named above.
 2. Phase 4: dashboard funnel, Leads-list lifecycle filter, timeline backfill (#7),
    `FactsGrid` phantom cells and the misnamed "Pipeline and responsibility" panel.
 3. Phase 5: retire `leads.stage_id` from Lead views.
