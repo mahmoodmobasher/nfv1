@@ -2,13 +2,15 @@ import { createHash } from "node:crypto";
 import type { ModuleTransaction } from "../database";
 
 export type IdempotentMutationOperation = "lead-operational-edit.v1" | "lead-stage-transition.v1" |
+  "lead-lifecycle-transition.v1" |
   "company-create.v1" | "company-edit.v1" | "company-archive.v1" | "company-restore.v1" |
   "contact-create.v1" | "contact-edit.v1" | "contact-archive.v1" | "contact-restore.v1" |
   "contact-affiliation-replace.v1" | "sales-deal-create.v1" | "sales-deal-update.v1" |
   "sales-deal-stage-transition.v1" | "sales-deal-archive.v1" | "sales-deal-restore.v1" |
   "lead-convert-to-deal.v1" | "lead-screen-create.v2" | "lead-screen-edit.v2" |
   "contact-internal-note-add.v1" | "activity-create.v1";
-export type LeadMutationOperation = Extract<IdempotentMutationOperation,"lead-operational-edit.v1"|"lead-stage-transition.v1">;
+export type LeadMutationOperation = Extract<IdempotentMutationOperation,
+  "lead-operational-edit.v1"|"lead-stage-transition.v1"|"lead-lifecycle-transition.v1">;
 
 export type IdempotencyReceipt<T = unknown> = {
   id: string;
