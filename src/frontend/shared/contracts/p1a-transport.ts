@@ -128,8 +128,13 @@ export const leadSummaryItemSchema = z.object({
 });
 export const leadSummariesViewSchema = z.object({ contractVersion: z.literal("listLeadSummaries.v1"), requestId: uuid,
   items: z.array(leadSummaryItemSchema).max(50), nextCursor: z.string().max(1024).nullable() }).strict();
+export const leadLifecycleCodeSchema = z.enum(["new", "working", "qualified", "disqualified", "converted"]);
+export const leadDisqualificationReasonSchema = z.enum(["not_a_fit", "no_response", "duplicate", "bad_data",
+  "no_budget", "lost_to_competitor", "other"]);
+export const leadLifecycleTransitionOptionSchema = z.object({ to: leadLifecycleCodeSchema,
+  label: z.string().min(1).max(60), requiresReason: z.boolean() }).strict();
 export const leadDetailViewSchema = z.object({ contractVersion: z.literal("getLeadDetail.v1"), requestId: uuid,
-  lead: leadSummaryItemSchema }).strict();
+  lead: leadSummaryItemSchema, lifecycleTransitions: z.array(leadLifecycleTransitionOptionSchema).max(5) }).strict();
 export const leadPipelineStageSchema = z.object({ stageId: uuid, name: z.string().min(1).max(160),
   position: z.number().int().min(0), status: z.literal("active") }).strict();
 export const leadPipelineStagesViewSchema = z.object({ contractVersion: z.literal("listLeadPipelineStages.v1"), requestId: uuid,
@@ -178,13 +183,21 @@ export const leadStageTransitionResultSchema = z.object({ contractVersion: z.lit
 export const leadOperationalEditSuccessEnvelopeSchema = z.object({ data: leadOperationalEditViewSchema }).strict();
 export const leadOperationalEditMutationSuccessEnvelopeSchema = z.object({ data: leadOperationalEditResultSchema }).strict();
 export const leadStageTransitionSuccessEnvelopeSchema = z.object({ data: leadStageTransitionResultSchema }).strict();
+export const leadLifecycleTransitionResultSchema = z.object({ contractVersion: z.literal("lead-lifecycle-transition-result.v1"),
+  leadId: uuid, leadVersion: positiveVersion, lifecycle: z.object({ code: leadLifecycleCodeSchema,
+    previousCode: leadLifecycleCodeSchema, disqualificationReason: leadDisqualificationReasonSchema.nullable(),
+    reopenCount: z.number().int().min(0) }).strict(), changed: z.boolean(), replayed: z.boolean(), requestId: uuid,
+  nextView: z.object({ kind: z.literal("lead_detail"), leadId: uuid }).strict() }).strict();
+export const leadLifecycleTransitionSuccessEnvelopeSchema = z.object({ data: leadLifecycleTransitionResultSchema }).strict();
 export const leadManagementErrorEnvelopeSchema = z.object({ error: z.object({ code: z.enum(["authentication_required",
   "permission_required", "resource_not_found", "validation_failed", "unsupported_contract_version", "idempotency_conflict",
-  "stale_version", "stage_unavailable", "assignment_unavailable", "rate_limited", "lead_mutation_unavailable", "unexpected_error"]),
+  "stale_version", "stage_unavailable", "assignment_unavailable", "lifecycle_transition_not_allowed",
+  "lifecycle_unavailable", "rate_limited", "lead_mutation_unavailable", "unexpected_error"]),
   message: z.string().min(1).max(200), retryable: z.boolean(), reconciliation: z.object({ required: z.boolean(), action: z.enum([
     "none", "refetch_lead", "refetch_lead_and_stages", "refetch_lead_operational_edit", "retry_same_request"]), }).strict(),
   details: z.object({ fields: z.array(z.enum(["contractVersion", "expectedVersion", "responsibleMembershipId",
-    "responsibleTeamId", "visibility", "visibleTeamIds", "targetStageId", "idempotencyKey"])).max(16) }).strict().optional() }).strict(),
+    "responsibleTeamId", "visibility", "visibleTeamIds", "targetStageId", "targetLifecycle",
+    "disqualificationReason", "disqualificationNote", "idempotencyKey"])).max(16) }).strict().optional() }).strict(),
   requestId: uuid }).strict();
 
 const dimensionDecision = z.discriminatedUnion("action", [z.object({ action: z.literal("dismiss") }).strict(), z.object({ action: z.literal("create") }).strict(),
@@ -263,4 +276,7 @@ export type LeadStageTransitionCommand = z.infer<typeof leadStageTransitionComma
 export type LeadOperationalEditView = z.infer<typeof leadOperationalEditViewSchema>;
 export type LeadOperationalEditResult = z.infer<typeof leadOperationalEditResultSchema>;
 export type LeadStageTransitionResult = z.infer<typeof leadStageTransitionResultSchema>;
+export type LeadLifecycleTransitionResult = z.infer<typeof leadLifecycleTransitionResultSchema>;
+export type LeadLifecycleCode = z.infer<typeof leadLifecycleCodeSchema>;
+export type LeadDisqualificationReason = z.infer<typeof leadDisqualificationReasonSchema>;
 export type LeadManagementErrorEnvelope = z.infer<typeof leadManagementErrorEnvelopeSchema>;

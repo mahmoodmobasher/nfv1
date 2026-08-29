@@ -5,6 +5,7 @@ import { companyTransactionParticipant } from "@/backend/modules/companies";
 import { lookupActiveActor, workspaceAuthorityParticipant, WORKSPACE_LEAD_DISCLOSURE_SQL_PREDICATE_V1,
   type TrustedActor } from "@/backend/platform/authorization";
 import { LeadIntakeError } from "../../contracts/lead-inquiry-intake.contract";
+import { ALLOWED_LEAD_LIFECYCLE_TRANSITIONS, type LeadLifecycleCode } from "../../contracts/lead-lifecycle.contract";
 import { assertLeadPresentationSafe, leadDetailViewV1Schema, leadSummariesViewV1Schema,
   leadPipelineStagesViewV1Schema,
   leadSummaryFiltersV1Schema, type LeadDetailViewV1, type LeadSummariesViewV1,
@@ -147,6 +148,28 @@ export async function listLeadSummariesV1(pool:Pool,actor:TrustedActor,rawFilter
       nextCursor:hasMore&&boundary?encodeCursor(boundary,filters):null});
     return result})}
 
+const LIFECYCLE_LABELS:Record<string,string>={new:"Mark as new",working:"Start working",qualified:"Mark qualified",
+  disqualified:"Disqualify",converted:"Convert"};
+
+/**
+ * The legal moves for THIS actor from THIS state. Mirrors the orchestrator's rules:
+ * the map decides what may follow what; owner/admin may make any legal move; a Member
+ * may act only on a Lead they own; reopening a disqualified Lead is owner/admin only;
+ * `converted` belongs to the conversion orchestrator and is never offered here.
+ */
+function lifecycleTransitionOptions(lead:LeadSummaryItemV1,actor:TrustedActor){
+  const from=lead.lifecycle.code;
+  if(!from||!(from in ALLOWED_LEAD_LIFECYCLE_TRANSITIONS))return [];
+  const privileged=actor.role==="owner"||actor.role==="admin";
+  if(from==="disqualified"&&!privileged)return [];
+  if(!privileged&&lead.assignment.responsibleMembershipId!==actor.membershipId)return [];
+  const unassigned=!lead.assignment.responsibleMembershipId;
+  return ALLOWED_LEAD_LIFECYCLE_TRANSITIONS[from as LeadLifecycleCode]
+    .filter(to=>to!=="converted")
+    .filter(to=>!(unassigned&&(to==="working"||to==="qualified")))
+    .map(to=>({to,label:LIFECYCLE_LABELS[to]??to,requiresReason:to==="disqualified"}));
+}
+
 export async function getLeadDetailV1(pool:Pool,actor:TrustedActor,leadId:string,requestId:string=randomUUID()):Promise<LeadDetailViewV1>{
   if(!uuid.safeParse(leadId).success)throw new LeadIntakeError("resource_not_found",404);return readOnly(pool,async client=>{
     const current=await lookupActiveActor(client,actor),row=(await client.query<Record<string,unknown>>(LEAD_PRESENTATION_DETAIL_SQL_V1,
@@ -154,8 +177,9 @@ export async function getLeadDetailV1(pool:Pool,actor:TrustedActor,leadId:string
     const authority=workspaceAuthorityParticipant(client),visible=await authority.visibleLeadIds(current,[{id:leadId,visibility:String(row.visibility),
       ownerMembershipId:row.responsibleMembershipId?String(row.responsibleMembershipId):null}]);if(!visible.has(leadId))throw new LeadIntakeError("resource_not_found",404);
     await lookupActiveActor(client,actor);const fresh=await revalidateCurrentDisclosure(pool,current,[disclosureSnapshot(row)]);
+    const lead=item(fresh.rows.get(leadId)!,fresh.presentation.labels,fresh.presentation.companies,fresh.actor);
     const result=assertLeadPresentationSafe(leadDetailViewV1Schema,{contractVersion:"getLeadDetail.v1",requestId,
-      lead:item(fresh.rows.get(leadId)!,fresh.presentation.labels,fresh.presentation.companies,fresh.actor)});return result})}
+      lead,lifecycleTransitions:lifecycleTransitionOptions(lead,fresh.actor)});return result})}
 
 export async function listLeadPipelineStagesV1(pool:Pool,actor:TrustedActor,
   requestId:string=randomUUID()):Promise<LeadPipelineStagesViewV1>{const result=await readOnly(pool,async client=>{
