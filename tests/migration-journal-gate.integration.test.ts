@@ -20,9 +20,9 @@ const suite = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
 const pool = new Pool({ connectionString });
 
 // ---- update these three constants when you add a migration -------------------
-const EXPECTED_JOURNAL_LENGTH = 26;
-const EXPECTED_HEAD_TAG = "0025_db_01b_lead_source_platform";
-const EXPECTED_HEAD_IDX = 25;
+const EXPECTED_JOURNAL_LENGTH = 27;
+const EXPECTED_HEAD_TAG = "0026_remarkable_young_avengers";
+const EXPECTED_HEAD_IDX = 26;
 // -----------------------------------------------------------------------------
 
 const journal = () => JSON.parse(readFileSync(`${migrationsFolder}/meta/_journal.json`, "utf8")) as {
@@ -47,6 +47,8 @@ const LEADS_COLUMNS = [
   "annual_revenue_minor", "annual_revenue_currency_code", "annual_revenue_currency_exponent", "employee_count",
   "street", "city", "state_province", "postal_code", "country",
   "source_platform",
+  "status_source", "lifecycle_changed_at", "working_started_at", "qualified_at",
+  "disqualification_reason", "disqualification_note", "lifecycle_reopen_count",
 ] as const;
 
 suite("migration journal gate", () => {
