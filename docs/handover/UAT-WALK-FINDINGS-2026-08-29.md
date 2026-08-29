@@ -49,11 +49,47 @@ anything the lineage or the settlement depends on. Note `Lead 01`, which *did* s
 converted **without** a disqualify/reopen cycle — that is the main difference between the
 two walks.
 
+### ISOLATED 2026-08-29, later the same day: the trigger is disqualify -> reopen
+
+A controlled A/B was run on the same release, same workspace, same actor, to separate the
+two variables that differed between Lead 01 (settled) and Lead 02 (did not).
+
+| | Lead 01 | Lead 02 | Lead 03 |
+|---|---|---|---|
+| identity review | create contact + company | create contact + company | create contact + company |
+| **disqualify -> reopen** | no | **yes** | no |
+| primary Contact linked | n/a | yes | yes |
+| Deal closed | **Won** | **Lost** | **Lost** |
+| Lead settled? | yes (`won`) | **NO** | yes (`lost`) |
+
+`Mobasher UAT Lead 03` (`a1098206-6741-4bdb-8b4c-0a7bfc508151`, Deal
+`da2ad008-4829-4ca8-8c49-39790cd3c0b4`) went intake -> review resolved -> working ->
+qualified -> convert -> close **Lost** with no disqualify/reopen cycle. The dashboard moved
+Open 7 -> 6 and **Lost 2 -> 3** immediately.
+
+So **the Lost path itself is fine**, and the Won/Lost distinction is NOT the variable.
+The variable is the **disqualify -> reopen cycle before conversion**. A Lead that was
+disqualified and reopened, then converted, does not receive its Deal-derived outcome.
+
+This also means Lead 02 and Lead 03 are a matched pair differing in one dimension, which
+makes the diagnosing query a direct column-by-column comparison rather than an open
+search.
+
+**Note the interaction with `applyDerivedOutcome`'s `status<>$3` guard.** Disqualification
+sets `status='lost'`; reopen is supposed to set it back to `'open'` via
+`LEAD_LIFECYCLE_UPDATE_SQL_V1`'s `when $4 in ('new','working','qualified') then 'open'`
+branch. If reopen ever leaves `status` at `'lost'`, the later Deal-derived `'lost'` write
+is a no-op because `status<>'lost'` is false -- but then the Lead would *read* as lost and
+the dashboard would count it in Lost, which it does not. Lead 02 is counted in **Open**.
+So the reopen did reset the status, and the no-op guard is not a sufficient explanation on
+its own. Do not stop at that hypothesis; get the row.
+
 **Confirm before fixing** (the point of this section — do not start from the hypothesis):
 
 ```
 sudo docker exec -it nexaflow-uat-postgres-1 psql -U nexaflow -d nexaflow_uat -c "
 select l.display_name, l.status, l.status_source, def.code as lifecycle,
+       l.lifecycle_reopen_count, l.disqualification_reason, l.version as lead_version,
        lin.deal_id, lin.lead_record_type, d.outcome_class, d.closed_at, d.version as deal_version
 from leads l
 join lead_lifecycle_definitions def on def.id = l.lifecycle_definition_id
@@ -61,15 +97,15 @@ left join lead_deal_conversion_lineage lin
        on lin.workspace_id = l.workspace_id and lin.lead_record_id = l.id
       and lin.lead_record_type = 'crm.lead'
 left join deals d on d.workspace_id = lin.workspace_id and d.id = lin.deal_id
-where l.display_name in ('Mobasher UAT Lead 01','Mobasher UAT Lead 02')
+where l.display_name in ('Mobasher UAT Lead 01','Mobasher UAT Lead 02','Mobasher UAT Lead 03')
 order by l.display_name;"
 ```
 
-Read it as: `Lead 02` with `status='open'` and `outcome_class='lost'` confirms the
-blocker. A null `lin.deal_id` for Lead 02 points at the lineage row instead. If
-`status='lost'` after all, then the **dashboard tile query** is what is wrong, not the
-settlement — a different and equally real bug, since the dashboard is what Phase 4's
-funnel builds on.
+Read it as a diff between **Lead 02 (broken)** and **Lead 03 (working)** — they differ in
+exactly one product action, so whichever column differs is the bug. Candidates in order of
+suspicion: a missing or differently-typed `lead_deal_conversion_lineage` row for Lead 02
+(making `derived` undefined and skipping the settlement silently), or something the reopen
+path leaves behind that the settlement's `where` clause excludes.
 
 **Test gap either way.** `lead-conversion-01-backend.integration.test.ts` covers "settles
 the Lead as lost when its only Deal is lost", and it passes. So whatever is happening
