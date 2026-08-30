@@ -118,12 +118,18 @@ while the UI offers omitting it.
 
 Two things are wrong and they should be fixed together:
 
-1. **The behaviour.** Either the server should permit `primaryContact: null` when the
-   review has a Contact (treating the Contact as available, not mandatory), or the UI must
-   stop offering "No primary Contact" once a review-bound Contact exists — and stop
-   printing the atomic effect *"Link the selected existing Company with no primary
-   Contact."*, which currently describes an outcome the server will refuse. This is a
-   product decision: is a primary Contact required on a converted Deal, or optional?
+1. **The behaviour. PRODUCT DECISION TAKEN 2026-08-29: a primary Contact is OPTIONAL on a
+   converted Deal. Fix the server; leave the UI's choice in place.** The guard must permit
+   `primaryContact: null` even when the identity review created a Contact. It should still
+   verify that a Contact *supplied* by the command is the reviewed one at the expected
+   version — that check is the point of the guard — but absence must be allowed.
+
+   The rationale, which is worth keeping: a review resolved with *Dismiss contact
+   candidates* already produces a contactless Deal today and always has, so contactless
+   Deals are a supported shape. Requiring a Contact only when the review happened to
+   create one is arbitrary, and it would have meant blocking the dismiss path too — a far
+   wider change. Choosing "required" would also have stranded every Lead whose review
+   dismissed its candidates.
 2. **The error.** A rejected *input* is reported as `stale_preview` — "the conversion
    preview has changed" — which tells the user a race occurred and invites them to retry
    forever. It cost three retries and a full reload here before the pattern was visible.
