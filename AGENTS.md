@@ -27,9 +27,11 @@ in their hooks, so parallel workers deadlock and emit misleading `Hook timed out
 Without `RUN_DB_INTEGRATION=1` they silently *skip* and the run looks clean — always check
 the skipped count.
 
-Known-red baseline: **12 failures** in `design-system-components.test.tsx` (6),
-`phase4-identity-boundary.test.ts` (4), `phase4-invitation-boundary.test.ts` (1),
-`contact-spectrum-migration.test.tsx` (1). Pre-existing; not your breakage.
+Known-red baseline: **6 failures** in `phase4-identity-boundary.test.ts` (4),
+`phase4-invitation-boundary.test.ts` (1), `contact-spectrum-migration.test.tsx` (1).
+Pre-existing; not your breakage. (`design-system-components.test.tsx` asserted `ds-*`
+class names that no longer exist since the Tailwind migration; deleted 2026-08-30 rather
+than rewritten, to avoid recreating the same shape-coupling anti-pattern.)
 
 ## Architectural guards that fail in surprising ways
 

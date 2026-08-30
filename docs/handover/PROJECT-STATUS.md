@@ -8,9 +8,10 @@ Status date: 2026-08-30. Supersedes the 2026-08-29 status (the one that stopped 
 - `main` at `d864abf`. `origin/main` matches.
 - UAT runs `d864abf-uat58`, healthy, migration ledger 28, head
   `0027_default_sales_pipeline_backfill`. No migration in any release since `0027`.
-- Test baseline: **970 passed, 12 failed, 9 skipped** across 122 files (at `d864abf`). The
-  12 are the same documented known-red set as before; the count grew from 967 with three
-  more regression tests added across the two blockers below.
+- Test baseline: **970 passed, 6 failed, 9 skipped** across 121 files. Was 970/12/9/122
+  at `d864abf` (the count grew from 967 with three more regression tests added across the
+  two blockers below); `design-system-components.test.tsx` was deleted 2026-08-30 (own
+  commit, decided below), removing 6 of the 12 known-red failures and one file.
 - Since `1237a93`/`uat56`, a further browser walk (`UAT-WALK-FINDINGS-2026-08-29.md`,
   third session) found two more real defects — both now fixed, merged, and verified live
   — plus two smaller Phase-4-scope items still open. One additional finding in that
@@ -162,14 +163,16 @@ through the browser. **Every one of these five was invisible to the test suite a
 code review; every one was found only by walking the product on UAT.** When a feature
 appears dead, or a green suite says a feature works, expect another cause behind it.
 
-## Known-red tests (12) — pre-existing, not new breakage
+## Known-red tests (6) — pre-existing, not new breakage
 
 | File | Count | Note |
 |---|---|---|
-| `design-system-components.test.tsx` | 6 | Asserts `ds-*` class names with **zero** occurrences anywhere in the design system; tests a system replaced by the Tailwind migration. Rewrite or delete. |
 | `phase4-identity-boundary.test.ts` | 4 | Pre-existing |
 | `phase4-invitation-boundary.test.ts` | 1 | Pre-existing |
 | `contact-spectrum-migration.test.tsx` | 1 | Pre-existing |
+
+`design-system-components.test.tsx` (was 6 of the 12) is deleted, not rewritten — see
+"Decisions settled" above.
 
 `db-00a-01-platform-audit` is skipped by design outside a dedicated `nexaflow_db00a01*`
 database. It is an index/latency benchmark — run before a release, not per change.
