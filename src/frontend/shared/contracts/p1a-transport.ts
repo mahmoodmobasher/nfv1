@@ -111,7 +111,7 @@ export const leadSummaryItemSchema = z.object({
   assignment: z.object({ responsibleMembershipId: uuid.nullable(), responsibleMembershipLabel: z.string().max(200).nullable(),
     responsibleTeamId: uuid.nullable(), responsibleTeamLabel: z.string().max(200).nullable(), isUnassigned: z.boolean() }).strict(),
   lifecycle: z.object({ code: z.string().max(80).nullable(), label: z.string().max(120).nullable(),
-    status: z.enum(["open", "won", "lost"]) }).strict(),
+    status: z.enum(["open", "won", "lost"]), statusSource: z.enum(["system", "manual"]) }).strict(),
   stage: z.object({ id: uuid, name: z.string().min(1).max(160), status: z.enum(["active", "archived"]) }).strict(),
   version: positiveVersion, identityReviewStatus: z.enum(["not_required", "pending", "resolved"]), visibility: z.enum(["workspace", "teams"]),
   receivedAt: z.string().datetime({ offset: true }), updatedAt: z.string().datetime({ offset: true }),

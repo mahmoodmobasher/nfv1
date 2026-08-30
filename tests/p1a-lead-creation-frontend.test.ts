@@ -23,6 +23,22 @@ describe("P1A Lead creation frontend integration", () => {
     const html=renderToStaticMarkup(React.createElement(LeadReadOnlyDetail,{lead:safeLeadSummaryFixture}));
     expect(html).toContain("Taylor Example");expect(html).toContain("No company provided");expect(html).toContain("Unassigned");expect(html).toContain("Lifecycle");expect(html).not.toContain("Pipeline stage");expect(html).not.toContain("Save changes");expect(leadAssignmentLabel(safeLeadSummaryFixture)).toBe("Unassigned");
   });
+  it("shows the Lead's settled outcome and retires the misnamed Pipeline panel", () => {
+    // UAT-WALK-FINDINGS-2026-08-29.md #3/#4: a Lead never showed leads.status (won/lost)
+    // on its own detail screen, and the "Pipeline and responsibility" panel showed
+    // neither Pipeline stage (retired in 0510611) nor responsibility (that's the other
+    // panel), leaving an empty third FactsGrid cell for the two facts it did show.
+    const open = renderToStaticMarkup(React.createElement(LeadReadOnlyDetail, { lead: safeLeadSummaryFixture }));
+    expect(open).toContain("Not yet settled");
+    expect(open).toContain("Lifecycle status");
+    expect(open).not.toContain("Pipeline and responsibility");
+    const won = { ...safeLeadSummaryFixture, lifecycle: { code: "converted", label: "Converted", status: "won" as const, statusSource: "system" as const } };
+    const wonHtml = renderToStaticMarkup(React.createElement(LeadReadOnlyDetail, { lead: won }));
+    expect(wonHtml).toContain("Won — automatic");
+    const manualLost = { ...safeLeadSummaryFixture, lifecycle: { code: "converted", label: "Converted", status: "lost" as const, statusSource: "manual" as const } };
+    const manualHtml = renderToStaticMarkup(React.createElement(LeadReadOnlyDetail, { lead: manualLost }));
+    expect(manualHtml).toContain("Lost — manual override");
+  });
   it("preserves empty server-defined Pipeline stages", () => {
     const stages=pipelineStagesFixture.items.map((stage,index)=>({stage,view:{...leadSummariesFixture,items:index?[]:[safeLeadSummaryFixture]}}));
     const html=renderToStaticMarkup(React.createElement(LeadPipeline,{stages}));expect(html).toContain("Pipeline stage 1");expect(html).toContain("Pipeline stage 2");expect(html).toContain("New");expect(html).toContain("Working");expect(html).toContain("No leads in this stage");

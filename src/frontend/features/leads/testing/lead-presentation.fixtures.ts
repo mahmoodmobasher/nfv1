@@ -6,7 +6,7 @@ export const safeLeadSummaryFixture:LeadSummariesView["items"][number]={
   contact:{contactId:null,maskedEmail:"t***@example.test",maskedPhone:"***1234"},
   company:{companyId:null,displayName:null},assignment:{responsibleMembershipId:null,responsibleMembershipLabel:null,
     responsibleTeamId:null,responsibleTeamLabel:null,isUnassigned:true},
-  lifecycle:{code:"new",label:"New",status:"open"},
+  lifecycle:{code:"new",label:"New",status:"open",statusSource:"system"},
   stage:{id:"40000000-0000-4000-8000-000000000003",name:"New",status:"active"},version:1,
   identityReviewStatus:"not_required",visibility:"workspace",receivedAt:"2026-08-25T12:00:00.000Z",
   updatedAt:"2026-08-25T12:00:00.000Z",originalAttribution:{sourceCategory:"manual",sourcePlatform:null,

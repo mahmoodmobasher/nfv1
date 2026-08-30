@@ -53,7 +53,7 @@ function item(row: Record<string, unknown>, labels: Labels, companies: Map<strin
     company:{companyId,displayName:companyId?companies.get(companyId)??null:row.companyName?String(row.companyName):null},
     assignment:{responsibleMembershipId:membershipId,responsibleMembershipLabel:membershipId?labels.memberships.get(membershipId)??null:null,
       responsibleTeamId:teamId,responsibleTeamLabel:teamId?labels.teams.get(teamId)??null:null,isUnassigned:!membershipId&&!teamId},
-    lifecycle:{code:row.lifecycleCode?String(row.lifecycleCode):null,label:row.lifecycleLabel?String(row.lifecycleLabel):null,status:row.status as "open"|"won"|"lost"},
+    lifecycle:{code:row.lifecycleCode?String(row.lifecycleCode):null,label:row.lifecycleLabel?String(row.lifecycleLabel):null,status:row.status as "open"|"won"|"lost",statusSource:row.statusSource as "system"|"manual"},
     stage:{id:String(row.stageId),name:String(row.stageName),status:row.stageStatus as "active"|"archived"},version:Number(row.version),
     identityReviewStatus:row.identityReviewStatus as LeadSummaryItemV1["identityReviewStatus"],visibility:row.visibility as "workspace"|"teams",
     receivedAt:new Date(String(row.receivedAt)).toISOString(),updatedAt:new Date(String(row.updatedAt)).toISOString(),originalAttribution:{
@@ -71,7 +71,7 @@ function item(row: Record<string, unknown>, labels: Labels, companies: Map<strin
 
 export const LEAD_PRESENTATION_SELECT_SQL_V1=`select l.id "leadId",l.display_name "displayName",l.first_name "firstName",l.last_name "lastName",
  l.email_display "emailDisplay",l.phone "phoneDisplay",l.contact_id "contactId",l.company_id "companyId",l.company "companyName",
- l.owner_membership_id "responsibleMembershipId",l.responsible_team_id "responsibleTeamId",l.status,l.version,
+ l.owner_membership_id "responsibleMembershipId",l.responsible_team_id "responsibleTeamId",l.status,l.status_source "statusSource",l.version,
  l.identity_review_status "identityReviewStatus",l.visibility,l.received_at "receivedAt",l.updated_at "updatedAt",
  l.updated_at::text "cursorUpdatedAt",
  l.original_source_category "sourceCategory",l.original_source_platform "sourcePlatform",l.original_source_medium "sourceMedium",
