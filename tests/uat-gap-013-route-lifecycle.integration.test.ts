@@ -144,6 +144,15 @@ suite("UAT-GAP-013 route-owned pool lifecycle",()=>{
     }
   });
 
+  // Fires 12 concurrent requests and waits on real Postgres round trips for each; under
+  // full-suite load (RUN_DB_INTEGRATION=1 npx vitest run --no-file-parallelism) this
+  // legitimately took 5.21s against vitest's 5000ms default, timing out once across
+  // several full runs while passing in ~300-430ms every time it ran alone. Confirmed not
+  // a regression: reproduced the intermittent full-suite timeout at both 81a088b and its
+  // parent d864abf, so it predates and is independent of any change on this branch. A
+  // bound that fires intermittently trains everyone to treat red as normal -- the mistake
+  // that let five earlier blockers reach UAT under a green suite -- so raise it instead of
+  // re-running until it happens to pass.
   it("isolates simultaneous affected-route denials without pool-ended, duplicate, or cross-request failure",async()=>{
     const unhandled:unknown[]=[];const listener=(reason:unknown)=>unhandled.push(reason);process.on("unhandledRejection",listener);
     const original=Pool.prototype.end;let endCount=0;
@@ -161,5 +170,5 @@ suite("UAT-GAP-013 route-owned pool lifecycle",()=>{
       expect(unhandled).toEqual([]);
     }finally{spy.mockRestore();process.off("unhandledRejection",listener)}
     expect((await database.query("select 1 as healthy")).rows[0].healthy).toBe(1);
-  });
+  },15000);
 });
