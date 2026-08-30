@@ -260,6 +260,21 @@ function assertCurrentCommand(
   const review = state.review.resolved;
   if (state.review.pending) fail("identity_review_pending");
   if (!review) fail("stale_preview");
+  // A primary Contact is OPTIONAL on a converted Deal (product decision, 2026-08-29;
+  // see UAT-WALK-FINDINGS-2026-08-29.md #5). The identity review may have created or
+  // matched a Contact without requiring it be used as the Deal's primary Contact --
+  // omitting primaryContact is always allowed, even when the review bound one. A
+  // SUPPLIED primary Contact must still be exactly the one the review resolved, at the
+  // version the preview showed: that check is the actual point of this guard, and it
+  // gets its own error code so a rejected selection is never reported as a stale preview
+  // (the previous behaviour, which read as a race and invited endless retries).
+  if (
+    command.primaryContact &&
+    (review.contactId !== command.primaryContact.contactId ||
+      state.customer.contact?.id !== command.primaryContact.contactId ||
+      state.customer.contact?.version !== command.primaryContact.expectedVersion)
+  )
+    fail("primary_contact_mismatch");
   if (
     state.lead.version !== command.expectedLeadVersion ||
     state.lead.intakeId !== command.intakeId ||
@@ -270,11 +285,6 @@ function assertCurrentCommand(
     review.decisionHeadVersion !== command.review.decisionHeadVersion ||
     state.customer.company?.id !== command.company.companyId ||
     state.customer.company.version !== command.company.expectedVersion ||
-    (state.customer.contact?.id ?? null) !==
-      (command.primaryContact?.contactId ?? null) ||
-    (command.primaryContact &&
-      state.customer.contact?.version !==
-        command.primaryContact.expectedVersion) ||
     state.pipeline?.pipelineId !== command.pipeline.pipelineId ||
     state.pipeline.version !== command.pipeline.expectedVersion ||
     state.pipeline.configurationVersion !==
@@ -282,7 +292,6 @@ function assertCurrentCommand(
     state.pipeline.stage.stageId !== command.pipeline.stageId ||
     state.pipeline.stage.version !== command.pipeline.expectedStageVersion ||
     review.companyId !== command.company.companyId ||
-    review.contactId !== (command.primaryContact?.contactId ?? null) ||
     !sameAssignment(state.lead, state.visibleTeamIds, command.assignment)
   )
     fail("stale_preview");

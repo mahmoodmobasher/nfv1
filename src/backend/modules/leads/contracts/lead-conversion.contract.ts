@@ -258,6 +258,7 @@ export const leadConversionErrorEnvelopeV1Schema = z
           "stale_preview",
           "identity_review_pending",
           "selection_unavailable",
+          "primary_contact_mismatch",
           "already_converted",
           "idempotency_conflict",
           "conversion_unavailable",

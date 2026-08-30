@@ -49,7 +49,7 @@ export const leadConversionResultV1Schema = z.object({
 }).strict();
 
 export const leadConversionErrorEnvelopeV1Schema = z.object({ error: z.object({
-  code: z.enum(["authentication_required", "permission_required", "resource_not_found", "validation_failed", "unsupported_contract_version", "stale_preview", "identity_review_pending", "selection_unavailable", "already_converted", "idempotency_conflict", "conversion_unavailable", "unexpected_error"]),
+  code: z.enum(["authentication_required", "permission_required", "resource_not_found", "validation_failed", "unsupported_contract_version", "stale_preview", "identity_review_pending", "selection_unavailable", "primary_contact_mismatch", "already_converted", "idempotency_conflict", "conversion_unavailable", "unexpected_error"]),
   message: clean(200), retryable: z.boolean(), reconciliation: z.object({ required: z.boolean(), action: z.enum(["none", "refetch_preview", "new_request", "retry_same_request", "clear_conversion_state"]) }).strict(), guarantees: z.object({ zeroPartialEffects: z.literal(true) }).strict(),
 }).strict(), requestId: uuid }).strict();
 

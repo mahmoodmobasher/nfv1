@@ -664,4 +664,87 @@ suite("LEAD-CONVERSION-01 backend", () => {
     });
     expect(result).toMatchObject({ committed: true, replayed: false });
   });
+
+  it("converts with no primary Contact even when the identity review created one", async () => {
+    // UAT-WALK-FINDINGS-2026-08-29.md #5: this is the untested combination -- the review
+    // resolved with "Create new contact" (review.contactId is set), and the command still
+    // omits primaryContact. Product decision 2026-08-29: a primary Contact is optional on
+    // a converted Deal, so this must succeed with a contactless Deal, exactly like the
+    // "Dismiss contact candidates" path already does.
+    const f = await fixtureWithNewIdentity();
+    const preview = await getLeadConversionPreviewV1(pool, f.actor, f.leadId);
+    expect(preview.lead.review!.reviewId).toBeTruthy();
+    expect(preview.choices.primaryContacts).toHaveLength(1); // the review DID create one
+    const input = {
+      contractVersion: "lead-convert-to-deal.v1" as const,
+      expectedLeadVersion: preview.lead.version,
+      intakeId: preview.lead.intakeId,
+      expectedIntakeVersion: preview.lead.intakeVersion,
+      review: preview.lead.review!,
+      company: {
+        companyId: preview.choices.companies[0].companyId,
+        expectedVersion: preview.choices.companies[0].version,
+      },
+      primaryContact: null,
+      pipeline: {
+        pipelineId: preview.pipeline!.pipelineId,
+        expectedVersion: preview.pipeline!.version,
+        expectedConfigurationVersion: preview.pipeline!.configurationVersion,
+        stageId: preview.pipeline!.initialStage.stageId,
+        expectedStageVersion: preview.pipeline!.initialStage.version,
+      },
+      deal: { name: "Vale Robotics opportunity", value: null, expectedCloseOn: null },
+      assignment: preview.assignment,
+    };
+    const result = await convertLeadToDealV1(pool, {
+      actor: f.actor,
+      leadId: f.leadId,
+      command: input,
+      idempotencyKey: `convert-${randomUUID()}`,
+    });
+    expect(result).toMatchObject({ committed: true, replayed: false });
+    const parties = await pool.query<{ record_type: string }>(
+      `select record_type from deal_party_refs where workspace_id=$1 and deal_id=$2`,
+      [f.workspaceId, result.deal.available ? result.deal.dealId : null],
+    );
+    expect(parties.rows.map((row) => row.record_type)).toEqual(["crm.company"]);
+  });
+
+  it("rejects a supplied primary Contact that does not match the resolved identity review", async () => {
+    // The other half of #5: relaxing the guard to permit absence must not silently drop
+    // the check on a Contact that IS supplied. A wrong contactId must still be refused --
+    // and refused with its own reason code, not the generic stale_preview that used to
+    // cover this and read as a race to retry.
+    const f = await fixtureWithNewIdentity();
+    const preview = await getLeadConversionPreviewV1(pool, f.actor, f.leadId);
+    const input = {
+      contractVersion: "lead-convert-to-deal.v1" as const,
+      expectedLeadVersion: preview.lead.version,
+      intakeId: preview.lead.intakeId,
+      expectedIntakeVersion: preview.lead.intakeVersion,
+      review: preview.lead.review!,
+      company: {
+        companyId: preview.choices.companies[0].companyId,
+        expectedVersion: preview.choices.companies[0].version,
+      },
+      primaryContact: { contactId: randomUUID(), expectedVersion: 1 },
+      pipeline: {
+        pipelineId: preview.pipeline!.pipelineId,
+        expectedVersion: preview.pipeline!.version,
+        expectedConfigurationVersion: preview.pipeline!.configurationVersion,
+        stageId: preview.pipeline!.initialStage.stageId,
+        expectedStageVersion: preview.pipeline!.initialStage.version,
+      },
+      deal: { name: "Vale Robotics opportunity", value: null, expectedCloseOn: null },
+      assignment: preview.assignment,
+    };
+    await expect(
+      convertLeadToDealV1(pool, {
+        actor: f.actor,
+        leadId: f.leadId,
+        command: input,
+        idempotencyKey: `convert-${randomUUID()}`,
+      }),
+    ).rejects.toMatchObject({ code: "primary_contact_mismatch", status: 409 });
+  });
 });
