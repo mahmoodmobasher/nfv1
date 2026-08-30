@@ -71,6 +71,12 @@ const presentation: Record<
     "refetch_preview",
     409,
   ],
+  primary_contact_mismatch: [
+    "The selected primary Contact does not match the resolved identity review.",
+    false,
+    "refetch_preview",
+    409,
+  ],
   already_converted: [
     "This Lead has already been converted.",
     false,
