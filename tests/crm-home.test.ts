@@ -18,7 +18,15 @@ describe("CRM home provider-independent behavior",()=>{
   it("allowlists, defaults, and canonicalizes dashboard filters",()=>{
     expect(parseCrmHomeFilters({})).toEqual(defaults);
     expect(parseCrmHomeFilters({status:"won",owner:"mine",period:"30d"})).toEqual({...defaults,status:"won",owner:"mine",period:"30d"});
-    for(const raw of [{other:"x"},{status:"pending"},{stage:"not-a-uuid"},{team:["all","all"]}])expect(()=>parseCrmHomeFilters(raw)).toThrowError(CrmHomeError);
+    for(const raw of [{status:"pending"},{stage:"not-a-uuid"},{team:["all","all"]}])expect(()=>parseCrmHomeFilters(raw)).toThrowError(CrmHomeError);
+  });
+  it("ignores unrecognized query params instead of failing the dashboard closed",()=>{
+    // UAT-WALK-FINDINGS-2026-08-29.md #4: /crm/home?r=2 used to render "Review the
+    // dashboard filters and try again" for a param the filter form never sends. A utm_*
+    // tag on any shared link would do the same.
+    expect(parseCrmHomeFilters({other:"x"})).toEqual(defaults);
+    expect(parseCrmHomeFilters({utm_source:"newsletter",r:"2",status:"won"})).toEqual({...defaults,status:"won"});
+    expect(parseCrmHomeFilters({utm_source:["a","b"]})).toEqual(defaults);
   });
   it("builds only fixed local lead links with normalized fields",()=>{
     const filters={...defaults,status:"open" as const,period:"7d" as const};

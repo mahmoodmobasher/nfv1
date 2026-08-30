@@ -19,6 +19,7 @@ export type CrmHomeModel = {
   options: { stages: CrmHomeOption[]; owners: CrmHomeOption[]; teams: CrmHomeOption[] };
   summary: { visible: number; open: number; won: number; lost: number };
   pipeline: Array<{ stageId: string; name: string; position: number; archived: boolean; count: number }>;
+  lifecycle: Array<{ code: string; label: string; count: number }>;
   owners: Array<{ membershipId: string; displayName: string; count: number }>;
   teams: Array<{ teamId: string; name: string; count: number }>;
   recentActivity: Array<{ activityId: string; leadId: string; leadLabel: string; kind: string; bodyPreview: string; actorLabel: string; occurredAt: string }>;
@@ -32,7 +33,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const KEYS = new Set(["status", "stage", "owner", "team", "period"]);
 
 export function parseCrmHomeFilters(raw: CrmHomeRawFilters): CrmHomeFilters {
-  if (Object.keys(raw).some((key) => !KEYS.has(key)) || Object.values(raw).some(Array.isArray)) throw new CrmHomeError("invalid_filter", 400);
+  // An unrecognized query param (a utm_* tag on a shared link, a stray "r=2") is ignored,
+  // not fatal -- only a KNOWN filter key with a malformed or duplicated (array) value
+  // fails the request. UAT-WALK-FINDINGS-2026-08-29.md #4: this previously failed the
+  // whole dashboard closed for any param the form itself never sends.
+  if ([...KEYS].some((key) => Array.isArray(raw[key]))) throw new CrmHomeError("invalid_filter", 400);
   const status = raw.status ?? "all", stage = raw.stage ?? "all", owner = raw.owner ?? "all", team = raw.team ?? "all", period = raw.period ?? "all";
   if (typeof status !== "string" || !["all", "open", "won", "lost"].includes(status)) throw new CrmHomeError("invalid_filter", 400);
   if (typeof period !== "string" || !["all", "7d", "30d", "90d"].includes(period)) throw new CrmHomeError("invalid_filter", 400);
@@ -53,6 +58,7 @@ type SnapshotRow = {
   actor: { role: "owner" | "admin" | "member"; membershipId: string } | null;
   summary: CrmHomeModel["summary"];
   pipeline: CrmHomeModel["pipeline"];
+  lifecycle: CrmHomeModel["lifecycle"];
   owners: CrmHomeModel["owners"];
   teams: CrmHomeModel["teams"];
   activities: Array<Omit<CrmHomeModel["recentActivity"][number], "kind" | "bodyPreview" | "occurredAt"> & { kind: string; body: string; occurredAt: Date | string }>;
@@ -95,6 +101,8 @@ export async function crmHome(database: Pool, identity: IdentityContext, workspa
       ), stage_options as (
         select distinct ps.id,ps.name,ps.position,ps.status from pipeline_stages ps cross join actor a
          where ps.workspace_id=a.workspace_id and (ps.status='active' or exists(select 1 from authorized_leads l where l.stage_id=ps.id))
+      ), lifecycle_options as (
+        select id,code,label,display_order from lead_lifecycle_definitions where status='active' order by display_order
       ), owner_options as (
         select distinct m.id,coalesce(nullif(btrim(u.display_name),''),'Workspace member') label
           from workspace_memberships m join users u on u.id=m.user_id cross join actor a
@@ -105,6 +113,7 @@ export async function crmHome(database: Pool, identity: IdentityContext, workspa
         (select json_build_object('role',a.role,'membershipId',a.membership_id) from actor a) actor,
         json_build_object('visible',(select count(*)::int from filtered_leads),'open',(select count(*)::int from filtered_leads where status='open'),'won',(select count(*)::int from filtered_leads where status='won'),'lost',(select count(*)::int from filtered_leads where status='lost')) summary,
         coalesce((select json_agg(json_build_object('stageId',s.id,'name',s.name,'position',s.position,'archived',s.status='archived','count',(select count(*)::int from filtered_leads l where l.stage_id=s.id)) order by s.position,s.id) from stage_options s),'[]') pipeline,
+        coalesce((select json_agg(json_build_object('code',lo.code,'label',lo.label,'count',(select count(*)::int from filtered_leads l where l.lifecycle_definition_id=lo.id)) order by lo.display_order) from lifecycle_options lo),'[]') lifecycle,
         coalesce((select json_agg(json_build_object('membershipId',x.id,'displayName',x.label,'count',x.count) order by x.count desc,lower(x.label),x.id) from (select o.id,o.label,count(l.id)::int count from owner_options o join filtered_leads l on l.owner_membership_id=o.id group by o.id,o.label) x),'[]') owners,
         coalesce((select json_agg(json_build_object('teamId',x.id,'name',x.name,'count',x.count) order by x.count desc,lower(x.name),x.id) from (select t.id,t.name,count(distinct l.id)::int count from allowed_teams t join lead_visible_teams lvt on lvt.team_id=t.id and lvt.workspace_id=$3 join filtered_leads l on l.id=lvt.lead_id group by t.id,t.name) x),'[]') teams,
         coalesce((select json_agg(json_build_object('activityId',x.id,'leadId',x.lead_id,'leadLabel',x.lead_label,'kind',x.kind,'body',x.body,'actorLabel',x.actor_label,'occurredAt',x.created_at) order by x.created_at desc,x.id desc) from (select la.id,la.lead_id,concat(l.first_name,' ',l.last_name) lead_label,la.kind,la.body,coalesce(nullif(btrim(u.display_name),''),'Workspace member') actor_label,la.created_at from lead_activities la join filtered_leads l on l.id=la.lead_id and l.workspace_id=la.workspace_id join workspace_memberships m on m.id=la.created_by_membership_id and m.workspace_id=la.workspace_id join users u on u.id=m.user_id order by la.created_at desc,la.id desc limit 10) x),'[]') activities,
@@ -118,7 +127,7 @@ export async function crmHome(database: Pool, identity: IdentityContext, workspa
     if(filters.owner!=="all"&&filters.owner!=="mine"&&!row.owner_options.some(option=>option.id===filters.owner))throw new CrmHomeError("resource_not_found",404);
     if(filters.team!=="all"&&!row.team_options.some(option=>option.id===filters.team))throw new CrmHomeError("resource_not_found",404);
     await client.query("commit");
-    return {source:"live",generatedAt:now.toISOString(),workspace:row.workspace,actor:row.actor,filters,options:{stages:row.stage_options,owners:row.owner_options,teams:row.team_options},summary:row.summary,pipeline:row.pipeline,owners:row.owners,teams:row.teams,recentActivity:row.activities.map(activity=>({...activity,kind:activityLabel(activity.kind),bodyPreview:activityPreview(activity.body),occurredAt:new Date(activity.occurredAt).toISOString()}))};
+    return {source:"live",generatedAt:now.toISOString(),workspace:row.workspace,actor:row.actor,filters,options:{stages:row.stage_options,owners:row.owner_options,teams:row.team_options},summary:row.summary,pipeline:row.pipeline,lifecycle:row.lifecycle,owners:row.owners,teams:row.teams,recentActivity:row.activities.map(activity=>({...activity,kind:activityLabel(activity.kind),bodyPreview:activityPreview(activity.body),occurredAt:new Date(activity.occurredAt).toISOString()}))};
   } catch(error) {
     await client.query("rollback").catch(()=>undefined);
     if(error instanceof CrmHomeError)throw error;
