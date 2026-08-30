@@ -1,18 +1,18 @@
 # Current UAT release
 
-Status date: 2026-08-29
+Status date: 2026-08-30
 
 | Item | Value |
 | --- | --- |
-| Source revision | `4a5add3` on `main` |
-| Release | `/opt/nexaflow/uat/releases/4a5add3-uat57` |
-| Image | `nexaflow:4a5add3-uat57` |
+| Source revision | `d864abf` on `main` |
+| Release | `/opt/nexaflow/uat/releases/d864abf-uat58` |
+| Image | `nexaflow:d864abf-uat58` |
 | Runtime user | `10001:10001` |
 | Migration ledger | 28 |
 | Migration head | `0027_default_sales_pipeline_backfill` |
 | UAT database | `nexaflow_uat` (not `nexaflow`) |
 
-App container reported `(healthy)` after deployment. `4a5add3-uat57` is frontend, tests,
+App container reported `(healthy)` after deployment. `d864abf-uat58` is backend, tests,
 and docs only — the migrate step ran and applied nothing; ledger stayed at 28, head
 unchanged at `0027_default_sales_pipeline_backfill`.
 
@@ -29,6 +29,7 @@ unchanged at `0027_default_sales_pipeline_backfill`.
 | `74936d5-uat55` | `74936d5` | Identity-review "Create new contact/company" now writes conversion-eligible customer-graph-v1 Contacts/Companies |
 | `1237a93-uat56` | `1237a93` | Deal-stage published contract now declares `pipelineId`; Deals list/board render again |
 | `4a5add3-uat57` | `4a5add3` | Merges `main`. Conversion panel re-fetches after a sibling lifecycle change (finding #2); no schema change |
+| `d864abf-uat58` | `d864abf` | Primary Contact is optional on conversion (finding #5); a rejected supplied Contact now fails `primary_contact_mismatch` instead of `stale_preview`; no schema change |
 
 ## Verified on UAT
 
@@ -54,10 +55,22 @@ unchanged at `0027_default_sales_pipeline_backfill`.
   fixed in this release, but the fix itself has not yet been verified live on UAT.**
   `LeadConversionPanel`'s preview effect now re-fetches on `lead.version`, which changes
   whenever `LeadLifecycleControl` calls `router.refresh()` after a successful transition.
-  Confirmed by a new behavioral test (mounted with `react-dom/client`, stubbed `fetch`);
-  not yet confirmed by driving the actual UI. Next UAT walk should reproduce: open a
-  `working` Lead, click a transition to `qualified`, and confirm the conversion panel
-  updates to offer Convert **without a page reload**.
+  Confirmed by a new behavioral test (mounted with `react-dom/client`, stubbed `fetch`),
+  **and now confirmed live on `uat57`**: resolving the review, then Start working, then
+  Mark qualified, with no reload at any point, left the full "Convert Lead to Deal" form
+  on screen — before `uat57` this read "not available" until a manual refresh.
+- **Finding #5 (a Lead whose identity review created a Contact could not convert with
+  Primary Contact left at "No primary Contact") is fixed and verified live on `uat58`.**
+  `Mobasher UAT Lead 05` (`e5439837-6333-4fbf-ab6e-f23369edcb69`), which refused
+  conversion five times on `uat57` and had been left deliberately in that failing state as
+  a live reproduction, converted with Primary Contact left at "No primary Contact." Deal
+  `21250c38-ccd6-441f-ad1a-29692f165854` shows the Company linked and "No buying Contacts
+  are available" — a genuinely contactless Deal, confirming the relaxed guard did not
+  silently link the reviewed Contact anyway. Migration ledger stayed at 28, head unchanged
+  at `0027_default_sales_pipeline_backfill`. The mismatched-Contact half of the fix (a
+  supplied Contact that doesn't match the review now fails `primary_contact_mismatch`) is
+  covered only by the integration test, not live — the UI offers just the one
+  server-authorized Contact choice, so a wrong one cannot be submitted through the form.
 
 ## Known stranded record
 
@@ -69,8 +82,9 @@ see `PROJECT-STATUS.md`.
 
 ## Remaining pending identity reviews
 
-Seven Leads still carry `identity_review_status='pending'`: `Mobasher UAT Lead 02`, `03`,
-`04`, `05`, `06`, `07`, `09`. Any of these is safe to use for further arc walks.
+`Mobasher UAT Lead 05` is now converted. Six Leads still carry
+`identity_review_status='pending'`: `Mobasher UAT Lead 02`, `03`, `04`, `06`, `07`, `09`.
+Any of these is safe to use for further arc walks.
 
 ## Deploy procedure
 

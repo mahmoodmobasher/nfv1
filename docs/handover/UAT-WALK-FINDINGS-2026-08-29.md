@@ -2,8 +2,9 @@
 
 These came from driving real data through the UI on UAT after `uat56`, in a session with
 browser access. Five blockers had already been found this way; these are what a **sixth**
-walk turned up. Ordered by severity. **Finding #1 is void — see below. #2 is fixed on
-`fix/conversion-panel-stale-lifecycle`. #3 and #4 are real and open.**
+walk turned up. Ordered by severity. **Finding #1 is void — see below. #2 is fixed and
+verified live on `uat57`. #5 is fixed and verified live on `uat58`. #3 and #4 are real
+and open — Phase 4 work.**
 
 Environment: UAT `1237a93-uat56`, `main` at `f5cdbe1`, actor = the `def` workspace owner.
 
@@ -64,7 +65,22 @@ is a query against the owning table, before any hypothesis is written down, any 
 is designed, or any other session is told to act. Reading the row here would have cost one
 command and saved several hours of two sessions' work.
 
-## 5. BLOCKER — "No primary Contact" is offered but the server always rejects it
+## 5. FIXED AND VERIFIED LIVE ON uat58 — "No primary Contact" was offered but the server always rejected it
+
+Fixed in `53b2331`, merged `d864abf`, deployed `uat58`. Verified live: `Mobasher UAT
+Lead 05` (`e5439837-6333-4fbf-ab6e-f23369edcb69`), left deliberately in the failing state
+on `uat57` as a live reproduction, converted with Primary Contact left at "No primary
+Contact." Deal `21250c38-ccd6-441f-ad1a-29692f165854` shows the Company linked and "No
+buying Contacts are available" — a genuinely contactless Deal, so the relaxed guard did
+not silently link the reviewed Contact instead of honoring the omission.
+
+**Not verified live: the mismatched-Contact half.** The fix's other half — a *supplied*
+primary Contact that doesn't match the one the review resolved now fails with its own
+`primary_contact_mismatch` code instead of the generic `stale_preview` — is covered only
+by the integration test added alongside the fix, not by driving the UI. The conversion
+form only ever offers the one server-authorized Contact as a choice, so a mismatched one
+cannot actually be submitted through it; reproducing this live would need a modified
+request, not a normal UI walk.
 
 Found on `uat57` by walking the one conversion branch nothing had exercised. **This is a
 live blocker, not cosmetic: a Lead cannot be converted without a primary Contact, even
@@ -200,13 +216,15 @@ outcome. Belongs with the Phase 4 surface work.
 
 ## Still not walked
 
-- **Walk C: conversion with no primary Contact** — resolve a review with *Dismiss contact
-  candidates* + *Create new company*, then convert. The code supports `primaryContact:
-  null` and the preview offers "No primary Contact", but nothing has exercised it live.
+- **Walk C: conversion with no primary Contact.** Done — see #5 above, verified live on
+  `uat58` via `Mobasher UAT Lead 05` (identity review resolved with *Create new contact*,
+  not *Dismiss*, which is the harder of the two "no primary Contact" paths since it's the
+  one the server used to reject).
 - **A Member-role actor.** Everything so far has been walked as workspace owner. The open
   product question — may Members resolve identity reviews? — is still unanswered, and the
   Member path through qualify → convert is unproven. Needs a second UAT account rather
   than a role change by SQL.
 
-Five pending Leads remain for this: `Mobasher UAT Lead 03`, `04`, `05`, `06`, `07`, `09`
-(`Lead 02` is now converted; `Lead 08` is the stranded pre-uat55 record — do not use it).
+Five pending Leads remain for this: `Mobasher UAT Lead 03`, `04`, `06`, `07`, `09`
+(`Lead 02` and `Lead 05` are now converted; `Lead 08` is the stranded pre-uat55
+record — do not use it).

@@ -1,22 +1,20 @@
 # NexaFlow project status
 
-Status date: 2026-08-29. Supersedes the earlier 2026-08-29 status (the one that stopped
-at the unmerged `00c2395` fix).
+Status date: 2026-08-30. Supersedes the 2026-08-29 status (the one that stopped at
+`1237a93`/`uat56`).
 
 ## Current authority
 
-- `design-system-consistency-local`, pushed to `design-system-consistency`, head
-  `1237a93`. **Merged to `main`.**
-- `main` merged `design-system-consistency-local` at `1237a93` (26 commits, 75 files since
-  the prior `main` head `1843381`). The merge brings the full branch — lead lifecycle,
-  conversion, both fixes below, and the earlier design-system-consistency visual/authz
-  work (CRM home Direction A, legacy-PATCH role enforcement, migrations `0026`/`0027`) —
-  not a lifecycle-only subset.
-- UAT runs `1237a93-uat56`, healthy, migration ledger 28, head
-  `0027_default_sales_pipeline_backfill`.
-- Test baseline: **967 passed, 12 failed, 9 skipped** across 122 files (at `1237a93`). The
-  12 are the same documented known-red set as before; the count is 967 not 966 because a
-  regression test was added for the second blocker below.
+- `main` at `d864abf`. `origin/main` matches.
+- UAT runs `d864abf-uat58`, healthy, migration ledger 28, head
+  `0027_default_sales_pipeline_backfill`. No migration in any release since `0027`.
+- Test baseline: **970 passed, 12 failed, 9 skipped** across 122 files (at `d864abf`). The
+  12 are the same documented known-red set as before; the count grew from 967 with three
+  more regression tests added across the two blockers below.
+- Since `1237a93`/`uat56`, a further browser walk (`UAT-WALK-FINDINGS-2026-08-29.md`,
+  third session) found two more real defects — both now fixed, merged, and verified live
+  — plus two smaller Phase-4-scope items still open. One additional finding in that
+  document was investigated and turned out to be **void, not a defect** (see below).
 
 ## The arc walked end to end, for real, for the first time
 
@@ -79,6 +77,51 @@ contract — confirmed to fail with `Unrecognized key: "pipelineId"` before the 
 after. Merged in `1237a93`, deployed as `uat56`. Verified live: the Deals list rendered,
 the Deal closed Won, and Lead 01 settled to `won`.
 
+## Sixth blocker — the conversion panel showed stale eligibility after a lifecycle change
+
+`LeadDetailWithConversion` renders `LeadLifecycleControl` and `LeadConversionPanel` as
+unconnected siblings. `LeadLifecycleControl` calls `router.refresh()` on a successful
+transition, re-fetching the server Lead — but `LeadConversionPanel`'s preview effect was
+keyed only on `[workspaceId, leadId]`, both constant across a lifecycle change. Qualifying
+a Lead in-page left the panel reading "not available: the canonical Lead lifecycle must be
+Qualified" until a full page reload; the server was correct throughout.
+
+Fixed by passing `lead.version` down as `leadVersion` and adding it to the effect's
+dependency array, so a real transition (which always increments Lead version) drives a
+fresh fetch. Covered by a behavioral test (`react-dom/client` + stubbed `fetch`, added
+`jsdom` as a devDependency since none existed) rather than the source-text assertions the
+original regression test used — a source-text assertion would have passed even with the
+mechanism broken. Merged `4a5add3`, deployed `uat57`, verified live.
+
+## Seventh blocker — a primary Contact was effectively required, not optional, on conversion
+
+A Lead whose identity review created a Contact could not be converted with Primary Contact
+left at "No primary Contact," even though the UI offers that choice and describes it as a
+supported atomic effect. `convert-lead-to-deal.orchestrator.ts`'s pre-commit guard required
+`command.primaryContact` to equal the reviewed Contact whenever the review had bound one;
+omitting it made two comparisons fail and the whole command fell into a generic
+`stale_preview` rejection that read as a race and invited endless retries.
+
+Product decision (2026-08-29): a primary Contact is optional on a converted Deal — the
+dismiss-candidates path already produces contactless Deals, so this was already a
+supported shape everywhere except when the review happened to create a Contact. Fixed by
+scoping the Contact check to only fire when `command.primaryContact` is actually supplied
+(absence always allowed; a supplied value still validated against id and version exactly
+as before), and giving a rejected supplied Contact its own `primary_contact_mismatch` code
+instead of the generic `stale_preview`. Merged `d864abf`, deployed `uat58`, verified live
+on `Mobasher UAT Lead 05` — converted contactless after refusing five times on `uat57`.
+
+## A finding that turned out to be void
+
+The same walk also produced a report that a Deal closed Lost didn't settle its Lead,
+based on reading the CRM home dashboard tiles. It was wrong: the premise (what the tiles
+read *before* the walk) was never verified against the `leads` table, and a wrong baseline
+made a correctly-settling Lead look unsettled. Direct SQL against `leads` showed the
+settlement, the lineage, and the dashboard aggregation were all correct throughout —
+nothing was changed as a result. Full account in `UAT-WALK-FINDINGS-2026-08-29.md` #1.
+**The lesson: a rendered aggregate is a claim about the data, not the data — query the
+owning table before writing a hypothesis down, not after.**
+
 ## What changed in this run (both sessions combined)
 
 The lead lifecycle was **structurally present in the database but inert in the
@@ -101,6 +144,8 @@ UAT, not just by tests.
 | 11 | Defects shipped to UAT unnoticed | The suite being run excluded 72 of 122 files |
 | 12 | Identity-review Contacts were permanently unconvertible | See "Fourth conversion blocker" above |
 | 13 | Deal pipeline screens crashed once real data existed | See "Fifth blocker" above |
+| 14 | Conversion panel showed stale eligibility after a lifecycle change | See "Sixth blocker" above |
+| 15 | A primary Contact was effectively required on conversion, not optional | See "Seventh blocker" above |
 
 Finding **#5 was withdrawn**: `canDiscloseLead` is deliberately narrower than
 `visibleLeadIds` because it guards identity-review PII. Acting on it caused 11 failures
@@ -152,20 +197,52 @@ database. It is an index/latency benchmark — run before a release, not per cha
 
 ## Recommended next sequence
 
-1. Resolve the remaining pending identity reviews and walk more Leads through the arc.
-   Seven remain `identity_review_status='pending'`: `Mobasher UAT Lead 02`, `03`, `04`,
-   `05`, `06`, `07`, `09`. Do not use `Lead 08` — stranded, forward-only fix does not
-   repair it.
-2. Decide on backfill for `Lead 08` and any other pre-fix identity-review record (see
-   "Fourth conversion blocker").
-3. Phase 4: dashboard funnel, Leads-list lifecycle filter, timeline backfill (#7),
-   `FactsGrid` phantom cells and the misnamed "Pipeline and responsibility" panel.
-4. Phase 5: retire `leads.stage_id` from Lead views.
-5. Decide the fate of the 12 red tests.
+1. **Phase 4**, in order: Lead detail surface (settled outcome display, `FactsGrid`
+   phantom cell, rename the misnamed "Pipeline and responsibility" panel) → dashboard
+   lifecycle funnel (aggregation confirmed correct — additive; also ignore unrecognized
+   query params instead of failing the dashboard closed) → Leads-list lifecycle filter
+   (not small — keyset pagination cursor encodes active filters, eight existing tests
+   assert cursor stability, read those first) → Lead timeline backfill (#7).
+2. Resolve the remaining pending identity reviews and walk more Leads through the arc as
+   Phase 4 lands. Six remain `identity_review_status='pending'`: `Mobasher UAT Lead 02`,
+   `03`, `04`, `06`, `07`, `09`. Do not use `Lead 08` — stranded, forward-only fix does
+   not repair it.
+3. Phase 5: retire `leads.stage_id` from Lead views.
+
+## Decisions settled 2026-08-30 — no longer open
+
+- **Members and identity reviews: current behaviour ratified, no code change.** A Member
+  may resolve a review by creating or dismissing, never by linking to an existing Contact
+  or Company — the role gate already in
+  `resolve-lead-identity-review.orchestrator.ts` and already covered by
+  `tests/p1a-manual-intake.integration.test.ts` ("allows an assigned-visible Member to
+  create identities but never link existing"). Deliberate: creating a new record is
+  low-risk, while linking binds a Lead to an existing customer record the Member may not
+  be authorized to view — a disclosure question, not just a permissions one. **Phase 4's
+  Lead detail surface work must respect this gate, not widen it.**
+- **Backfill for `Mobasher UAT Lead 08` and other pre-`74936d5` legacy-p1a-root-v1
+  records: forward-only, no migration, no UI adoption action.** These records exist only
+  as UAT dummy data; this code never shipped past UAT, so there is nothing real to
+  rescue. A migration writing `authority_contract_version` plus synthesized identity
+  points and affiliations would be risk against customer identity records for no benefit,
+  and contradicts the existing design, which deliberately offers no adoption or backfill
+  action. `Lead 08` stays stranded and must not be used to test conversion (see
+  `CURRENT-UAT.md`). If a real customer hits this shape post-launch, write the migration
+  then, against real data.
+- **`design-system-components.test.tsx`: deleted, own commit.** It asserted `ds-*` class
+  names that exist nowhere since the Tailwind migration — it tested a design system that
+  no longer exists. Rewriting it to assert Tailwind classes would recreate the same
+  anti-pattern (coupling tests to markup shape) that made it rot in the first place, and
+  this project has been bitten repeatedly by tests that assert shape rather than
+  behaviour. New baseline after deletion: **970 passed, 6 failed, 9 skipped across 121
+  files** — the remaining 6 are `phase4-identity-boundary.test.ts` (4),
+  `phase4-invitation-boundary.test.ts` (1), `contact-spectrum-migration.test.tsx` (1).
+  If component-level coverage is wanted later, write it fresh as behaviour and
+  accessibility assertions (roles, labels, keyboard) — not class names.
 
 ## Holds
 
-- `main` now contains this work as of `1237a93`. Production deploy from `main` is a
+- `main` now contains this work as of `d864abf`. Production deploy from `main` is a
   separate, not-yet-taken step — nothing beyond UAT has been deployed.
 - The `Documentation/handover/` folder is a **separate, untracked** handover set from the
   earlier multi-chat program (2026-08-27/28). It is not in Git, predates this work, and is
